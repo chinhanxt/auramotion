@@ -6,3 +6,256 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+}
+
+enum PlanCode {
+  free
+  pro
+  ultra
+}
+
+enum BillingPeriod {
+  MONTH
+  YEAR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+enum CreditTxnType {
+  grant
+  purchase
+  hold
+  charge
+  refund
+  admin_adjust
+  expire
+}
+
+enum CreditBucket {
+  PLAN
+  PURCHASED
+}
+
+enum ModelProvider {
+  MUSE
+  AGY
+  CODEX
+  LOCAL
+}
+
+enum JobKind {
+  IMAGE
+  VIDEO
+  ASSEMBLE
+}
+
+enum PresetKind {
+  STYLE
+  CAMERA
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum PaymentType {
+  PLAN
+  CREDIT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  CANCELED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String?
+  googleId     String?    @unique
+  name         String
+  avatarUrl    String?
+  role         Role       @default(USER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+
+  resetTokens   PasswordResetToken[]
+  subscriptions Subscription[]
+  transactions  CreditTransaction[]
+  jobs          Job[]
+  payments      Payment[]
+
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model Plan {
+  id             String   @id @default(cuid())
+  code           PlanCode @unique
+  name           String
+  priceMonth     Int
+  priceYear      Int
+  monthlyCredits Decimal  @db.Decimal(12, 2)
+  maxConcurrent  Int
+  maxDurationSec Int
+  rank           Int
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id          String             @id @default(cuid())
+  userId      String
+  planId      String
+  period      BillingPeriod
+  startAt     DateTime           @default(now())
+  endAt       DateTime?
+  nextGrantAt DateTime
+  status      SubscriptionStatus @default(ACTIVE)
+  remindedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model CreditTransaction {
+  id        String        @id @default(cuid())
+  userId    String
+  type      CreditTxnType
+  bucket    CreditBucket
+  amount    Decimal       @db.Decimal(12, 2)
+  jobId     String?
+  paymentId String?
+  actorId   String?
+  note      String?
+  createdAt DateTime      @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job     Job?     @relation(fields: [jobId], references: [id])
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([userId])
+  @@index([jobId])
+  @@map("credit_transactions")
+}
+
+model AiModel {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  provider    ModelProvider
+  engineModel String
+  kind        JobKind
+  minPlanRank Int           @default(0)
+  baseCost    Decimal       @db.Decimal(12, 2)
+  options     Json          @default("{}")
+  enabled     Boolean       @default(true)
+  sort        Int           @default(0)
+
+  jobs Job[]
+
+  @@map("models")
+}
+
+model Preset {
+  id           String     @id @default(cuid())
+  kind         PresetKind
+  name         String
+  promptSuffix String
+  thumbnailUrl String?
+  enabled      Boolean    @default(true)
+
+  @@unique([kind, name])
+  @@map("presets")
+}
+
+model Job {
+  id         String    @id @default(cuid())
+  userId     String
+  modelId    String
+  kind       JobKind
+  prompt     String
+  params     Json      @default("{}")
+  inputUrl   String?
+  status     JobStatus @default(PENDING)
+  cost       Decimal   @db.Decimal(12, 2)
+  museTaskId String?
+  resultUrls String[]  @default([])
+  error      String?
+  createdAt  DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+  deletedAt  DateTime?
+  expiresAt  DateTime?
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model        AiModel             @relation(fields: [modelId], references: [id])
+  transactions CreditTransaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("jobs")
+}
+
+model Payment {
+  id            String         @id @default(cuid())
+  userId        String
+  type          PaymentType
+  planCode      PlanCode?
+  period        BillingPeriod?
+  creditAmount  Decimal?       @db.Decimal(12, 2)
+  amount        Int
+  refCode       String         @unique
+  status        PaymentStatus  @default(PENDING)
+  providerTxnId String?        @unique
+  paidAt        DateTime?
+  confirmedBy   String?
+  createdAt     DateTime       @default(now())
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+
+  @@index([userId])
+  @@map("payments")
+}
+
+model Setting {
+  key   String @id
+  value Json
+
+  @@map("settings")
+}
