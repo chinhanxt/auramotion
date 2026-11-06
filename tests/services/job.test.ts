@@ -1,0 +1,329 @@
+import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { queues } from "@/lib/queue";
+import { redis } from "@/lib/redis";
+import { putFile, storagePath } from "@/lib/storage";
+import type { HttpMuseClient, MuseTaskStatus } from "@/server/engines/muse";
+import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
+import { getBalance } from "@/server/services/credit";
+import {
+  cancelJob,
+  cleanupExpiredResults,
+  createJob,
+  deleteJob,
+  processJob,
+  sweepStuckJobs,
+} from "@/server/services/job";
+import { startFree } from "@/server/services/plan";
+import type { GenerationParams } from "@/server/services/pricing";
+import { setSetting } from "@/server/services/settings";
+import { seed } from "../../prisma/seed";
+import { resetDb } from "../helpers/db";
+
+const SAMPLE_PNG = path.resolve("tests/fixtures/sample.png");
+const MINUTE = 60_000;
+
+let server: Server;
+let baseUrl: string;
+const seenHeaders: IncomingHttpHeaders[] = [];
+
+let userId: string;
+let otherId: string;
+let models: Record<string, string>;
+
+async function newFreeUser(email: string): Promise<string> {
+  const user = await db.user.create({ data: { email, name: email } });
+  await startFree(user.id);
+  return user.id;
+}
+
+async function balance(id = userId) {
+  const b = await getBalance(id);
+  return { available: b.available.toFixed(2), held: b.held.toFixed(2) };
+}
+
+function imageParams(extra: Partial<Extract<GenerationParams, { kind: "image" }>> = {}): GenerationParams {
+  return { kind: "image", modelId: models["MUSE Ảnh"], prompt: "a bottle", aspectRatio: "9:16", imageCount: 2, ...extra };
+}
+
+async function expectAppError(p: Promise<unknown>, code: string): Promise<void> {
+  const err = await p.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  expect(err).toBeInstanceOf(AppError);
+  expect((err as AppError).code).toBe(code);
+}
+
+type StubTask = { status: MuseTaskStatus; urls?: string[]; error?: string };
+
+function stubMuse(tasks: StubTask[]) {
+  const submitted: MediaRequest[] = [];
+  const polled: string[] = [];
+  let i = 0;
+  const muse = {
+    authHeaders: { Authorization: "Bearer dev-muse-key" },
+    submit: vi.fn(async (req: MediaRequest) => {
+      submitted.push(req);
+      return { taskId: "task_1" };
+    }),
+    getTask: vi.fn(async (_kind: "image" | "video", taskId: string) => {
+      polled.push(taskId);
+      const t = tasks[Math.min(i++, tasks.length - 1)];
+      return { status: t.status, urls: t.urls ?? [], ...(t.error ? { error: t.error } : {}) };
+    }),
+  };
+  return { muse: muse as unknown as HttpMuseClient, submitted, polled, raw: muse };
+}
+
+function resultUrls(n: number): string[] {
+  return Array.from({ length: n }, (_, i) => `${baseUrl}/v1/media/img_${i}.webp`);
+}
+
+describe("job", () => {
+  beforeAll(async () => {
+    const png = await fs.readFile(SAMPLE_PNG);
+    server = createServer((req, res) => {
+      seenHeaders.push(req.headers);
+      res.writeHead(200, { "Content-Type": "image/webp" });
+      res.end(png);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    for (const q of Object.values(queues)) vi.spyOn(q, "add").mockResolvedValue({} as never);
+    seenHeaders.length = 0;
+    await resetDb();
+    await seed();
+    await setSetting("maintenance", false);
+    userId = await newFreeUser("job@test.local");
+    otherId = await newFreeUser("other@test.local");
+    models = Object.fromEntries((await db.aiModel.findMany()).map((m) => [m.name, m.id]));
+  });
+
+  afterAll(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await Promise.all(Object.values(queues).map((q) => q.close()));
+    await redis.quit();
+    await db.$disconnect();
+  });
+
+  it("createJob holds credit", async () => {
+    const job = await createJob(userId, imageParams());
+    expect(job.status).toBe("PENDING");
+    expect(job.cost.toFixed(2)).toBe("2.00");
+    expect(job.expiresAt!.getTime() - Date.now()).toBeGreaterThan(29 * 24 * 60 * MINUTE);
+    expect(await balance()).toEqual({ available: "18.00", held: "2.00" });
+    expect(queues.muse.add).toHaveBeenCalledWith("image", { jobId: job.id }, { priority: 10, jobId: job.id });
+  });
+
+  it("createJob stores parsed params only", async () => {
+    const job = await createJob(userId, { ...imageParams(), hack: "x" } as unknown as GenerationParams);
+    expect(job.params).not.toHaveProperty("hack");
+    expect(job.params).toMatchObject({ kind: "image", prompt: "a bottle", imageCount: 2 });
+  });
+
+  it("createJob routes agy to cli queue", async () => {
+    const job = await createJob(userId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1 }));
+    expect(queues.cli.add).toHaveBeenCalledWith("image", { jobId: job.id }, expect.objectContaining({ jobId: job.id }));
+    expect(queues.muse.add).not.toHaveBeenCalled();
+  });
+
+  it("createJob concurrency limit", async () => {
+    await createJob(userId, imageParams({ imageCount: 1 }));
+    await expectAppError(createJob(userId, imageParams({ imageCount: 1 })), "CONCURRENCY_LIMIT");
+    expect(await balance()).toEqual({ available: "19.00", held: "1.00" });
+    expect(await db.job.count({ where: { userId } })).toBe(1);
+  });
+
+  it("createJob in maintenance", async () => {
+    await setSetting("maintenance", true);
+    await expectAppError(createJob(userId, imageParams()), "MAINTENANCE");
+    expect(await db.job.count()).toBe(0);
+  });
+
+  it("createJob rejects disabled model", async () => {
+    await db.aiModel.update({ where: { id: models["MUSE Ảnh"] }, data: { enabled: false } });
+    await expectAppError(createJob(userId, imageParams()), "NOT_FOUND");
+  });
+
+  it("createJob rejects input file of another user", async () => {
+    const own = await putFile(SAMPLE_PNG, `uploads/${userId}/${randomUUID()}.png`);
+    const foreign = await putFile(SAMPLE_PNG, `uploads/${otherId}/${randomUUID()}.png`);
+    await expectAppError(createJob(userId, imageParams({ inputUrl: foreign })), "FORBIDDEN");
+    await expectAppError(createJob(userId, imageParams({ inputUrl: "https://evil.example/x.png" })), "VALIDATION");
+    await expectAppError(createJob(userId, imageParams({ inputUrl: `/media/uploads/${userId}/missing.png` })), "VALIDATION");
+
+    const otherJob = await createJob(otherId, imageParams({ imageCount: 1 }));
+    const otherResult = await putFile(SAMPLE_PNG, `results/${otherId}/${otherJob.id}/0.png`);
+    await db.job.update({ where: { id: otherJob.id }, data: { status: "SUCCEEDED", resultUrls: [otherResult] } });
+    await expectAppError(createJob(userId, imageParams({ inputUrl: otherResult })), "FORBIDDEN");
+
+    const job = await createJob(userId, imageParams({ inputUrl: own }));
+    expect(job.inputUrl).toBe(own);
+  });
+
+  it("processJob muse success charges", async () => {
+    const preset = await db.preset.findFirstOrThrow({ where: { kind: "STYLE", name: "Studio" } });
+    const job = await createJob(userId, imageParams({ presetId: preset.id }));
+    const stub = stubMuse([{ status: "running" }, { status: "succeeded", urls: resultUrls(2) }]);
+    await processJob(job.id, { muse: stub.muse, pollMs: 1 });
+
+    const done = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(done.status).toBe("SUCCEEDED");
+    expect(done.museTaskId).toBe("task_1");
+    expect(done.startedAt).not.toBeNull();
+    expect(done.finishedAt).not.toBeNull();
+    expect(done.resultUrls).toEqual([
+      `/media/results/${userId}/${job.id}/0.webp`,
+      `/media/results/${userId}/${job.id}/1.webp`,
+    ]);
+    for (const url of done.resultUrls) expect(existsSync(storagePath(url.slice("/media/".length)))).toBe(true);
+    expect(seenHeaders[0].authorization).toBe("Bearer dev-muse-key");
+    expect(stub.submitted[0]).toMatchObject({
+      kind: "image",
+      engineModel: "muse-image",
+      prompt: `a bottle, ${preset.promptSuffix}`,
+      aspectRatio: "9:16",
+      imageCount: 2,
+    });
+    expect(await balance()).toEqual({ available: "18.00", held: "0.00" });
+  });
+
+  it("processJob muse failure refunds", async () => {
+    const job = await createJob(userId, imageParams());
+    const stub = stubMuse([{ status: "failed", error: "upstream refused" }]);
+    await processJob(job.id, { muse: stub.muse, pollMs: 1 });
+
+    const done = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(done.status).toBe("FAILED");
+    expect(done.error).toBe("upstream refused");
+    expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
+  });
+
+  it("processJob resumes without resubmit", async () => {
+    const job = await createJob(userId, imageParams());
+    await db.job.update({ where: { id: job.id }, data: { status: "RUNNING", startedAt: new Date(), museTaskId: "task_9" } });
+    const stub = stubMuse([{ status: "running" }, { status: "succeeded", urls: resultUrls(2) }]);
+    await processJob(job.id, { muse: stub.muse, pollMs: 1 });
+
+    expect(stub.raw.submit).not.toHaveBeenCalled();
+    expect(stub.polled).toEqual(["task_9", "task_9"]);
+    expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).status).toBe("SUCCEEDED");
+  });
+
+  it("processJob twice is no-op", async () => {
+    const job = await createJob(userId, imageParams());
+    const stub = stubMuse([{ status: "succeeded", urls: resultUrls(2) }]);
+    await processJob(job.id, { muse: stub.muse, pollMs: 1 });
+    await processJob(job.id, { muse: stub.muse, pollMs: 1 });
+
+    expect(stub.raw.submit).toHaveBeenCalledTimes(1);
+    expect(stub.raw.getTask).toHaveBeenCalledTimes(1);
+    const txns = await db.creditTransaction.count({ where: { jobId: job.id, type: "charge" } });
+    expect(txns).toBe(1);
+  });
+
+  it("processJob retryable submit error returns job to pending", async () => {
+    const job = await createJob(userId, imageParams());
+    const stub = stubMuse([]);
+    stub.raw.submit.mockRejectedValueOnce(new EngineError("MUSE_BUSY", "busy", true));
+    await expect(processJob(job.id, { muse: stub.muse, pollMs: 1 })).rejects.toThrow("busy");
+    const after = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(after.status).toBe("PENDING");
+    expect(await balance()).toEqual({ available: "18.00", held: "2.00" });
+  });
+
+  it("processJob file engine success", async () => {
+    const job = await createJob(userId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1 }));
+    const out = path.join(os.tmpdir(), `aura-out-${randomUUID()}.png`);
+    await fs.copyFile(SAMPLE_PNG, out);
+    const requests: MediaRequest[] = [];
+    const agy: FileEngine = {
+      generate: async (req) => {
+        requests.push(req);
+        return { files: [out] };
+      },
+    };
+    await processJob(job.id, { engines: { AGY: agy } });
+
+    const done = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(done.status).toBe("SUCCEEDED");
+    expect(done.resultUrls).toEqual([`/media/results/${userId}/${job.id}/0.png`]);
+    expect(existsSync(storagePath(done.resultUrls[0].slice("/media/".length)))).toBe(true);
+    expect(existsSync(out)).toBe(false);
+    expect(requests[0]).toMatchObject({ engineModel: "gemini-3.8-flash-medium", aspectRatio: "9:16" });
+    expect(await balance()).toEqual({ available: "19.00", held: "0.00" });
+  });
+
+  it("sweepStuckJobs refunds timed-out jobs", async () => {
+    const now = new Date();
+    const museJob = await createJob(userId, imageParams());
+    await db.job.update({
+      where: { id: museJob.id },
+      data: { status: "RUNNING", museTaskId: "task_1", startedAt: new Date(now.getTime() - 16 * MINUTE) },
+    });
+    const cliJob = await createJob(otherId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1 }));
+    await db.job.update({
+      where: { id: cliJob.id },
+      data: { status: "RUNNING", startedAt: new Date(now.getTime() - 11 * MINUTE) },
+    });
+
+    expect(await sweepStuckJobs(now)).toBe(1);
+    const swept = await db.job.findUniqueOrThrow({ where: { id: museJob.id } });
+    expect(swept.status).toBe("FAILED");
+    expect(swept.error).toBe("TIMEOUT");
+    expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
+    expect((await db.job.findUniqueOrThrow({ where: { id: cliJob.id } })).status).toBe("RUNNING");
+    expect(await balance(otherId)).toEqual({ available: "19.00", held: "1.00" });
+  });
+
+  it("cancelJob only pending", async () => {
+    const job = await createJob(userId, imageParams());
+    await cancelJob(job.id);
+    expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).status).toBe("CANCELED");
+    expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
+    await expectAppError(cancelJob(job.id), "CONFLICT");
+
+    const running = await createJob(userId, imageParams());
+    await db.job.update({ where: { id: running.id }, data: { status: "RUNNING", startedAt: new Date() } });
+    await expectAppError(cancelJob(running.id), "CONFLICT");
+    await expectAppError(cancelJob("missing"), "NOT_FOUND");
+  });
+
+  it("deleteJob other user", async () => {
+    const job = await createJob(userId, imageParams());
+    await processJob(job.id, { muse: stubMuse([{ status: "succeeded", urls: resultUrls(2) }]).muse, pollMs: 1 });
+    await expectAppError(deleteJob(otherId, job.id), "NOT_FOUND");
+
+    const { resultUrls: urls } = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    await deleteJob(userId, job.id);
+    const deleted = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(deleted.deletedAt).not.toBeNull();
+    for (const url of urls) expect(existsSync(storagePath(url.slice("/media/".length)))).toBe(false);
+    await expectAppError(deleteJob(userId, job.id), "NOT_FOUND");
+  });
+
+  it("cleanupExpiredResults removes free results after 30 days", async () => {
+    const job = await createJob(userId, imageParams());
+    await processJob(job.id, { muse: stubMuse([{ status: "succeeded", urls: resultUrls(2) }]).muse, pollMs: 1 });
+    const done = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+
+    expect(await cleanupExpiredResults(new Date(Date.now() + 29 * 24 * 60 * MINUTE))).toBe(0);
+    expect(await cleanupExpiredResults(new Date(Date.now() + 31 * 24 * 60 * MINUTE))).toBe(1);
+    const cleaned = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(cleaned.deletedAt).not.toBeNull();
+    for (const url of done.resultUrls) expect(existsSync(storagePath(url.slice("/media/".length)))).toBe(false);
+  });
+});

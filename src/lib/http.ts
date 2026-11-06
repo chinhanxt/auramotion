@@ -17,3 +17,9 @@ export async function handle(fn: () => Promise<unknown>): Promise<Response> {
     return Response.json({ error: { code: "INTERNAL", message: "Lỗi hệ thống, vui lòng thử lại" } }, { status: 500 });
   }
 }
+
+export async function readJson(req: Request): Promise<unknown> {
+  return req.json().catch(() => {
+    throw new AppError("VALIDATION", "Dữ liệu gửi lên không hợp lệ");
+  });
+}
