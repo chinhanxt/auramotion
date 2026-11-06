@@ -11,7 +11,13 @@ import type { HttpMuseClient } from "@/server/engines/muse";
 import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
 import { charge, hold, refund } from "@/server/services/credit";
 import { getActivePlan } from "@/server/services/plan";
-import { generationParamsSchema, quote, validateParams, type GenerationParams } from "@/server/services/pricing";
+import {
+  generationParamsSchema,
+  quote,
+  validateParams,
+  type AssembleParams,
+  type GenerationParams,
+} from "@/server/services/pricing";
 import { getSetting } from "@/server/services/settings";
 import { processAssemble } from "../../../worker/processors/assemble";
 
@@ -70,6 +76,48 @@ async function checkInputUrl(userId: string, url: string): Promise<void> {
   if (!stat?.isFile()) throw new AppError("VALIDATION", "Ảnh tham chiếu không tồn tại");
 }
 
+async function isFile(filePath: string): Promise<boolean> {
+  return (await fs.stat(filePath).catch(() => null))?.isFile() ?? false;
+}
+
+// Ghép video: clip phải là ảnh / video SUCCEEDED, chưa xóa, của chính user, `index` có trong resultUrls;
+// mẫu giọng phải là upload của chính user; nhạc phải có trong music_tracks. Worker kiểm lại lúc chạy.
+async function checkAssembleInputs(userId: string, p: AssembleParams): Promise<void> {
+  const rows = await db.job.findMany({
+    where: {
+      id: { in: p.clips.map((c) => c.jobId) },
+      userId,
+      status: "SUCCEEDED",
+      deletedAt: null,
+      kind: { in: ["IMAGE", "VIDEO"] },
+    },
+    select: { id: true, resultUrls: true },
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const clip of p.clips) {
+    const url = byId.get(clip.jobId)?.resultUrls[clip.index ?? 0];
+    if (!url) throw new AppError("VALIDATION", "Clip không tồn tại hoặc chưa tạo xong");
+  }
+
+  if (p.voice?.refUrl) {
+    const prefix = `${MEDIA_PREFIX}uploads/${userId}/`;
+    const name = p.voice.refUrl.startsWith(prefix) ? p.voice.refUrl.slice(prefix.length) : "";
+    if (!name || name.includes("/") || name.includes("\\") || name === "..") {
+      throw new AppError("VALIDATION", "Mẫu giọng không hợp lệ");
+    }
+    if (!(await isFile(storagePath(`uploads/${userId}/${name}`)))) {
+      throw new AppError("VALIDATION", "Không tìm thấy mẫu giọng, vui lòng tải lên lại");
+    }
+  }
+
+  if (p.musicId) {
+    const tracks = await getSetting<{ id: string }[]>("music_tracks").catch(() => []);
+    if (!Array.isArray(tracks) || !tracks.some((t) => t.id === p.musicId)) {
+      throw new AppError("VALIDATION", "Nhạc nền không tồn tại");
+    }
+  }
+}
+
 async function loadEnabledModel(modelId: string) {
   const model = await db.aiModel.findUnique({ where: { id: modelId } });
   if (!model || !model.enabled) throw new AppError("NOT_FOUND", "Engine không tồn tại hoặc đang tắt");
@@ -96,6 +144,8 @@ export async function createJob(userId: string, input: GenerationParams): Promis
       }
     }
     if (p.inputUrl) await checkInputUrl(userId, p.inputUrl);
+  } else {
+    await checkAssembleInputs(userId, p);
   }
 
   const cost = await quote(p, model);

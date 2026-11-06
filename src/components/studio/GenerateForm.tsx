@@ -49,7 +49,7 @@ function pick<T>(list: T[] | undefined, value: T | undefined, fallback: T): T {
   return value !== undefined && list.includes(value) ? value : list[0];
 }
 
-function ErrorNotice({ error }: { error: ApiError }) {
+export function ErrorNotice({ error }: { error: ApiError }) {
   let body: React.ReactNode = error.message;
   if (error.code === "INSUFFICIENT_CREDIT") {
     body = (
