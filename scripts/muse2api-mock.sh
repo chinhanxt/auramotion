@@ -19,7 +19,18 @@ MSG
 fi
 
 DATA_DIR="$(mktemp -d)"
-trap 'rm -rf "$DATA_DIR"' EXIT
+PID=""
+# Dừng cả muse2api khi script bị kill (SIGTERM/SIGINT), rồi xóa thư mục tạm.
+cleanup() {
+  if [ -n "$PID" ]; then
+    kill "$PID" 2>/dev/null || true
+    wait "$PID" 2>/dev/null || true
+  fi
+  rm -rf "$DATA_DIR"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 
 export MUSE2API_DRIVER=mock
 export MUSE2API_API_KEY=dev-muse-key
@@ -28,4 +39,6 @@ export MUSE2API_PORT="${MUSE2API_PORT:-18611}"
 
 # Chạy trong thư mục tạm để không đọc .env của repo muse2api.
 cd "$DATA_DIR"
-"$MUSE2API_DIR/.venv/bin/python" -m muse2api
+"$MUSE2API_DIR/.venv/bin/python" -m muse2api &
+PID=$!
+wait "$PID"
