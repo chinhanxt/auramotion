@@ -152,7 +152,7 @@ export async function sendRenewalReminders(now: Date): Promise<number> {
     },
     include: { plan: true, user: { select: { email: true, name: true } } },
   });
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   let sent = 0;
   for (const sub of due) {
     // Đánh dấu trước khi gửi để hai lần chạy song song không gửi trùng.

@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { charge, getBalance, grant, hold } from "@/server/services/credit";
+import { charge, getBalance, grant, hold, refund } from "@/server/services/credit";
 import {
   activatePlan,
   expireSubscriptions,
@@ -127,6 +127,27 @@ describe("plan", () => {
     expect(renewed.remindedAt).toBeNull();
     expect(await balance()).toEqual({ plan: "450.00", purchased: "0.00" });
     expect(await db.subscription.count({ where: { userId } })).toBe(2);
+  });
+
+  it("upgrade pro to ultra while plan credit is held", async () => {
+    await startFree(userId, undefined, T0);
+    await activatePlan(userId, "pro", "MONTH", T0);
+    const model = await db.aiModel.findFirstOrThrow();
+    const job = await db.job.create({ data: { userId, modelId: model.id, kind: "IMAGE", prompt: "x", cost: 100 } });
+    await db.$transaction((tx) => hold(tx, userId, job.id, 100));
+    await activatePlan(userId, "ultra", "MONTH", T0);
+    expect((await getBalance(userId)).held.toFixed(2)).toBe("100.00");
+    expect(await balance()).toEqual({ plan: "2000.00", purchased: "0.00" });
+    await refund(job.id);
+    expect(await balance()).toEqual({ plan: "2000.00", purchased: "0.00" });
+    expect((await getActivePlan(userId)).plan.code).toBe("ultra");
+  });
+
+  it("concurrent activatePlan keeps one active subscription", async () => {
+    await startFree(userId, undefined, T0);
+    await Promise.all([activatePlan(userId, "pro", "MONTH", T0), activatePlan(userId, "pro", "MONTH", T0)]);
+    expect(await db.subscription.count({ where: { userId, status: "ACTIVE" } })).toBe(1);
+    expect(await balance()).toEqual({ plan: "500.00", purchased: "0.00" });
   });
 
   it("getActivePlan without subscription throws NOT_FOUND", async () => {
