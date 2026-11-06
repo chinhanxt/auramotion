@@ -10,6 +10,7 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     env: loadEnv("test", process.cwd(), ""),
+    globalSetup: ["tests/global-setup.ts"],
     fileParallelism: false,
   },
 });

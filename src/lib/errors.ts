@@ -10,7 +10,8 @@ export type ErrorCode =
   | "MAINTENANCE"
   | "ACCOUNT_LOCKED"
   | "CONFLICT"
-  | "ENGINE";
+  | "ENGINE"
+  | "INTERNAL";
 
 const DEFAULT_STATUS: Record<ErrorCode, number> = {
   UNAUTHORIZED: 401,
@@ -25,6 +26,7 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   ACCOUNT_LOCKED: 423,
   CONFLICT: 409,
   ENGINE: 502,
+  INTERNAL: 500,
 };
 
 export class AppError extends Error {
