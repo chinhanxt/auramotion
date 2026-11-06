@@ -13,6 +13,8 @@ export type RunCliOptions<T> = {
   timeoutMs: number;
   setup?: (dir: string) => Promise<void>;
   collect?: (dir: string, stdout: string) => Promise<T>;
+  // Nhận stdout ngay khi có, kể cả khi lệnh sau đó lỗi / quá giờ (lúc đó `collect` không chạy).
+  onStdout?: (chunk: string) => void;
   signal?: AbortSignal;
 };
 
@@ -111,6 +113,7 @@ function spawnInGroup(opts: RunCliOptions<unknown>, dir: string): Promise<string
       stdoutBytes += Buffer.byteLength(chunk);
       if (stdoutBytes > MAX_STDOUT_BYTES) return stop("TOO_LARGE");
       stdout += chunk;
+      opts.onStdout?.(chunk);
     });
     child.stderr!.setEncoding("utf8").on("data", (chunk: string) => {
       stderr = (stderr + chunk).slice(-4 * STDERR_TAIL);

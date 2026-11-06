@@ -1,4 +1,5 @@
 import { agyImage } from "@/server/engines/agy";
+import { codexImage } from "@/server/engines/codex";
 import { HttpMuseClient } from "@/server/engines/muse";
 import { EngineError, type FileEngine } from "@/server/engines/types";
 
@@ -12,7 +13,7 @@ export function getMuse(): HttpMuseClient {
 }
 
 // Engine tạo file trên máy (agy, codex) đăng ký tại đây.
-const FILE_ENGINES: Partial<Record<FileProvider, FileEngine>> = { AGY: agyImage };
+const FILE_ENGINES: Partial<Record<FileProvider, FileEngine>> = { AGY: agyImage, CODEX: codexImage };
 
 export function getFileEngine(provider: FileProvider): FileEngine {
   const engine = FILE_ENGINES[provider];
