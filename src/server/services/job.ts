@@ -189,8 +189,11 @@ export async function finishJob(
     await charge(jobId, tx);
     return true;
   });
+  if (done) return;
   // Job đã bị hủy / hết hạn trong lúc lưu file: bỏ file vừa lưu.
-  if (!done) await deleteByUrls(urls);
+  // Lần chạy khác đã SUCCEEDED trước thì file cùng key là của nó: giữ nguyên.
+  const current = await db.job.findUnique({ where: { id: jobId }, select: { status: true } });
+  if (current?.status !== "SUCCEEDED") await deleteByUrls(urls);
 }
 
 export async function failJob(jobId: string, error: string): Promise<void> {

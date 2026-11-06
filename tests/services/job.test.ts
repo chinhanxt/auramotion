@@ -223,6 +223,23 @@ describe("job", () => {
     expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).status).toBe("SUCCEEDED");
   });
 
+  it("two concurrent resumes keep the winner's files", async () => {
+    const job = await createJob(userId, imageParams());
+    await db.job.update({ where: { id: job.id }, data: { status: "RUNNING", startedAt: new Date(), museTaskId: "task_9" } });
+    const a = stubMuse([{ status: "succeeded", urls: resultUrls(2) }]);
+    const b = stubMuse([{ status: "succeeded", urls: resultUrls(2) }]);
+    await Promise.all([
+      processJob(job.id, { muse: a.muse, pollMs: 1 }),
+      processJob(job.id, { muse: b.muse, pollMs: 1 }),
+    ]);
+
+    const done = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(done.status).toBe("SUCCEEDED");
+    expect(done.resultUrls).toHaveLength(2);
+    for (const url of done.resultUrls) expect(existsSync(storagePath(url.slice("/media/".length)))).toBe(true);
+    expect(await db.creditTransaction.count({ where: { jobId: job.id, type: "charge" } })).toBe(1);
+  });
+
   it("processJob twice is no-op", async () => {
     const job = await createJob(userId, imageParams());
     const stub = stubMuse([{ status: "succeeded", urls: resultUrls(2) }]);
