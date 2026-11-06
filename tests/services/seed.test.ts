@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
+import { getBalance } from "@/server/services/credit";
+import { getActivePlan } from "@/server/services/plan";
 import { getSetting } from "@/server/services/settings";
 import { seed } from "../../prisma/seed";
 import { resetDb } from "../helpers/db";
@@ -11,6 +13,8 @@ async function counts() {
     models: await db.aiModel.count(),
     presets: await db.preset.count(),
     settings: await db.setting.count(),
+    subscriptions: await db.subscription.count(),
+    transactions: await db.creditTransaction.count(),
   };
 }
 
@@ -42,9 +46,16 @@ describe("seed", () => {
     expect(await db.preset.count({ where: { kind: "CAMERA" } })).toBe(6);
   });
 
+  it("gives admin the free plan", async () => {
+    const admin = await db.user.findFirstOrThrow({ where: { role: "ADMIN" } });
+    expect((await getActivePlan(admin.id)).plan.code).toBe("free");
+    expect((await getBalance(admin.id)).plan.toFixed(2)).toBe("20.00");
+  });
+
   it("is idempotent", async () => {
     const before = await counts();
     await seed();
     expect(await counts()).toEqual(before);
+    expect(before.subscriptions).toBe(1);
   });
 });

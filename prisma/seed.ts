@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import type { JobKind, ModelProvider, PlanCode, Prisma } from "@prisma/client";
 import { db } from "../src/lib/db";
+import { startFree } from "../src/server/services/plan";
 
 const IMAGE_RATIOS = ["1:1", "9:16", "16:9", "4:5"];
 const VIDEO_RATIOS = ["9:16", "16:9", "1:1"];
@@ -90,11 +91,13 @@ export async function seed(): Promise<void> {
   const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD;
   if (!email || !password) throw new Error("Thiếu SEED_ADMIN_EMAIL hoặc SEED_ADMIN_PASSWORD");
-  await db.user.upsert({
+  const admin = await db.user.upsert({
     where: { email },
     create: { email, name: "Admin", role: "ADMIN", passwordHash: await bcrypt.hash(password, 10) },
     update: { role: "ADMIN" },
   });
+  const hasActive = await db.subscription.count({ where: { userId: admin.id, status: "ACTIVE" } });
+  if (hasActive === 0) await startFree(admin.id);
 }
 
 if (process.argv[1]?.replace(/\\/g, "/").endsWith("prisma/seed.ts")) {
