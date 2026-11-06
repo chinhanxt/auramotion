@@ -126,6 +126,17 @@ describe("voice", () => {
     expect((await runs())[0]).toContain(`--ref ${storagePath(refUrl.slice("/media/".length))}`);
   });
 
+  it("clone previews of two users do not share a cache key", async () => {
+    const urls: string[] = [];
+    for (const email of ["a@test.local", "b@test.local"]) {
+      current.user = await makeUser(email, "pro");
+      const res = await preview({ refUrl: await makeUpload(current.user.id) });
+      urls.push(((await res.json()) as { url: string }).url);
+    }
+    expect(urls[0]).not.toBe(urls[1]);
+    expect(await runs()).toHaveLength(2);
+  });
+
   it("rejects foreign or invalid refUrl", async () => {
     const other = await makeUser("other@test.local", "free");
     current.user = await makeUser("pro2@test.local", "pro");
