@@ -2,9 +2,14 @@
 
 Hệ thống tạo ảnh/video AI đơn giản: người dùng mua gói → nhận Credit → nhập Prompt → **MUSE** tạo Ảnh/Video. Admin quản lý người dùng, giá Credit và cấu hình qua cổng quản trị.
 
-**MUSE** là AI engine tạo ảnh và video của dự án.
+**MUSE** là AI engine tạo ảnh và video của dự án, chạy bằng [muse2api](https://github.com/www222fff/muse2api): một service riêng biến Muse thành API chuẩn OpenAI (`/v1/images/generations`, `/v1/videos`, `/v1/chat/completions`).
 
-**Nguyên tắc:** web app không tự chạy AI. App nhận yêu cầu, tính và trừ Credit, đưa job vào hàng đợi; worker gọi MUSE qua API rồi lưu kết quả. Web và MUSE tách rời, nâng cấp MUSE không phải sửa web.
+**Nguyên tắc:** web app không tự chạy AI. App nhận yêu cầu, tính và trừ Credit, đưa job vào hàng đợi; worker gửi task sang muse2api, poll tới khi xong rồi lưu kết quả. Web và MUSE tách rời, nâng cấp MUSE không phải sửa web.
+
+**MUSE hỗ trợ:**
+- Ảnh: prompt, tỷ lệ khung, 1–4 ảnh mỗi lần, tối đa 4 ảnh tham chiếu.
+- Video: prompt, tỷ lệ khung, thời lượng, 1 ảnh khung đầu.
+- Không có tham số độ phân giải, chất lượng, âm thanh. Các gói vì vậy không phân theo độ phân giải.
 
 ---
 
@@ -12,7 +17,7 @@ Hệ thống tạo ảnh/video AI đơn giản: người dùng mua gói → nh�
 
 ```
 Đăng ký → Nhận Credit gói Free
-   → Chọn Tạo Ảnh / Tạo Video → Chọn model, tỷ lệ khung, độ phân giải, thời lượng
+   → Chọn Tạo Ảnh / Tạo Video → Chọn tỷ lệ khung, số ảnh hoặc thời lượng, preset
    → Nhập Prompt (+ ảnh tham chiếu nếu có) → Thấy trước giá Credit → Bấm Tạo
    → Hệ thống giữ Credit → Đưa vào hàng đợi → Worker gọi MUSE
    → Thành công: trừ Credit, lưu kết quả vào Thư viện
@@ -29,9 +34,9 @@ Hệ thống tạo ảnh/video AI đơn giản: người dùng mua gói → nh�
 |---|---|---|---|
 | Credit/tháng | 20 | 500 | 2.000 |
 | Tác vụ chạy cùng lúc | 1 | 3 | 6 |
-| Độ phân giải tối đa | 720p | 1080p | 4K |
-| Model được dùng | Model cơ bản | Cơ bản + cao cấp | Tất cả |
-| Watermark | Có | Không | Không |
+| Thời lượng video tối đa | 5s | 10s | 10s |
+| Lưu kết quả | 30 ngày | Vĩnh viễn | Vĩnh viễn |
+| Watermark (giai đoạn 2) | Có | Không | Không |
 | Ưu tiên hàng đợi | Thấp | Trung bình | Cao |
 
 - Giá tiền, số Credit và giới hạn của từng gói do Admin cấu hình, không viết cứng trong code.
@@ -43,19 +48,18 @@ Hệ thống tạo ảnh/video AI đơn giản: người dùng mua gói → nh�
 Giá Credit **phụ thuộc vào tác vụ**, không cố định:
 
 ```
-Credit = Giá gốc của model × Hệ số độ phân giải × Số đơn vị thời lượng (chỉ áp dụng cho video)
+Ảnh:  Credit = Giá gốc ảnh × Số ảnh
+Video: Credit = Giá gốc video × (Thời lượng / 5)
 ```
 
-Ví dụ mặc định (Admin chỉnh được):
+Mặc định (Admin chỉnh được):
 
-| Tác vụ | Model cơ bản | Model cao cấp |
-|---|---|---|
-| Tạo 1 ảnh | 1 | 2 |
-| Ảnh 4K | 2 | 4 |
-| Video 5s 720p | 3 | 8 |
-| Video 5s 1080p | 5 | 15 |
-| Video 5s 4K | — | 30 |
-| Upscale ảnh / video | 1 / 3 | — |
+| Tác vụ | Credit |
+|---|---|
+| 1 ảnh | 1 |
+| 4 ảnh | 4 |
+| Video 5s | 3 |
+| Video 10s | 6 |
 
 - Credit là số thập phân, lưu với 2 chữ số sau dấu phẩy.
 - Giá Credit luôn **hiển thị trên nút Tạo** trước khi người dùng bấm.
@@ -87,22 +91,18 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 
 ### 2.3 Tạo Ảnh
 - [ ] Nhập Prompt.
-- [ ] Chọn model (chỉ hiện model mà gói được dùng; model bị khóa thì gắn nhãn "Pro"/"Ultra").
 - [ ] Chọn tỷ lệ khung: 1:1, 9:16, 16:9, 4:5.
 - [ ] Chọn số ảnh mỗi lần: 1, 2 hoặc 4.
 - [ ] Chọn Preset phong cách (Studio, Ngoài trời, Trên tay, Lifestyle…). Preset tự thêm phần mô tả vào prompt.
 - [ ] Upload ảnh tham chiếu (tối đa 1 ảnh ở MVP).
-- [ ] Xem kết quả, tải ảnh xuống, Upscale.
+- [ ] Xem kết quả, tải ảnh xuống.
 
 ### 2.4 Tạo Video
 - [ ] **Text-to-Video**: tạo video từ Prompt.
 - [ ] **Image-to-Video**: upload ảnh sản phẩm làm khung đầu.
-- [ ] **Khung đầu + khung cuối** (chỉ với model hỗ trợ).
 - [ ] Chọn tỷ lệ khung: 9:16 (TikTok/Reels/Shorts), 16:9 (YouTube), 1:1 (Instagram).
-- [ ] Chọn thời lượng: 5s hoặc 10s.
-- [ ] Chọn độ phân giải theo giới hạn gói: 720p / 1080p / 4K.
+- [ ] Chọn thời lượng: 5s hoặc 10s (theo giới hạn gói).
 - [ ] Chọn Preset chuyển động camera: Zoom In, Zoom Out, Pan trái/phải, Xoay 360, Tĩnh.
-- [ ] Bật/tắt âm thanh (chỉ với model hỗ trợ).
 - [ ] Xem video bằng trình phát, tải MP4.
 
 ### 2.5 Thư viện (Projects)
@@ -130,11 +130,11 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 - [ ] Khóa / mở khóa tài khoản.
 
 ### 3.3 Cấu hình
-- [ ] **Model MUSE**: thêm, sửa, bật/tắt các model/phiên bản MUSE (ví dụ MUSE Image, MUSE Video, MUSE Video Pro). Thông tin của mỗi model: loại (ảnh/video), gói tối thiểu, độ phân giải và thời lượng hỗ trợ, có hỗ trợ khung cuối/âm thanh không.
-- [ ] **Bảng giá Credit**: giá gốc từng model, hệ số theo độ phân giải.
-- [ ] **Gói dịch vụ**: giá, Credit/tháng, số tác vụ chạy cùng lúc, độ phân giải tối đa.
+- [ ] **Model MUSE**: bật/tắt, sửa tên hiển thị và tham số hỗ trợ của `muse-image`, `muse-video`. Thêm model khi muse2api có model mới.
+- [ ] **Bảng giá Credit**: giá gốc ảnh, giá gốc video (mỗi 5s).
+- [ ] **Gói dịch vụ**: giá, Credit/tháng, số tác vụ chạy cùng lúc, thời lượng video tối đa.
 - [ ] **Preset**: thêm/sửa preset phong cách và camera, gồm tên, ảnh demo, đoạn prompt thêm vào.
-- [ ] **Kết nối MUSE**: URL endpoint, API key (lưu mã hóa), nút test kết nối, xem MUSE đang online hay offline.
+- [ ] **Kết nối MUSE**: xem trạng thái muse2api (`/readyz`: driver, số tài khoản Muse khả dụng), nút test kết nối. URL và API key muse2api để trong biến môi trường.
 - [ ] Bật/tắt chế độ bảo trì.
 
 ### 3.4 Hàng đợi & Lỗi
@@ -156,14 +156,14 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 | Bảng | Trường chính |
 |---|---|
 | `users` | id, email, password_hash, google_id, name, role (user/admin), status, created_at |
-| `plans` | id, code (free/pro/ultra), price_month, price_year, monthly_credits, max_concurrent, max_resolution |
+| `plans` | id, code (free/pro/ultra), price_month, price_year, monthly_credits, max_concurrent, max_duration_sec |
 | `subscriptions` | id, user_id, plan_id, period (month/year), start_at, end_at, status |
 | `credit_transactions` | id, user_id, type, amount, job_id, note, created_at |
 | `models` | id, name, muse_model_id, kind (image/video), min_plan, base_cost, options (JSON), enabled |
 | `presets` | id, kind (style/camera), name, prompt_suffix, thumbnail, enabled |
 | `jobs` | id, user_id, model_id, kind, prompt, params (JSON), input_url, status, cost, result_urls, error, created_at, finished_at |
 | `payments` | id, user_id, type (plan/credit), amount, ref_code, status, created_at |
-| `settings` | key, value (hệ số độ phân giải, chế độ bảo trì, endpoint + API key MUSE mã hóa…) |
+| `settings` | key, value (chế độ bảo trì, gói Credit lẻ…) |
 
 ---
 
@@ -172,8 +172,9 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 - **Frontend + Backend**: Next.js (App Router + API routes), không tách microservice. Chi tiết thư mục xem [architecture.md](architecture.md).
 - **DB**: PostgreSQL. **Hàng đợi**: Redis + 1 worker (BullMQ / RQ).
 - **Lưu file**: S3 / Cloudflare R2.
-- **Worker**: lấy job → gửi sang MUSE → chờ kết quả (poll hoặc MUSE gọi webhook) → lưu file lên R2 → cập nhật job và Credit.
-- **MUSE client**: 1 module duy nhất `src/server/muse/` bọc toàn bộ API MUSE (`generateImage`, `generateVideo`, `getStatus`). Web chỉ gọi qua module này.
+- **MUSE**: muse2api chạy như 1 service riêng trong docker-compose. Dev và test dùng `MUSE2API_DRIVER=mock` (không cần tài khoản, không tốn lượt); chạy thật dùng driver `browser` (máy cần Chromium).
+- **Worker**: lấy job → gửi task sang muse2api → poll mỗi 5 giây tới khi xong → tải file về R2 → cập nhật job và Credit. Số job chạy cùng lúc đặt theo số tài khoản Muse (`MUSE_CONCURRENCY`; 1 tài khoản chạy được khoảng 3 video hoặc 8 ảnh song song).
+- **MUSE client**: 1 module duy nhất `src/server/muse/` bọc API muse2api (`submit`, `getTask`, `health`). Web chỉ gọi qua module này.
 - Giới hạn tác vụ chạy cùng lúc: đếm các job `pending`/`running` của user, so với `plans.max_concurrent`.
 
 ---
@@ -186,11 +187,12 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 - Tạo Video (Text-to-Video, Image-to-Video, Preset camera).
 - Thư viện + Tạo lại.
 - Admin: người dùng, model, bảng giá, gói, preset, hàng đợi, thanh toán, dashboard.
-- Tích hợp MUSE: 1 model ảnh + 1 model video. Thêm model MUSE sau.
+- Tích hợp MUSE qua muse2api: `muse-image` + `muse-video`.
 
 ### Giai đoạn 2 — Mở rộng
-- Khung đầu/cuối, Upscale, Bật âm thanh.
-- Nhiều ảnh tham chiếu, Inpaint (sửa vùng ảnh), Đặt sản phẩm vào bối cảnh.
+- AI viết prompt (muse-chat hoặc gateway agy/codex, template từ muse-video-skill).
+- Tắt tiếng video bằng ffmpeg, watermark gói Free.
+- Nhiều ảnh tham chiếu (tối đa 4), ghép sản phẩm vào bối cảnh, ảnh nền trong suốt.
 - Lồng tiếng AI (TTS) + phụ đề tự động.
 - Kéo dài video, Video-to-Video.
 

@@ -4,10 +4,10 @@
 
 Toàn bộ dự án là 1 repo, 1 app Next.js và 1 worker chạy riêng. Không có microservice.
 
-**MUSE** là AI engine tạo ảnh/video, chạy tách riêng. Repo này chỉ gọi MUSE qua API.
+**MUSE** là AI engine tạo ảnh/video, chạy bằng [muse2api](https://github.com/www222fff/muse2api) (service riêng, API chuẩn OpenAI). Repo này chỉ gọi muse2api qua HTTP; dev/test dùng muse2api với driver `mock`.
 
 ```
-Người dùng ──► Next.js app ──► Redis queue ──► Worker ──► MUSE (tạo ảnh/video)
+Người dùng ──► Next.js app ──► Redis queue ──► Worker ──► muse2api (MUSE)
                    │                              │
                    └──────── PostgreSQL ◄─────────┴──► R2 (lưu file kết quả)
 Admin ──► /admin (trong cùng app)
@@ -31,8 +31,8 @@ auramotion/
 │   │   ├── pricing/          Bảng giá (công khai)
 │   │   ├── admin/            Cổng quản trị — chỉ role admin
 │   │   │   ├── users         Người dùng, cộng/trừ Credit, khóa
-│   │   │   ├── models        Model MUSE, bật/tắt, gói tối thiểu
-│   │   │   ├── credit-rules  Giá Credit theo model × độ phân giải
+│   │   │   ├── models        Model MUSE (muse-image, muse-video), bật/tắt
+│   │   │   ├── credit-rules  Giá gốc ảnh / video
 │   │   │   ├── plans         Gói Free / Pro / Ultra
 │   │   │   ├── presets       Preset phong cách & camera
 │   │   │   ├── jobs          Hàng đợi, hủy / chạy lại, log lỗi
@@ -44,21 +44,20 @@ auramotion/
 │   │       ├── uploads       Upload ảnh tham chiếu (URL ký sẵn lên R2)
 │   │       ├── credits       Số dư, báo giá trước khi tạo
 │   │       ├── payments/webhook  Nhận xác nhận chuyển khoản
-│   │       ├── muse/webhook  MUSE báo job xong
 │   │       └── admin         API cho cổng quản trị
 │   ├── components/
 │   │   ├── ui/               Nút, input, modal… dùng chung
 │   │   ├── layout/           Header, sidebar, footer
-│   │   ├── studio/           Ô prompt, chọn model, chọn tỷ lệ, preset, nút Tạo (hiện giá)
+│   │   ├── studio/           Ô prompt, chọn tỷ lệ, số ảnh / thời lượng, preset, nút Tạo (hiện giá)
 │   │   ├── library/          Lưới kết quả, trình xem ảnh/video
 │   │   └── admin/            Bảng, form, biểu đồ cho cổng quản trị
 │   ├── server/               Logic chỉ chạy phía server (dùng chung cho app + worker)
 │   │   ├── services/         credit (giữ/trừ/hoàn), pricing (tính giá), job, plan, payment
-│   │   └── muse/             MUSE client: generateImage, generateVideo, getStatus
+│   │   └── muse/             Client muse2api: submit, getTask, health
 │   ├── lib/                  Kết nối hạ tầng: db (Prisma), redis/queue, storage (R2), auth
 │   └── types/                Kiểu dữ liệu dùng chung
 ├── worker/                   Tiến trình riêng: `node worker`
-│   ├── processors/           Xử lý job tạo ảnh/video: gọi MUSE → lưu R2 → trừ/hoàn Credit
+│   ├── processors/           Xử lý job: gửi task muse2api → poll → lưu R2 → trừ/hoàn Credit
 │   └── cron/                 Cấp Credit theo kỳ, hết hạn gói, xóa file Free sau 30 ngày
 ├── tests/
 ├── .env.example

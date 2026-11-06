@@ -2,27 +2,29 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Dựng bộ xương nghiệp vụ chạy được end-to-end: tài khoản → gói → Credit (giữ/trừ/hoàn) → tạo job ảnh/video qua **FakeMuse** → thư viện → thanh toán QR → cổng Admin.
+**Goal:** Dựng bộ xương nghiệp vụ chạy được end-to-end: tài khoản → gói → Credit (giữ/trừ/hoàn) → tạo job ảnh/video qua **muse2api** → thư viện → thanh toán QR → cổng Admin.
 
-**Architecture:** 1 app Next.js (trang + API routes) + 1 worker BullMQ. Mọi logic nghiệp vụ nằm trong `src/server/services`, route chỉ parse input (zod) rồi gọi service. MUSE được gọi qua interface `MuseClient`; giai đoạn này dùng `FakeMuse` trả file mẫu, sau này thay bằng client thật mà không phải sửa service.
+**Architecture:** 1 app Next.js (trang + API routes) + 1 worker BullMQ. Mọi logic nghiệp vụ nằm trong `src/server/services`, route chỉ parse input (zod) rồi gọi service. MUSE là service [muse2api](https://github.com/www222fff/muse2api) chạy riêng; worker gọi nó qua `HttpMuseClient` (submit task → poll). Dev và test chạy muse2api với `MUSE2API_DRIVER=mock`, nên không cần tài khoản Muse và không tốn lượt; chạy thật chỉ đổi biến môi trường của muse2api.
 
-**Tech Stack:** Next.js 15 (App Router, TypeScript), Prisma + PostgreSQL 16, Redis 7 + BullMQ, Auth.js v5 (Credentials + Google), zod, bcryptjs, @aws-sdk/client-s3 (MinIO khi dev, R2 khi prod), nodemailer, Tailwind + shadcn/ui, Vitest.
+**Tech Stack:** Next.js 15 (App Router, TypeScript), Prisma + PostgreSQL 16, Redis 7 + BullMQ, Auth.js v5 (Credentials + Google), zod, bcryptjs, @aws-sdk/client-s3 (MinIO khi dev, R2 khi prod), nodemailer, Tailwind + shadcn/ui, Vitest. muse2api (Python, Docker) cho MUSE.
 
 **Spec:** [`docs/plan.md`](../../plan.md), [`docs/architecture.md`](../../architecture.md)
 
 ## Ngoài phạm vi (làm sau)
-- Tích hợp MUSE thật (chỉ có interface + FakeMuse).
-- Lồng tiếng TTS, phụ đề, upscale, khung đầu/cuối, inpaint, hậu kỳ, watermark.
+- AI viết prompt (muse-chat / gateway agy, codex).
+- Lồng tiếng TTS, phụ đề, tắt tiếng bằng ffmpeg, hậu kỳ, watermark, nhiều ảnh tham chiếu, nền trong suốt.
 - Cộng đồng, Character ID, API cho bên ngoài.
 
 ## Global Constraints
 - Credit lưu `Decimal(12,2)`, làm tròn HALF_UP về 2 chữ số sau mỗi phép tính giá.
 - Số dư = tổng `credit_transactions.amount`. Không có cột số dư nào trên `users`.
 - Loại giao dịch: `grant`, `purchase`, `hold`, `charge`, `refund`, `admin_adjust`, `expire`.
-- Gói seed: Free 20 credit / 1 job cùng lúc / 720p · Pro 500 / 3 / 1080p · Ultra 2000 / 6 / 4K. Giá Pro, Ultra để trong DB, Admin chỉnh.
+- Gói seed: Free 20 credit / 1 job cùng lúc / video tối đa 5s · Pro 500 / 3 / 10s · Ultra 2000 / 6 / 10s. Giá Pro, Ultra để trong DB, Admin chỉnh.
 - Credit của gói không cộng dồn sang kỳ sau. Credit mua thêm thì không hết hạn. Khi tiêu thì trừ credit gói trước.
 - Tỷ lệ khung: ảnh `1:1, 9:16, 16:9, 4:5`; video `9:16, 16:9, 1:1`. Số ảnh mỗi lần: `1, 2, 4`. Thời lượng video: `5, 10` giây.
-- Hệ số độ phân giải (setting `resolution_multipliers`): ảnh `{"1k":1,"4k":2}`, video `{"720p":1,"1080p":1.7,"4k":3.75}`.
+- Giá: ảnh = `baseCost × imageCount`, video = `baseCost × durationSec / 5`. Seed `muse-image` baseCost 1, `muse-video` baseCost 3.
+- muse2api: base URL `MUSE_API_URL`, header `Authorization: Bearer ${MUSE_API_KEY}`. Ảnh `POST /v1/images/generations` với `async: true` → task `{id, status, result: {data: [{url}]}, error}`; poll `GET /v1/images/generations/{id}`. Video `POST /v1/videos` → task; poll `GET /v1/videos/{id}`, `result: {url, mime}`. Trạng thái task: `queued|running|succeeded|failed|cancelled`.
+- Worker chạy tối đa `MUSE_CONCURRENCY` job cùng lúc (mặc định 3), poll muse2api mỗi 5 giây.
 - Gói Credit lẻ (setting `credit_packs`): 100 / 500 / 1000 credit, giá do Admin nhập.
 - Kết quả của gói Free giữ 30 ngày. Gửi email nhắc gia hạn 3 ngày trước khi gói hết hạn.
 - Ưu tiên hàng đợi theo BullMQ `priority`: ultra 1, pro 5, free 10.
@@ -33,7 +35,7 @@
 1. **Bấm Tạo hai lần liên tiếp:** hai request giữ Credit cùng lúc không được làm số dư âm. Test `hold is serialized per user` (Task 3).
 2. **Worker chết giữa chừng:** Credit đang giữ phải được hoàn bởi sweeper. Test `sweepStuckJobs refunds timed-out jobs` (Task 8).
 3. **Webhook gửi lặp hoặc sai số tiền:** không được cộng gói hay Credit hai lần, không kích hoạt khi chuyển thiếu. Test `webhook is idempotent` và `underpaid webhook does not fulfill` (Task 9).
-4. **Gọi API vượt giới hạn gói:** gói Free gửi `resolution=4k` hoặc model Pro thẳng qua API phải bị từ chối ở server. Test `rejects resolution above plan` (Task 4).
+4. **Gọi API vượt giới hạn gói:** gói Free gửi `durationSec=10` thẳng qua API phải bị từ chối ở server. Test `rejects duration above plan` (Task 4).
 5. **Tài khoản bị khóa vẫn còn session:** mọi request sau khi khóa phải bị chặn. Test `requireUser rejects locked user` (Task 6).
 
 ---
@@ -41,12 +43,11 @@
 ## File Structure
 
 ```
-docker-compose.yml                    postgres, redis, minio
+docker-compose.yml                    postgres, redis, minio, muse2api (driver mock)
 vitest.config.ts
-.env.example                          (sửa) thêm biến BANK_*, SMTP_*, FAKE_MUSE_*
+.env.example                          (sửa) thêm biến BANK_*, SMTP_*
 prisma/schema.prisma
 prisma/seed.ts
-public/samples/sample.jpg, sample.mp4 file mẫu cho FakeMuse
 src/lib/db.ts                         Prisma client singleton
 src/lib/redis.ts                      ioredis connection
 src/lib/queue.ts                      BullMQ queue "generation"
@@ -64,9 +65,9 @@ src/server/services/account.ts
 src/server/services/job.ts
 src/server/services/payment.ts
 src/server/services/admin.ts
-src/server/muse/types.ts              MuseClient, MuseRequest, MuseResult, MuseError
-src/server/muse/fake.ts               FakeMuse
-src/server/muse/index.ts              getMuseClient()
+src/server/muse/types.ts              MuseClient, MuseRequest, MuseTask, MuseError
+src/server/muse/http.ts               HttpMuseClient (gọi muse2api)
+src/server/muse/index.ts              getMuseClient(), buildPrompt()
 src/app/api/**/route.ts               route mỏng, gọi service
 src/app/(auth)/**, (user)/**, pricing, admin/**   trang
 src/components/**                     UI
@@ -91,16 +92,19 @@ tests/api/*.test.ts
 - Produces:
   - `db: PrismaClient` (`src/lib/db.ts`)
   - `redis: IORedis` (`src/lib/redis.ts`)
-  - `class AppError extends Error { code: ErrorCode; status: number }`, `type ErrorCode = 'UNAUTHORIZED'|'FORBIDDEN'|'NOT_FOUND'|'VALIDATION'|'INSUFFICIENT_CREDIT'|'CONCURRENCY_LIMIT'|'PLAN_RESOLUTION'|'PLAN_MODEL'|'MAINTENANCE'|'ACCOUNT_LOCKED'|'CONFLICT'`
+  - `class AppError extends Error { code: ErrorCode; status: number }`, `type ErrorCode = 'UNAUTHORIZED'|'FORBIDDEN'|'NOT_FOUND'|'VALIDATION'|'INSUFFICIENT_CREDIT'|'CONCURRENCY_LIMIT'|'PLAN_DURATION'|'PLAN_MODEL'|'MAINTENANCE'|'ACCOUNT_LOCKED'|'CONFLICT'`
   - `handle(fn: () => Promise<unknown>): Promise<Response>`: trả 200 JSON; AppError → `{error:{code,message}}` với `status`; ZodError → 400 `VALIDATION`.
   - `resetDb(): Promise<void>`: TRUNCATE mọi bảng (CASCADE).
 
 - [ ] **Step 1:** `npx create-next-app@15 . --ts --tailwind --app --src-dir --import-alias "@/*" --no-eslint`, cài `prisma @prisma/client bullmq ioredis zod bcryptjs next-auth@5 @aws-sdk/client-s3 @aws-sdk/s3-request-presigner nodemailer` và dev deps `vitest @types/bcryptjs @types/nodemailer tsx`. Thêm script: `dev`, `worker` (`tsx worker/index.ts`), `test` (`vitest run`), `db:migrate`, `db:seed`.
-- [ ] **Step 2:** `docker-compose.yml`: postgres:16 (5432), redis:7 (6379), minio (9000/9001, bucket `auramotion`). `.env.test` trỏ tới DB `auramotion_test`.
+- [ ] **Step 2:** `docker-compose.yml`:
+  - postgres:16 (5432), redis:7 (6379), minio (9000/9001, bucket `auramotion`).
+  - `muse2api`: build từ `https://github.com/www222fff/muse2api.git#v0.4.0`, cổng 18610, env `MUSE2API_DRIVER=mock`, `MUSE2API_API_KEY=dev-muse-key`, volume `muse2api-data:/app/data`.
+  - `.env.test` trỏ tới DB `auramotion_test`, `MUSE_API_URL=http://localhost:18610`, `MUSE_API_KEY=dev-muse-key`.
 - [ ] **Step 3: Viết test** `tests/smoke.test.ts`: `handle(() => { throw new AppError('NOT_FOUND', 'x', 404) })` trả status 404, body `{error:{code:'NOT_FOUND',message:'x'}}`.
 - [ ] **Step 4:** Chạy `npm test`. Kết quả mong đợi: FAIL (chưa có module).
 - [ ] **Step 5:** Viết `errors.ts`, `http.ts`, `db.ts`, `redis.ts`.
-- [ ] **Step 6:** Chạy `docker compose up -d && npm test && npm run build`. Kết quả mong đợi: PASS, build OK.
+- [ ] **Step 6:** Chạy `docker compose up -d && npm test && npm run build`. Kết quả mong đợi: PASS, build OK. Thêm: `curl -s localhost:18610/readyz` trả về 200.
 - [ ] **Step 7: Commit** `chore: khởi tạo Next.js, Prisma, Vitest, docker-compose`
 
 ---
@@ -114,12 +118,12 @@ tests/api/*.test.ts
 - Produces các model Prisma sau (tên trường dùng xuyên suốt plan):
   - `User { id, email @unique, passwordHash?, googleId? @unique, name, avatarUrl?, role: USER|ADMIN, status: ACTIVE|LOCKED, createdAt }`
   - `PasswordResetToken { id, userId, tokenHash @unique, expiresAt, usedAt? }`
-  - `Plan { id, code @unique: free|pro|ultra, name, priceMonth Int, priceYear Int, monthlyCredits Decimal, maxConcurrent Int, maxResolution String, rank Int }` (rank: free 0, pro 1, ultra 2; giá tính bằng VND)
+  - `Plan { id, code @unique: free|pro|ultra, name, priceMonth Int, priceYear Int, monthlyCredits Decimal, maxConcurrent Int, maxDurationSec Int, rank Int }` (rank: free 0, pro 1, ultra 2; giá tính bằng VND)
   - `Subscription { id, userId, planId, period: MONTH|YEAR, startAt, endAt?, nextGrantAt, status: ACTIVE|EXPIRED|CANCELED, remindedAt? }` (Free: `endAt = null`)
   - `CreditTransaction { id, userId, type, bucket: PLAN|PURCHASED, amount Decimal(12,2), jobId?, paymentId?, actorId?, note?, createdAt }`, index `(userId)`, `(jobId)`
-  - `AiModel { id, name, museModelId, kind: IMAGE|VIDEO, minPlanRank Int, baseCost Decimal, options Json, enabled Boolean, sort Int }`. `options = { aspectRatios: string[], resolutions: string[], durations?: number[], audio?: boolean }`
+  - `AiModel { id, name, museModelId, kind: IMAGE|VIDEO, minPlanRank Int, baseCost Decimal, options Json, enabled Boolean, sort Int }`. `options = { aspectRatios: string[], durations?: number[], maxRefs?: number }`
   - `Preset { id, kind: STYLE|CAMERA, name, promptSuffix, thumbnailUrl?, enabled }`
-  - `Job { id, userId, modelId, kind, prompt, params Json, inputUrl?, status: PENDING|RUNNING|SUCCEEDED|FAILED|CANCELED, cost Decimal, resultUrls String[], error?, createdAt, startedAt?, finishedAt?, deletedAt?, expiresAt? }`
+  - `Job { id, userId, modelId, kind, prompt, params Json, inputUrl?, status: PENDING|RUNNING|SUCCEEDED|FAILED|CANCELED, cost Decimal, museTaskId?, resultUrls String[], error?, createdAt, startedAt?, finishedAt?, deletedAt?, expiresAt? }`
   - `Payment { id, userId, type: PLAN|CREDIT, planCode?, period?, creditAmount Decimal?, amount Int, refCode @unique, status: PENDING|SUCCEEDED|CANCELED, providerTxnId? @unique, paidAt?, confirmedBy?, createdAt }`
   - `Setting { key @id, value Json }`
 - Produces `getSetting<T>(key: string): Promise<T>`, `setSetting(key: string, value: unknown): Promise<void>` (`settings.ts`).
@@ -129,24 +133,23 @@ tests/api/*.test.ts
   ```ts
   expect(await db.plan.count()).toBe(3)
   expect((await db.plan.findUnique({where:{code:'pro'}}))!.monthlyCredits.toNumber()).toBe(500)
-  expect(await getSetting('resolution_multipliers')).toEqual({image:{'1k':1,'4k':2},video:{'720p':1,'1080p':1.7,'4k':3.75}})
-  expect(await db.aiModel.count({where:{enabled:true}})).toBe(4)
+  expect((await db.plan.findUnique({where:{code:'free'}}))!.maxDurationSec).toBe(5)
+  expect(await getSetting('maintenance')).toBe(false)
+  expect((await db.aiModel.findMany({where:{enabled:true}})).map(m => m.museModelId).sort()).toEqual(['muse-image','muse-video'])
   expect(await db.user.count({where:{role:'ADMIN'}})).toBe(1)
   ```
 - [ ] **Step 2:** Chạy test. Kết quả mong đợi: FAIL.
 - [ ] **Step 3:** Viết schema và `seed.ts` (export `seed()`, chạy lại nhiều lần không sinh trùng nhờ upsert). Seed gồm:
   - 3 gói.
-  - 4 model, giá gốc lấy theo bảng 1.2 của spec:
+  - 2 model:
 
-    | Model | kind | minPlanRank | baseCost |
-    |---|---|---|---|
-    | MUSE Image | IMAGE | 0 | 1 |
-    | MUSE Image Pro | IMAGE | 1 | 2 |
-    | MUSE Video | VIDEO | 0 | 3 |
-    | MUSE Video Pro | VIDEO | 1 | 8 |
+    | name | museModelId | kind | minPlanRank | baseCost | options |
+    |---|---|---|---|---|---|
+    | MUSE Ảnh | `muse-image` | IMAGE | 0 | 1 | `{aspectRatios:['1:1','9:16','16:9','4:5'], maxRefs:1}` |
+    | MUSE Video | `muse-video` | VIDEO | 0 | 3 | `{aspectRatios:['9:16','16:9','1:1'], durations:[5,10]}` |
 
   - Preset style: Studio, Ngoài trời, Trên tay, Lifestyle. Preset camera: Zoom In, Zoom Out, Pan trái, Pan phải, Xoay 360, Tĩnh.
-  - Settings: `resolution_multipliers`, `credit_packs` (`[{credits:100,price:...},…]`), `maintenance: false`.
+  - Settings: `credit_packs` (`[{credits:100,price:...},…]`), `maintenance: false`.
   - 1 admin, email và mật khẩu lấy từ `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`.
 - [ ] **Step 4:** Chạy `npx prisma migrate dev --name init && npm test`. Kết quả mong đợi: PASS.
 - [ ] **Step 5: Commit** `feat(db): schema và seed gói, model, preset`
@@ -201,35 +204,32 @@ tests/api/*.test.ts
 - Create: `src/server/services/pricing.ts`, `tests/services/pricing.test.ts`
 
 **Interfaces:**
-- Consumes: `getSetting`, `AiModel`, `Plan`
+- Consumes: `AiModel`, `Plan`
 - Produces:
   - `generationParamsSchema`: zod schema cho
     ```ts
     type GenerationParams = {
       kind: 'image'|'video'; modelId: string; prompt: string /*1..2000*/;
-      aspectRatio: string; resolution: string;
-      imageCount?: 1|2|4; durationSec?: 5|10; withAudio?: boolean;
+      aspectRatio: string;
+      imageCount?: 1|2|4;      // ảnh, mặc định 1
+      durationSec?: 5|10;      // video, mặc định 5
       presetId?: string; inputUrl?: string;
     }
     ```
   - `validateParams(p: GenerationParams, model: AiModel, plan: Plan): void`
-  - `quote(p: GenerationParams, model: AiModel): Promise<Decimal>`
+  - `quote(p: GenerationParams, model: AiModel): Decimal`
 - Luật:
   - `validateParams`:
-    - `model.kind` khác `p.kind`, hoặc `aspectRatio`/`resolution`/`durationSec` không nằm trong `model.options` → `VALIDATION`.
-    - `model.minPlanRank > plan.rank` → `PLAN_MODEL`.
-    - Độ phân giải vượt `plan.maxResolution` → `PLAN_RESOLUTION`. Thứ tự so sánh: `720p < 1k ≈ 1080p < 4k`. Free có `maxResolution = 720p` nên ảnh `1k` vẫn được.
-  - `quote` = `baseCost × multiplier[kind][resolution] × (image ? imageCount : durationSec / 5)`, làm tròn 2 chữ số.
+    - `model.kind` khác `p.kind`, hoặc `aspectRatio`/`durationSec` không nằm trong `model.options` → `VALIDATION`.
+    - `model.minPlanRank > plan.rank` → `PLAN_MODEL` (giữ cho model MUSE thêm sau).
+    - `durationSec > plan.maxDurationSec` → `PLAN_DURATION`.
+  - `quote` = `baseCost × (image ? imageCount : durationSec / 5)`, làm tròn 2 chữ số.
 
 - [ ] **Step 1: Viết test** `pricing.test.ts`:
-  - Ảnh MUSE Image 1k × 1 = `1.00`.
-  - Ảnh MUSE Image Pro 4k × 1 = `4.00`.
-  - Ảnh MUSE Image 1k × 4 = `4.00`.
-  - Video MUSE Video 5s 720p = `3.00`.
-  - Video MUSE Video Pro 5s 4k = `30.00`.
-  - Video MUSE Video 10s 1080p = `10.20`.
-  - `rejects resolution above plan`: gói Free, video 1080p → `PLAN_RESOLUTION`.
-  - `rejects model above plan`: gói Free dùng MUSE Video Pro → `PLAN_MODEL`.
+  - Ảnh × 1 = `1.00`, ảnh × 4 = `4.00`.
+  - Video 5s = `3.00`, video 10s = `6.00`.
+  - `rejects duration above plan`: gói Free, video 10s → `PLAN_DURATION`.
+  - `rejects model above plan`: model test có `minPlanRank: 1`, gói Free → `PLAN_MODEL`.
   - Ảnh với tỷ lệ `21:9` → `VALIDATION`.
 - [ ] **Step 2:** Chạy test. Kết quả mong đợi: FAIL.
 - [ ] **Step 3:** Viết `pricing.ts`.
@@ -305,38 +305,50 @@ tests/api/*.test.ts
 
 ---
 
-### Task 7: MUSE client (Fake) & lưu trữ
+### Task 7: MUSE client (muse2api) & lưu trữ
 
 **Files:**
-- Create: `src/server/muse/types.ts`, `src/server/muse/fake.ts`, `src/server/muse/index.ts`, `src/lib/storage.ts`, `src/app/api/uploads/route.ts`, `public/samples/sample.jpg`, `public/samples/sample.mp4`, `tests/services/muse.test.ts`, `tests/services/storage.test.ts`
+- Create: `src/server/muse/types.ts`, `src/server/muse/http.ts`, `src/server/muse/index.ts`, `src/lib/storage.ts`, `src/app/api/uploads/route.ts`, `tests/services/muse.test.ts`, `tests/services/storage.test.ts`
 
 **Interfaces:**
 - Produces:
   - ```ts
     type MuseRequest = { museModelId: string; kind: 'image'|'video'; prompt: string;
-      aspectRatio: string; resolution: string; imageCount?: number; durationSec?: number;
-      withAudio?: boolean; inputUrl?: string }
-    type MuseResult = { urls: string[] }
-    interface MuseClient { generate(req: MuseRequest): Promise<MuseResult> }
-    class MuseError extends Error { code: string }
+      aspectRatio: string; imageCount?: number; durationSec?: number; inputUrl?: string }
+    type MuseTask = { id: string; status: 'queued'|'running'|'succeeded'|'failed'|'cancelled';
+      urls: string[]; error?: string }
+    interface MuseClient {
+      submit(req: MuseRequest): Promise<{ taskId: string }>
+      getTask(kind: 'image'|'video', taskId: string): Promise<MuseTask>
+      health(): Promise<{ ok: boolean; accounts?: number; driver?: string }>
+    }
+    class MuseError extends Error { code: string; retryable: boolean }
     ```
-  - `FakeMuse implements MuseClient`: đợi `FAKE_MUSE_DELAY_MS` (mặc định 2000). Trả `imageCount` URL tới `${APP_URL}/samples/sample.jpg`, hoặc 1 URL `sample.mp4` cho video. `FAKE_MUSE_FAIL=1` thì ném `MuseError('FAKE_FAIL')`.
-  - `getMuseClient(): MuseClient`: `MUSE_API_URL` rỗng thì trả `FakeMuse`, có giá trị thì ném lỗi "chưa hỗ trợ" (client thật làm sau).
+  - `HttpMuseClient implements MuseClient` (`http.ts`), dùng `fetch`:
+    - Ảnh: `POST /v1/images/generations` body `{ model: museModelId, prompt, size: aspectRatio, n: imageCount, image: inputUrl, async: true, response_format: 'url' }`.
+    - Video: `POST /v1/videos` body `{ model: museModelId, prompt, size: aspectRatio, duration: durationSec, image: inputUrl }`.
+    - `getTask`: `GET /v1/images/generations/{id}` hoặc `GET /v1/videos/{id}`. `urls` lấy từ `result.data[].url` (ảnh) hoặc `[result.url]` (video). `error` lấy từ `error.message`.
+    - HTTP 429/5xx/lỗi mạng → `MuseError(code, retryable: true)`. HTTP 4xx khác → `retryable: false`. Mỗi request timeout 30 giây.
+    - `health`: `GET /readyz` → `ok` khi 200, đọc số tài khoản và driver nếu có trong body.
+  - `getMuseClient(): MuseClient` = `new HttpMuseClient(MUSE_API_URL, MUSE_API_KEY)`.
   - `buildPrompt(prompt: string, preset?: Preset | null): string` = `prompt` + `", " + preset.promptSuffix` nếu có preset.
   - `presignUpload(userId: string, contentType: string, size: number): Promise<{ uploadUrl: string; fileUrl: string }>`: chỉ nhận `image/jpeg|png|webp`, tối đa 10 MB, nếu không → `VALIDATION`. Key `uploads/{userId}/{uuid}.{ext}`.
   - `putFromUrl(srcUrl: string, key: string): Promise<string>`: tải file nguồn về rồi upload, trả public URL.
   - `deleteObjects(urls: string[]): Promise<void>`
   - `POST /api/uploads` `{ contentType, size }` → `presignUpload`.
 
-- [ ] **Step 1: Viết test**:
-  - `FakeMuse returns imageCount urls`.
-  - `FakeMuse fails when FAKE_MUSE_FAIL=1`.
+- [ ] **Step 1: Viết test** (chạy với muse2api driver mock trong docker-compose):
+  - `submit image then poll succeeds`: submit ảnh `imageCount: 2` → poll `getTask` tới khi `succeeded` (tối đa 10 giây) → `urls.length` = 2.
+  - `submit video then poll succeeds`: `urls.length` = 1.
+  - `bad api key throws non-retryable`: client với key sai → `MuseError`, `retryable: false`.
+  - `server down throws retryable`: client trỏ tới `http://localhost:1` → `retryable: true`.
+  - `health ok`.
   - `buildPrompt appends preset suffix`.
   - `presignUpload rejects gif and >10MB`.
 - [ ] **Step 2:** Chạy test. Kết quả mong đợi: FAIL.
 - [ ] **Step 3:** Viết code.
 - [ ] **Step 4:** Chạy test. Kết quả mong đợi: PASS.
-- [ ] **Step 5: Commit** `feat(muse): interface MuseClient, FakeMuse, upload R2`
+- [ ] **Step 5: Commit** `feat(muse): client muse2api, upload R2`
 
 ---
 
@@ -350,7 +362,7 @@ tests/api/*.test.ts
 - Produces:
   - `generationQueue: Queue<{ jobId: string }>` (tên `"generation"`)
   - `createJob(userId: string, p: GenerationParams): Promise<Job>`
-  - `processJob(jobId: string, muse: MuseClient): Promise<void>`
+  - `processJob(jobId: string, muse: MuseClient, opts?: { pollMs?: number }): Promise<void>` (`pollMs` mặc định 5000)
   - `sweepStuckJobs(now: Date, timeoutMin = 15): Promise<number>`
   - `cancelJob(jobId: string): Promise<void>`: chỉ với job PENDING; set CANCELED và refund.
   - `retryJob(jobId: string): Promise<Job>`: chỉ với job FAILED; tạo job mới cùng params cho cùng user, đi qua `createJob`.
@@ -371,22 +383,25 @@ tests/api/*.test.ts
   5. Trong 1 transaction: tạo Job PENDING với `cost = quote(...)`, `expiresAt = now + 30 ngày` nếu gói Free, rồi `hold`.
   6. Ngoài transaction: `generationQueue.add('generate', { jobId }, { priority, jobId })`.
 - Luật `processJob`:
-  - Chỉ chạy khi job đang PENDING. Set RUNNING và `startedAt`.
-  - Gọi `muse.generate` với prompt đã ghép preset.
-  - Thành công: `putFromUrl` từng URL vào key `results/{userId}/{jobId}/{i}.{ext}` → SUCCEEDED, `resultUrls`, `finishedAt`, `charge`.
-  - Có lỗi: FAILED, `error = code`, `refund`.
+  - Chỉ chạy khi job đang PENDING, hoặc RUNNING mà đã có `museTaskId` (worker khởi động lại thì poll tiếp, không submit lại).
+  - Chưa có `museTaskId`: set RUNNING, `startedAt`, gọi `muse.submit` với prompt đã ghép preset, lưu `museTaskId`.
+  - Poll `muse.getTask` mỗi `pollMs` tới khi trạng thái kết thúc. Lỗi `retryable` khi poll thì bỏ qua và poll tiếp; sweeper lo trường hợp treo quá 15 phút.
+  - `succeeded`: `putFromUrl` từng URL vào key `results/{userId}/{jobId}/{i}.{ext}` → SUCCEEDED, `resultUrls`, `finishedAt`, `charge`.
+  - `failed`/`cancelled` hoặc `submit` lỗi không retryable: FAILED, `error`, `refund`.
+  - `submit` lỗi retryable (muse2api tạm sập): ném lỗi để BullMQ thử lại (`attempts: 3`, backoff 10 giây); hết lượt thử thì FAILED và `refund`.
 - `worker/index.ts`:
-  - `new Worker('generation', job => processJob(job.data.jobId, getMuseClient()), { concurrency: 4 })`.
+  - `new Worker('generation', job => processJob(job.data.jobId, getMuseClient()), { concurrency: Number(process.env.MUSE_CONCURRENCY ?? 3) })`.
   - Lịch cron (BullMQ repeatable, chạy mỗi 5 phút): `sweepStuckJobs`, `runMonthlyGrants`, `expireSubscriptions`.
   - Chạy hằng ngày: `sendRenewalReminders`, `cleanupExpiredResults`.
 
-- [ ] **Step 1: Viết test** `job.test.ts` (mock `generationQueue.add`, mock `putFromUrl` trả lại đúng src):
-  - `createJob holds credit`: Free 20, ảnh 1k × 2 → job PENDING cost 2, `available` = 18, `held` = 2.
+- [ ] **Step 1: Viết test** `job.test.ts` (mock `generationQueue.add`, mock `putFromUrl` trả lại đúng src, `MuseClient` là stub trong test trả kết quả định sẵn, `pollMs: 1`):
+  - `createJob holds credit`: Free 20, ảnh × 2 → job PENDING cost 2, `available` = 18, `held` = 2.
   - `createJob concurrency limit`: Free đã có 1 job PENDING → `CONCURRENCY_LIMIT`.
   - `createJob in maintenance` → `MAINTENANCE`.
-  - `processJob success charges`: FakeMuse → SUCCEEDED, có 2 `resultUrls`, `held` = 0, `available` = 18.
-  - `processJob failure refunds`: FakeMuse lỗi → FAILED, `available` = 20.
-  - `processJob twice is no-op`.
+  - `processJob success charges`: stub trả `running` rồi `succeeded` với 2 URL → SUCCEEDED, 2 `resultUrls`, `museTaskId` đã lưu, `held` = 0, `available` = 18.
+  - `processJob failure refunds`: stub trả `failed` → FAILED, `available` = 20.
+  - `processJob resumes without resubmit`: job RUNNING đã có `museTaskId` → `submit` không được gọi, chỉ poll.
+  - `processJob twice is no-op`: job đã SUCCEEDED → không gọi stub.
   - `sweepStuckJobs refunds timed-out jobs`: job RUNNING có `startedAt` cách 16 phút → FAILED, error `TIMEOUT`, `available` = 20.
   - `cancelJob only pending`.
   - `deleteJob other user` → `NOT_FOUND`.
@@ -394,7 +409,7 @@ tests/api/*.test.ts
 - [ ] **Step 2:** Chạy test. Kết quả mong đợi: FAIL.
 - [ ] **Step 3:** Viết `queue.ts`, `job.ts`, worker, cron, route.
 - [ ] **Step 4:** Chạy test. Kết quả mong đợi: PASS.
-- [ ] **Step 5:** Kiểm tra tay: chạy `npm run dev` và `npm run worker`, gọi `curl POST /api/jobs` (kèm cookie session), sau khoảng 2 giây `GET /api/jobs` phải trả job SUCCEEDED.
+- [ ] **Step 5:** Kiểm tra tay với muse2api mock: chạy `npm run dev` và `npm run worker`, gọi `curl POST /api/jobs` (kèm cookie session), sau khoảng 5–10 giây `GET /api/jobs` phải trả job SUCCEEDED, file nằm trong bucket MinIO.
 - [ ] **Step 6: Commit** `feat(job): tạo job, worker, sweeper, cron`
 
 ---
@@ -443,27 +458,26 @@ tests/api/*.test.ts
   - `src/app/(user)/layout.tsx` (sidebar + số dư credit ở header)
   - `src/app/(user)/studio/image/page.tsx`, `src/app/(user)/studio/video/page.tsx`
   - `src/app/(user)/library/page.tsx`, `src/app/(user)/library/[id]/page.tsx`
-  - `src/components/studio/GenerateForm.tsx`, `ModelSelect.tsx`, `AspectRatioPicker.tsx`, `PresetPicker.tsx`, `ImageUpload.tsx`, `GenerateButton.tsx`
+  - `src/components/studio/GenerateForm.tsx`, `AspectRatioPicker.tsx`, `PresetPicker.tsx`, `ImageUpload.tsx`, `GenerateButton.tsx`
   - `src/components/library/JobGrid.tsx`, `JobCard.tsx`, `MediaViewer.tsx`
   - `src/app/api/catalog/route.ts`
   - `tests/api/catalog.test.ts`
 
 **Interfaces:**
 - Consumes:
-  - `GET /api/catalog?kind=` → `{ models: (AiModel & { locked: boolean })[]; presets: Preset[]; plan: Plan }`. Trường `locked` = `minPlanRank > plan.rank`.
+  - `GET /api/catalog?kind=` → `{ model: AiModel; presets: Preset[]; plan: Plan }`. `model` là model bật đầu tiên của loại đó (theo `sort`).
   - Các API job ở Task 8, `POST /api/uploads`.
 - Hành vi:
   - `GenerateForm`:
     - Đổi bất kỳ tham số nào → gọi `/api/jobs/quote` (debounce 300 ms). `GenerateButton` hiển thị `Tạo · {cost} Credit`.
-    - Option model bị khóa hiện nhãn "Pro"/"Ultra" và không chọn được.
-    - Lỗi `INSUFFICIENT_CREDIT` → hiện link sang `/credits`. Lỗi `CONCURRENCY_LIMIT` → "Bạn đang có N tác vụ chạy, vui lòng chờ".
-    - Trang ảnh: chọn tỷ lệ, số ảnh (1/2/4), độ phân giải, preset style, 1 ảnh tham chiếu.
-    - Trang video: chọn tỷ lệ, thời lượng (5/10), độ phân giải, preset camera, ảnh khung đầu, bật/tắt âm thanh (chỉ hiện khi `model.options.audio`).
+    - Lỗi `INSUFFICIENT_CREDIT` → hiện link sang `/credits`. Lỗi `CONCURRENCY_LIMIT` → "Bạn đang có N tác vụ chạy, vui lòng chờ". Lỗi `MAINTENANCE` → "Hệ thống đang bảo trì".
+    - Trang ảnh: chọn tỷ lệ, số ảnh (1/2/4), preset style, 1 ảnh tham chiếu.
+    - Trang video: chọn tỷ lệ, thời lượng (5/10; lựa chọn vượt `plan.maxDurationSec` hiện nhãn "Pro" và không chọn được), preset camera, ảnh khung đầu.
   - `?from={jobId}` trên trang studio → điền form bằng `GET /api/jobs/:id/params`. Đây là nút "Tạo lại".
   - `JobGrid`: tab Ảnh / Video, lọc theo trạng thái. Job PENDING/RUNNING được poll `GET /api/jobs?ids=` mỗi 3 giây cho tới khi xong.
   - Trang chi tiết: xem ảnh/video, prompt, tham số, cost, các nút Tải xuống / Tạo lại / Xóa.
 
-- [ ] **Step 1: Viết test** `catalog.test.ts`: user Free → MUSE Video Pro có `locked: true`, MUSE Video có `locked: false`; model bị tắt không xuất hiện.
+- [ ] **Step 1: Viết test** `catalog.test.ts`: `kind=video` trả model `muse-video` và chỉ preset CAMERA đang bật; tắt `muse-video` → 404 `NOT_FOUND`.
 - [ ] **Step 2:** Chạy test. Kết quả mong đợi: FAIL. Viết route. Chạy lại. Kết quả mong đợi: PASS.
 - [ ] **Step 3:** Viết các trang và component.
 - [ ] **Step 4:** Kiểm tra tay (cần `dev` + `worker` cùng chạy):
@@ -514,10 +528,10 @@ tests/api/*.test.ts
   - `setUserStatus(userId: string, status: 'ACTIVE'|'LOCKED', actorId: string): Promise<void>`: admin không tự khóa chính mình (`VALIDATION`).
   - `adminChangePlan(userId: string, planCode: 'free'|'pro'|'ultra', period: 'MONTH'|'YEAR'): Promise<void>`: đổi sang `free` thì đóng sub hiện tại, `expirePlanCredits`, `startFree`.
   - CRUD model, plan, preset qua zod schema. Không cho xóa model đã có job, chỉ tắt (`enabled = false`). Không cho xóa plan.
-  - Trang `credit-rules`: sửa `baseCost` của từng model và setting `resolution_multipliers`, có bảng xem trước giá với vài tổ hợp mẫu (gọi `quote`).
+  - Trang `credit-rules`: sửa `baseCost` của `muse-image` và `muse-video`, có bảng xem trước giá (ảnh × 1/2/4, video 5s/10s) gọi `quote`.
   - Trang `jobs`: lọc theo trạng thái, user, model; nút Hủy (job PENDING) và Chạy lại (job FAILED); xem `error`.
   - Trang `payments`: lọc theo trạng thái; nút "Xác nhận" cho đơn PENDING → `fulfillPayment(id, { confirmedBy })`.
-  - Trang `settings`: bật/tắt bảo trì, sửa `credit_packs`, hiện trạng thái MUSE (hiện tại là "FakeMuse").
+  - Trang `settings`: bật/tắt bảo trì, sửa `credit_packs`, hiện trạng thái MUSE từ `getMuseClient().health()` (online/offline, driver, số tài khoản).
 
 - [ ] **Step 1: Viết test** `admin.test.ts`:
   - Mọi route `/api/admin/*` gọi bằng user thường → 403 `FORBIDDEN` (test 1 route đại diện + `requireAdmin`).
@@ -538,5 +552,5 @@ tests/api/*.test.ts
 
 ## Hoàn tất
 - [ ] `npm test` xanh toàn bộ, `npm run build` OK.
-- [ ] Chạy thử luồng đầy đủ: đăng ký → tạo ảnh và video bằng FakeMuse → mua Pro qua webhook giả → tạo video 1080p → admin thấy số liệu trên dashboard.
-- [ ] Cập nhật README: cách chạy dev (`docker compose up -d`, `npm run db:migrate`, `npm run db:seed`, `npm run dev`, `npm run worker`).
+- [ ] Chạy thử luồng đầy đủ với muse2api mock: đăng ký → tạo ảnh và video → mua Pro qua webhook giả → tạo video 10s → admin thấy số liệu trên dashboard.
+- [ ] Cập nhật README: cách chạy dev (`docker compose up -d`, `npm run db:migrate`, `npm run db:seed`, `npm run dev`, `npm run worker`) và cách chuyển muse2api sang Muse thật (`MUSE2API_DRIVER=browser`, import cookie tài khoản qua dashboard muse2api). Chạy Muse thật do chinhan bấm, agent chỉ chạy mock.
