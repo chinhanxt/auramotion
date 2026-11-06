@@ -621,10 +621,13 @@ export const settingsSchema = z
       .refine((packs) => new Set(packs.map((p) => p.credits)).size === packs.length, {
         message: "Số Credit các gói không được trùng nhau",
       }),
-    prompt_writer: z.object({
-      provider: z.enum(["agy", "codex"]),
-      model: z.string().trim().max(200),
-    }),
+    // agy bắt buộc --model; codex để trống = model mặc định.
+    prompt_writer: z
+      .object({
+        provider: z.enum(["agy", "codex"]),
+        model: z.string().trim().max(200),
+      })
+      .refine((w) => w.provider !== "agy" || w.model.length > 0, { message: "Cần nhập model cho agy", path: ["model"] }),
   })
   .partial();
 

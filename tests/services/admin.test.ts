@@ -353,6 +353,15 @@ describe("admin", () => {
     await expect(updateAdminSettings({ credit_packs: [] })).rejects.toThrow();
   });
 
+  it("prompt_writer agy requires a model", async () => {
+    await expect(updateAdminSettings({ prompt_writer: { provider: "agy", model: " " } })).rejects.toThrow();
+    await updateAdminSettings({ prompt_writer: { provider: "codex", model: "" } });
+    expect((await updateAdminSettings({ prompt_writer: { provider: "agy", model: "gemini-x" } })).prompt_writer).toEqual({
+      provider: "agy",
+      model: "gemini-x",
+    });
+  });
+
   it("preset used by a job is only disabled on delete", async () => {
     const used = await db.preset.create({ data: { kind: "STYLE", name: "Dùng rồi", promptSuffix: "a" } });
     const unused = await db.preset.create({ data: { kind: "STYLE", name: "Chưa dùng", promptSuffix: "b" } });
