@@ -1,64 +1,47 @@
 # Kiến Trúc Thư Mục
 
-**Stack:** Next.js (App Router, TypeScript) · PostgreSQL + Prisma · Redis + BullMQ · Cloudflare R2 / S3.
+**Stack:** Next.js 15 (App Router, TypeScript) · PostgreSQL + Prisma · Redis + BullMQ · lưu file trên ổ máy.
 
-Toàn bộ dự án là 1 repo, 1 app Next.js và 1 worker chạy riêng. Không có microservice.
-
-**MUSE** là AI engine tạo ảnh/video, chạy bằng [muse2api](https://github.com/www222fff/muse2api) (service riêng, API chuẩn OpenAI). Repo này chỉ gọi muse2api qua HTTP; dev/test dùng muse2api với driver `mock`.
+1 repo, 1 app Next.js, 1 worker. Chạy trên **1 máy** (MVP đồ án): Postgres + Redis bằng docker-compose; app, worker và muse2api chạy native, vì worker cần `agy`, `codex`, `vieneu-say`, `ffmpeg` đã đăng nhập / cài sẵn trên máy.
 
 ```
-Người dùng ──► Next.js app ──► Redis queue ──► Worker ──► muse2api (MUSE)
-                   │                              │
-                   └──────── PostgreSQL ◄─────────┴──► R2 (lưu file kết quả)
+Người dùng ──► Next.js app ──► Redis (BullMQ) ──► Worker ─┬─► muse2api (MUSE): ảnh, video
+                   │                                       ├─► agy / codex CLI: viết prompt, ảnh
+                   │                                       └─► tools/post/assemble.py: VieNeu + ffmpeg
+                   └──────── PostgreSQL ◄──────────────────┴──► STORAGE_DIR (file kết quả, /media/...)
 Admin ──► /admin (trong cùng app)
 ```
 
 ```
 auramotion/
-├── docs/                     Tài liệu: kế hoạch, kiến trúc, phân tích
-├── prisma/                   schema.prisma, migrations, seed.ts (gói, model, preset mặc định)
+├── docs/                     plan, kiến trúc, voice, hậu kỳ, plan triển khai (superpowers/plans)
+├── prisma/                   schema.prisma, migrations, seed.ts (gói, engine, preset, nhạc mặc định)
 ├── public/
-│   └── presets/              Ảnh/video demo của preset
+│   ├── presets/              Ảnh demo của preset
+│   └── music/                Nhạc nền CC0 + LICENSES.md
+├── scripts/                  muse-keepalive.sh, muse2api-mock.sh, start-all.sh
+├── tools/post/               assemble.py — ghép video bằng ffmpeg
 ├── src/
-│   ├── app/                  Định tuyến Next.js (trang + API)
-│   │   ├── (auth)/           login, register, forgot-password
-│   │   ├── (user)/           Khu vực người dùng (cần đăng nhập)
-│   │   │   ├── studio/image  Tạo ảnh
-│   │   │   ├── studio/video  Tạo video
+│   ├── app/
+│   │   ├── (auth)/           login, register, forgot-password, reset-password
+│   │   ├── (user)/
+│   │   │   ├── studio/image  Tạo ảnh (chọn engine MUSE / agy / codex)
+│   │   │   ├── studio/video  Tạo video (MUSE)
+│   │   │   ├── studio/edit   Ghép video: clip + lời thoại + giọng + nhạc + phụ đề
 │   │   │   ├── library       Thư viện kết quả
 │   │   │   ├── credits       Số dư, lịch sử Credit & thanh toán
 │   │   │   └── profile       Hồ sơ
 │   │   ├── pricing/          Bảng giá (công khai)
-│   │   ├── admin/            Cổng quản trị — chỉ role admin
-│   │   │   ├── users         Người dùng, cộng/trừ Credit, khóa
-│   │   │   ├── models        Model MUSE (muse-image, muse-video), bật/tắt
-│   │   │   ├── credit-rules  Giá gốc ảnh / video
-│   │   │   ├── plans         Gói Free / Pro / Ultra
-│   │   │   ├── presets       Preset phong cách & camera
-│   │   │   ├── jobs          Hàng đợi, hủy / chạy lại, log lỗi
-│   │   │   ├── payments      Đơn thanh toán, xác nhận QR
-│   │   │   └── settings      Kết nối MUSE, bảo trì
-│   │   └── api/
-│   │       ├── auth          Đăng nhập, OAuth
-│   │       ├── jobs          Tạo job, xem trạng thái
-│   │       ├── uploads       Upload ảnh tham chiếu (URL ký sẵn lên R2)
-│   │       ├── credits       Số dư, báo giá trước khi tạo
-│   │       ├── payments/webhook  Nhận xác nhận chuyển khoản
-│   │       └── admin         API cho cổng quản trị
-│   ├── components/
-│   │   ├── ui/               Nút, input, modal… dùng chung
-│   │   ├── layout/           Header, sidebar, footer
-│   │   ├── studio/           Ô prompt, chọn tỷ lệ, số ảnh / thời lượng, preset, nút Tạo (hiện giá)
-│   │   ├── library/          Lưới kết quả, trình xem ảnh/video
-│   │   └── admin/            Bảng, form, biểu đồ cho cổng quản trị
-│   ├── server/               Logic chỉ chạy phía server (dùng chung cho app + worker)
-│   │   ├── services/         credit (giữ/trừ/hoàn), pricing (tính giá), job, plan, payment
-│   │   └── muse/             Client muse2api: submit, getTask, health
-│   ├── lib/                  Kết nối hạ tầng: db (Prisma), redis/queue, storage (R2), auth
-│   └── types/                Kiểu dữ liệu dùng chung
-├── worker/                   Tiến trình riêng: `node worker`
-│   ├── processors/           Xử lý job: gửi task muse2api → poll → lưu R2 → trừ/hoàn Credit
-│   └── cron/                 Cấp Credit theo kỳ, hết hạn gói, xóa file Free sau 30 ngày
+│   │   ├── media/[...key]    Phục vụ file trong STORAGE_DIR
+│   │   ├── admin/            users · models · credit-rules · plans · presets · music · jobs · payments · settings
+│   │   └── api/              auth · jobs · uploads · credits · payments(/webhook) · ai/prompt · voices · catalog · admin
+│   ├── components/           ui · layout · studio · library · admin
+│   ├── server/               Logic phía server (dùng chung app + worker)
+│   │   ├── services/         credit, pricing, plan, account, job, payment, admin, settings
+│   │   └── engines/          muse (muse2api), cli (chạy CLI tạm + dọn), agy, codex, prompt-writer, voice, assemble
+│   ├── lib/                  db, redis, queue, storage (ổ đĩa), mail, auth, errors, http
+│   └── types/
+├── worker/                   `npm run worker`: 3 hàng đợi muse · cli · post + cron
 ├── tests/
 ├── .env.example
 └── README.md
@@ -67,9 +50,10 @@ auramotion/
 ## Quy tắc
 - `app/` chỉ nhận request và trả về. Logic nghiệp vụ nằm trong `server/services`.
 - Mọi thay đổi Credit đi qua `server/services/credit`, không ghi thẳng vào DB ở chỗ khác.
-- Chỉ `server/muse/` được gọi trực tiếp tới MUSE. Thêm model MUSE mới chỉ cần thêm 1 dòng trong bảng `models`.
+- Chỉ `server/engines/` được gọi engine (muse2api, CLI, VieNeu, ffmpeg). Service gọi engine qua `getMuse()` và `getFileEngine(provider)`.
+- Mỗi lệnh CLI (agy / codex) chạy trong thư mục tạm riêng, xong là xóa cả thư mục và phiên — không để lại session.
 - `worker/` import `src/server` và `src/lib`, không import gì từ `app/` hay `components/`.
 
 ## Nhánh
 - `main`: bản ổn định. Chỉ merge vào qua PR.
-- `dev1`, `dev2`: nhánh phát triển song song, rẽ từ `main`.
+- `dev1`, `dev2`: nhánh phát triển song song, rẽ từ `main`. Chỉ push khi chinhan bảo.
