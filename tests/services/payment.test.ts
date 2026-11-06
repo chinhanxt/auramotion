@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getBalance } from "@/server/services/credit";
 import { getActivePlan, startFree } from "@/server/services/plan";
 import { createOrder, fulfillPayment, getPayment, handleWebhook } from "@/server/services/payment";
+import { POST as webhookRoute } from "@/app/api/payments/webhook/route";
 import { seed } from "../../prisma/seed";
 import { resetDb } from "../helpers/db";
 
@@ -98,6 +99,25 @@ describe("payment", () => {
     expect(await handleWebhook(empty, sign(empty))).toEqual({ ok: true });
   });
 
+  it("webhook finds refCode glued to other text", async () => {
+    const order = await createOrder(userId, { type: "CREDIT", credits: 100 });
+    const body = JSON.stringify({ transactionId: "T1", amount: 49000, description: `NGUYEN VAN NAM${order.refCode}` });
+    expect(await handleWebhook(body, sign(body))).toEqual({ ok: true });
+    expect(await purchased()).toBe("100.00");
+  });
+
+  it("webhook route rejects oversized body", async () => {
+    const body = "x".repeat(65 * 1024);
+    const res = await webhookRoute(
+      new Request("http://localhost/api/payments/webhook", {
+        method: "POST",
+        body,
+        headers: { "content-length": String(body.length), "x-signature": sign(body) },
+      }),
+    );
+    expect(res.status).toBe(413);
+  });
+
   it("webhook is idempotent", async () => {
     const order = await createOrder(userId, { type: "CREDIT", credits: 100 });
     const body = webhookBody("T1", 49000, order.refCode);
@@ -167,6 +187,17 @@ describe("payment", () => {
     expect(paid.status).toBe("SUCCEEDED");
     expect(paid.confirmedBy).toMatch(/^admin-[12]$/);
     expect(paid.providerTxnId).toBeNull();
+  });
+
+  it("fulfill rolls back to PENDING when activation fails", async () => {
+    const order = await db.payment.create({
+      data: { userId, type: "PLAN", planCode: "free", period: "MONTH", amount: 1, refCode: "AMBROKEN01" },
+    });
+    await expect(fulfillPayment(order.id, { providerTxnId: "T1" })).rejects.toMatchObject({ code: "INTERNAL" });
+    const after = await db.payment.findUniqueOrThrow({ where: { id: order.id } });
+    expect(after.status).toBe("PENDING");
+    expect(after.providerTxnId).toBeNull();
+    expect(after.paidAt).toBeNull();
   });
 
   it("fulfill does not touch canceled orders", async () => {

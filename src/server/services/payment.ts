@@ -14,7 +14,8 @@ export type OrderInput =
 export type PaymentWithQr = Payment & { qrUrl: string };
 
 const REF_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const REF_PATTERN = /AM[A-Z0-9]{8}/;
+// Lookahead để lấy cả các ứng viên chồng lấn, vd "NAMAM12345678" → "AMAM123456", "AM12345678".
+const REF_PATTERN = /(?=(AM[A-Z0-9]{8}))/g;
 
 const webhookSchema = z.object({
   transactionId: z.union([z.string().min(1), z.number()]).transform(String),
@@ -129,18 +130,18 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
   }
   const body = webhookSchema.parse(json);
 
-  const refCode = body.description.toUpperCase().match(REF_PATTERN)?.[0];
-  if (!refCode) return { ok: true };
+  const candidates = [...body.description.toUpperCase().matchAll(REF_PATTERN)].map((m) => m[1]);
+  if (candidates.length === 0) return { ok: true };
 
   const processed = await db.payment.findUnique({ where: { providerTxnId: body.transactionId } });
   if (processed) return { ok: true };
 
-  const payment = await db.payment.findUnique({ where: { refCode } });
-  if (!payment || payment.status !== "PENDING") return { ok: true };
+  const payment = await db.payment.findFirst({ where: { refCode: { in: candidates }, status: "PENDING" } });
+  if (!payment) return { ok: true };
 
   if (body.amount < payment.amount) {
     console.warn(
-      `[payment] ${refCode} chuyển thiếu: nhận ${body.amount}, cần ${payment.amount} (giao dịch ${body.transactionId})`,
+      `[payment] ${payment.refCode} chuyển thiếu: nhận ${body.amount}, cần ${payment.amount} (giao dịch ${body.transactionId})`,
     );
     return { ok: true };
   }
