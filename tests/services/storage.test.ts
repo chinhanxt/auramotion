@@ -5,10 +5,13 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { POST as uploadPOST } from "@/app/api/uploads/route";
 import { GET as mediaGET } from "@/app/media/[...key]/route";
 import { AppError } from "@/lib/errors";
 import { deleteByUrls, putFile, putFromUrl, saveUpload, storagePath } from "@/lib/storage";
+
+vi.mock("@/lib/auth", () => ({ requireUser: vi.fn(async () => ({ id: "user-storage-test" })) }));
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const USER_ID = "user-storage-test";
@@ -150,13 +153,56 @@ describe("storage", () => {
     expect(suffix.status).toBe(206);
     expect(await suffix.text()).toBe("789");
 
+    const open = await media("results/u1/j4/0.mp4", { Range: "bytes=7-" });
+    expect(open.status).toBe(206);
+    expect(open.headers.get("content-range")).toBe("bytes 7-9/10");
+    expect(await open.text()).toBe("789");
+
+    const bigSuffix = await media("results/u1/j4/0.mp4", { Range: "bytes=-500" });
+    expect(bigSuffix.headers.get("content-range")).toBe("bytes 0-9/10");
+    expect(await bigSuffix.text()).toBe("0123456789");
+
     const bad = await media("results/u1/j4/0.mp4", { Range: "bytes=20-" });
     expect(bad.status).toBe(416);
+    expect(bad.headers.get("content-range")).toBe("bytes */10");
+
+    for (const ignored of ["bytes=0-1,4-5", "bytes=5-2", "items=0-1"]) {
+      const res = await media("results/u1/j4/0.mp4", { Range: ignored });
+      expect(res.status, ignored).toBe(200);
+      expect(await res.text()).toBe("0123456789");
+    }
   });
 
   it("media route returns 404 when missing", async () => {
     expect((await media("results/u1/none.mp4")).status).toBe(404);
     expect((await media("../package.json")).status).toBe(404);
     expect((await media("results/u1")).status).toBe(404);
+  });
+
+  it("upload route rejects oversized body before reading it", async () => {
+    const form = new FormData();
+    form.set("kind", "image");
+    form.set("file", new File([PNG_MAGIC, Buffer.alloc(100)], "a.png", { type: "image/png" }));
+    const big = await uploadPOST(
+      new Request("http://localhost/api/uploads", {
+        method: "POST",
+        body: form,
+        headers: { "content-length": String(11 * 1024 * 1024) },
+      }),
+    );
+    expect(big.status).toBe(400);
+    expect((await big.json()).error.code).toBe("VALIDATION");
+
+    const okReq = new Request("http://localhost/api/uploads", { method: "POST", body: form });
+    const body = await okReq.arrayBuffer();
+    const ok = await uploadPOST(
+      new Request("http://localhost/api/uploads", {
+        method: "POST",
+        body,
+        headers: { "content-type": okReq.headers.get("content-type")!, "content-length": String(body.byteLength) },
+      }),
+    );
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).url).toMatch(/^\/media\/uploads\/user-storage-test\/.+\.png$/);
   });
 });

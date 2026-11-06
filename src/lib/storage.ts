@@ -12,7 +12,7 @@ import { AppError } from "@/lib/errors";
 const execFileAsync = promisify(execFile);
 
 const MEDIA_PREFIX = "/media/";
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const AUDIO_MIN_SEC = 3;
 const AUDIO_MAX_SEC = 30;
 const DOWNLOAD_TIMEOUT_MS = 5 * 60_000;

@@ -20,10 +20,11 @@ function notFound(): Response {
   return new Response("Not found", { status: 404 });
 }
 
-// Chỉ hỗ trợ một khoảng: "bytes=a-b", "bytes=a-", "bytes=-n". null = khoảng không hợp lệ.
-function parseRange(header: string, size: number): { start: number; end: number } | null {
+// Chỉ hỗ trợ một khoảng: "bytes=a-b", "bytes=a-", "bytes=-n".
+// undefined = sai cú pháp / nhiều khoảng → bỏ qua Range, trả cả file; null = không thỏa được → 416.
+function parseRange(header: string, size: number): { start: number; end: number } | null | undefined {
   const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
-  if (!m || (m[1] === "" && m[2] === "")) return null;
+  if (!m || (m[1] === "" && m[2] === "")) return undefined;
   let start: number;
   let end: number;
   if (m[1] === "") {
@@ -33,9 +34,10 @@ function parseRange(header: string, size: number): { start: number; end: number 
     end = size - 1;
   } else {
     start = Number(m[1]);
+    if (m[2] !== "" && Number(m[2]) < start) return undefined;
     end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
   }
-  if (start >= size || start > end) return null;
+  if (start >= size) return null;
   return { start, end };
 }
 
@@ -59,9 +61,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
   });
 
   const rangeHeader = req.headers.get("range");
-  if (rangeHeader) {
-    const range = parseRange(rangeHeader, size);
-    if (!range) {
+  const range = rangeHeader ? parseRange(rangeHeader, size) : undefined;
+  if (range !== undefined) {
+    if (range === null) {
       headers.set("Content-Range", `bytes */${size}`);
       return new Response(null, { status: 416, headers });
     }
