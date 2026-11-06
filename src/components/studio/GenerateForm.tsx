@@ -91,6 +91,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
   const [cost, setCost] = useState<number | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [aiWriting, setAiWriting] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [notice, setNotice] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -165,6 +166,31 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
     };
   }, [kind, modelId, aspectRatio, imageCount, durationSec]);
 
+  // Ô Prompt đang chứa ý tưởng (tiếng Việt): AI viết lại thành prompt tiếng Anh và thay vào ô.
+  async function onAiWrite() {
+    const idea = prompt.trim();
+    if (!idea) {
+      setError(new ApiError("VALIDATION", "Nhập ý tưởng vào ô Prompt trước", 400));
+      return;
+    }
+    setAiWriting(true);
+    setError(null);
+    setNotice("");
+    try {
+      const res = await postJson<{ prompt?: string }>("/api/ai/prompt", {
+        idea,
+        kind,
+        ...(aspectRatio ? { aspect: aspectRatio } : {}),
+        ...(kind === "video" ? { durationSec } : {}),
+      });
+      if (res.prompt) setPrompt(res.prompt);
+    } catch (err) {
+      setError(err instanceof ApiError ? err : new ApiError("INTERNAL", (err as Error).message, 0));
+    } finally {
+      setAiWriting(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!model) return;
@@ -203,7 +229,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
       <form onSubmit={onSubmit} className="space-y-5 rounded-xl border border-neutral-200 bg-white p-4 md:p-5">
-        <PromptBox value={prompt} onChange={setPrompt} placeholder={text.placeholder} />
+        <PromptBox value={prompt} onChange={setPrompt} placeholder={text.placeholder} onAiWrite={onAiWrite} aiPending={aiWriting} />
         <EngineSelect models={catalog.models} value={modelId} onChange={(m) => applyModel(m, maxDuration)} unit={text.unit} />
         {model && <AspectRatioPicker ratios={model.options.aspectRatios ?? []} value={aspectRatio} onChange={setAspectRatio} />}
 
@@ -263,7 +289,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
           cost={cost}
           quoting={quoting}
           pending={submitting}
-          disabled={!model || model.locked || !prompt.trim() || uploading}
+          disabled={!model || model.locked || !prompt.trim() || uploading || aiWriting}
         />
       </form>
 

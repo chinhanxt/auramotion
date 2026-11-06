@@ -69,7 +69,7 @@ const SETTINGS: Record<string, Prisma.InputJsonValue> = {
     { credits: 1000, price: 349000 },
   ],
   voice_line_cost: 1,
-  prompt_writer: { provider: "agy", model: "claude-sonnet-4-6" },
+  prompt_writer: { provider: "agy", model: "claude-sonnet-5-5-low" },
   music_tracks: MUSIC_TRACKS,
 };
 

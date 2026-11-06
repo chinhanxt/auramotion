@@ -112,7 +112,7 @@ tests/fixtures/fake-agy.sh · fake-codex.sh · fake-vieneu-say.sh · sample.png 
   - `Payment { id, userId, type: PLAN|CREDIT, planCode?, period?, creditAmount Decimal?, amount Int, refCode @unique, status: PENDING|SUCCEEDED|CANCELED, providerTxnId? @unique, paidAt?, confirmedBy?, createdAt }`
   - `Setting { key @id, value Json }`
 - Produces `getSetting<T>(key): Promise<T>`, `setSetting(key, value): Promise<void>`.
-- Seed settings: `maintenance: false`, `credit_packs: [{credits:100,price:…},{credits:500,…},{credits:1000,…}]`, `voice_line_cost: 1`, `prompt_writer: {provider:'agy', model:'claude-sonnet-4-6'}`, `music_tracks: [{id:'funky-house', name:'Funky House', file:'/music/music-funky-house.mp3'}, …]`.
+- Seed settings: `maintenance: false`, `credit_packs: [{credits:100,price:…},{credits:500,…},{credits:1000,…}]`, `voice_line_cost: 1`, `prompt_writer: {provider:'agy', model:'claude-sonnet-5-5-low'}`, `music_tracks: [{id:'funky-house', name:'Funky House', file:'/music/music-funky-house.mp3'}, …]`.
 
 - [ ] **Step 1: Viết test** `seed.test.ts` sau `seed()`:
   ```ts
@@ -393,7 +393,7 @@ tests/fixtures/fake-agy.sh · fake-codex.sh · fake-vieneu-say.sh · sample.png 
   - `codexText(prompt: string, effort = 'low'): Promise<string>`: `codex exec --ephemeral --skip-git-repo-check -C <dir> -s read-only -c model_reasoning_effort="<effort>" -o <dir>/last.txt <prompt>`; trả nội dung `last.txt`.
   - `writePrompt(input: { idea: string; kind: 'image'|'video'|'script'; aspect?: string; durationSec?: number }): Promise<{ prompt?: string; lines?: string[] }>`
     - Ghép task tiếng Việt yêu cầu trả JSON: ảnh / video → `{"prompt": "..."}` (tiếng Anh 40–80 từ: chủ thể, bối cảnh, ánh sáng, góc máy, phong cách; video thêm chuyển động camera); `script` → `{"lines": ["...", ...]}` (lời thoại quảng cáo tiếng Việt, 3–6 câu, mỗi câu ≤ 20 chữ, không bịa giá / ưu đãi nếu ý tưởng không có).
-    - Gọi theo `prompt_writer` setting (mặc định agy `claude-sonnet-4-6`); lỗi → thử engine còn lại (codex ↔ agy); cả hai lỗi → `EngineError('PROMPT_WRITER')`.
+    - Gọi theo `prompt_writer` setting (mặc định agy `claude-sonnet-5-5-low`); lỗi → thử engine còn lại (codex ↔ agy); cả hai lỗi → `EngineError('PROMPT_WRITER')`.
     - Parse JSON từ chuỗi trả về (bỏ ```json nếu có); sai dạng → `EngineError('BAD_OUTPUT')`.
   - `POST /api/ai/prompt` `{ idea, kind, aspect?, durationSec? }` → `writePrompt` (không tốn Credit; tối đa 1 request đang chạy mỗi user, quá → `CONCURRENCY_LIMIT`).
   - Biến môi trường: `AGY_BIN` (mặc định `agy`), `CODEX_BIN` (mặc định `codex`), `AGY_HOME`, `CODEX_HOME`.
