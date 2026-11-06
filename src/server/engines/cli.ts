@@ -18,6 +18,44 @@ export type RunCliOptions<T> = {
 
 const STDERR_TAIL = 300;
 const EXIT_GRACE_MS = 2000;
+// stdout lớn hơn mức này (CLI in vô hạn) thì kill nhóm, tránh tràn bộ nhớ.
+const MAX_STDOUT_BYTES = 32 * 1024 * 1024;
+
+// Chỉ truyền cho CLI biến hệ thống nó cần; không lộ DATABASE_URL, AUTH_SECRET… của app.
+const ENV_KEYS = [
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "LANG",
+  "LANGUAGE",
+  "TERM",
+  "TZ",
+  "TMPDIR",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_CACHE_HOME",
+  "XDG_STATE_HOME",
+  "XDG_RUNTIME_DIR",
+  "DBUS_SESSION_BUS_ADDRESS",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NODE_EXTRA_CA_CERTS",
+  "CODEX_HOME",
+];
+
+function cliEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    // FAKE_*: tham số cho CLI giả trong test.
+    if (ENV_KEYS.includes(key) || key.startsWith("LC_") || (process.env.NODE_ENV === "test" && key.startsWith("FAKE_"))) {
+      env[key] = value;
+    }
+  }
+  return { ...env, ...extra } as NodeJS.ProcessEnv;
+}
 
 function killGroup(pid: number | undefined): void {
   if (!pid) return;
@@ -51,15 +89,16 @@ function spawnInGroup(opts: RunCliOptions<unknown>, dir: string): Promise<string
     const child = spawn(opts.bin, args, {
       cwd: dir,
       detached: true,
-      env: { ...process.env, ...opts.env },
+      env: cliEnv(opts.env),
       stdio: [opts.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     });
     let stdout = "";
+    let stdoutBytes = 0;
     let stderr = "";
-    let stopped: "TIMEOUT" | "CANCELED" | null = null;
+    let stopped: "TIMEOUT" | "CANCELED" | "TOO_LARGE" | null = null;
     let spawnError: Error | null = null;
 
-    const stop = (reason: "TIMEOUT" | "CANCELED") => {
+    const stop = (reason: "TIMEOUT" | "CANCELED" | "TOO_LARGE") => {
       stopped ??= reason;
       killGroup(child.pid);
     };
@@ -67,7 +106,12 @@ function spawnInGroup(opts: RunCliOptions<unknown>, dir: string): Promise<string
     const timer = setTimeout(() => stop("TIMEOUT"), opts.timeoutMs);
     opts.signal?.addEventListener("abort", onAbort, { once: true });
 
-    child.stdout!.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+    child.stdout!.setEncoding("utf8").on("data", (chunk: string) => {
+      if (stopped) return;
+      stdoutBytes += Buffer.byteLength(chunk);
+      if (stdoutBytes > MAX_STDOUT_BYTES) return stop("TOO_LARGE");
+      stdout += chunk;
+    });
     child.stderr!.setEncoding("utf8").on("data", (chunk: string) => {
       stderr = (stderr + chunk).slice(-4 * STDERR_TAIL);
     });
@@ -97,6 +141,8 @@ function spawnInGroup(opts: RunCliOptions<unknown>, dir: string): Promise<string
         reject(new EngineError("TIMEOUT", `Lệnh ${name} quá ${Math.round(opts.timeoutMs / 1000)} giây`));
       } else if (stopped === "CANCELED") {
         reject(new EngineError("CANCELED", `Đã hủy lệnh ${name}`));
+      } else if (stopped === "TOO_LARGE") {
+        reject(new EngineError("CLI_FAILED", `${name} in ra quá ${MAX_STDOUT_BYTES / 1024 / 1024} MB`));
       } else if (spawnError) {
         reject(new EngineError("CLI_FAILED", `Không chạy được ${name}: ${spawnError.message}`));
       } else if (code !== 0) {

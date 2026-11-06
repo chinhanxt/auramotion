@@ -78,6 +78,34 @@ describe("runCli", () => {
     expect(stdout).toBe("xin chào|ok");
   });
 
+  it("runCli does not pass app secrets to the CLI", async () => {
+    const saved = { DATABASE_URL: process.env.DATABASE_URL, AUTH_SECRET: process.env.AUTH_SECRET };
+    process.env.DATABASE_URL = "postgresql://secret";
+    process.env.AUTH_SECRET = "secret";
+    try {
+      const { stdout } = await runCli({ bin: "env", args: [], env: { CODEX_HOME: "/x" }, timeoutMs: 5000 });
+      const keys = stdout.split("\n").map((l) => l.split("=")[0]);
+      expect(keys).not.toContain("DATABASE_URL");
+      expect(keys).not.toContain("AUTH_SECRET");
+      expect(keys).toContain("PATH");
+      expect(keys).toContain("HOME");
+      expect(stdout).toContain("CODEX_HOME=/x");
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("runCli kills the CLI when stdout is too large", async () => {
+    const started = Date.now();
+    const err = await catchError(runCli({ bin: "yes", args: [], timeoutMs: 20_000 }));
+    expect(err.code).toBe("CLI_FAILED");
+    expect(err.message).toContain("MB");
+    expect(Date.now() - started).toBeLessThan(15_000);
+  });
+
   it("runCli kills process group on timeout and removes workdir", async () => {
     const pidFile = path.join(scratch, "pids");
     let dir = "";
