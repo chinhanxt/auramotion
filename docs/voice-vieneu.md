@@ -10,6 +10,13 @@ Dự án là MVP đồ án, ít người dùng, nên **chạy CPU là đủ**. G
 mkdir -p ~/Apps/vieneu-tts && cd ~/Apps/vieneu-tts
 python3.12 -m venv .venv
 .venv/bin/pip install --default-timeout=120 --retries 10 vieneu "onnxruntime<1.23"
+cp <repo>/tools/voice/vieneu_say.py ~/Apps/vieneu-tts/
+mkdir -p ~/.local/bin && cat > ~/.local/bin/vieneu-say <<'EOF'
+#!/usr/bin/env bash
+export PYTHONWARNINGS=ignore HF_HUB_DISABLE_SYMLINKS_WARNING=1
+exec "$HOME/Apps/vieneu-tts/.venv/bin/python" "$HOME/Apps/vieneu-tts/vieneu_say.py" "$@"
+EOF
+chmod +x ~/.local/bin/vieneu-say
 ```
 
 - `onnxruntime<1.23` là **bắt buộc**: bản 1.23 trở lên chặn file trọng số nằm trong cache Hugging Face (symlink) và báo `External data path escapes model directory`.
