@@ -24,6 +24,23 @@ async function engineError(p: Promise<unknown>): Promise<EngineError> {
   return err as EngineError;
 }
 
+describe("HttpMuseClient input", () => {
+  it("missing input file throws non-retryable BAD_INPUT", async () => {
+    const client = new HttpMuseClient("http://127.0.0.1:9", "dev-muse-key");
+    const err = await engineError(
+      client.submit({
+        kind: "image",
+        engineModel: "muse-image",
+        prompt: "x",
+        aspectRatio: "1:1",
+        inputPath: path.resolve("tests/fixtures/does-not-exist.png"),
+      }),
+    );
+    expect(err.code).toBe("BAD_INPUT");
+    expect(err.retryable).toBe(false);
+  });
+});
+
 describe.skipIf(!inject("museMock"))("HttpMuseClient (muse2api mock)", () => {
   const client = new HttpMuseClient(MUSE_URL, "dev-muse-key");
 

@@ -23,7 +23,10 @@ const IMAGE_MIME: Record<string, string> = {
 async function toDataUrl(filePath: string): Promise<string> {
   const mime = IMAGE_MIME[path.extname(filePath).toLowerCase()];
   if (!mime) throw new EngineError("BAD_INPUT", "Ảnh tham chiếu phải là PNG, JPEG hoặc WebP");
-  const data = await fs.readFile(filePath);
+  const data = await fs.readFile(filePath).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === "ENOENT") throw new EngineError("BAD_INPUT", "Ảnh tham chiếu không còn tồn tại", false);
+    throw err;
+  });
   return `data:${mime};base64,${data.toString("base64")}`;
 }
 

@@ -228,6 +228,14 @@ async function buildRequest(job: Job & { model: { engineModel: string } }): Prom
   if (p.kind === "assemble") throw new EngineError("BAD_PARAMS", "Tham số không phải tác vụ ảnh / video");
   const preset = p.presetId ? await db.preset.findUnique({ where: { id: p.presetId } }) : null;
   const inputKey = job.inputUrl ? mediaKey(job.inputUrl) : null;
+  const inputPath = inputKey ? storagePath(inputKey) : null;
+  // File đầu vào bị xóa sau khi tạo job: chạy lại cũng không được, đánh lỗi luôn.
+  if (inputPath) {
+    await fs.stat(inputPath).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") throw new EngineError("BAD_INPUT", "Ảnh tham chiếu không còn tồn tại", false);
+      throw err;
+    });
+  }
   return {
     kind: p.kind,
     engineModel: job.model.engineModel,
@@ -235,7 +243,7 @@ async function buildRequest(job: Job & { model: { engineModel: string } }): Prom
     aspectRatio: p.aspectRatio,
     ...(p.kind === "image" ? { imageCount: p.imageCount ?? 1 } : { durationSec: p.durationSec ?? 5 }),
     ...(job.inputUrl ? { inputUrl: job.inputUrl } : {}),
-    ...(inputKey ? { inputPath: storagePath(inputKey) } : {}),
+    ...(inputPath ? { inputPath } : {}),
   };
 }
 
@@ -335,24 +343,26 @@ export async function sweepStuckJobs(now: Date = new Date()): Promise<number> {
   return swept;
 }
 
-export async function cancelJob(jobId: string): Promise<void> {
+// userId: chỉ thao tác trên job của user này (job người khác → NOT_FOUND). Admin bỏ trống.
+export async function cancelJob(jobId: string, userId?: string): Promise<void> {
+  const where = { id: jobId, ...(userId ? { userId } : {}) };
   const canceled = await db.$transaction(async (tx) => {
     const updated = await tx.job.updateMany({
-      where: { id: jobId, status: "PENDING" },
+      where: { ...where, status: "PENDING" },
       data: { status: "CANCELED", finishedAt: new Date() },
     });
     if (updated.count > 0) await refund(jobId, tx);
     return updated.count > 0;
   });
   if (canceled) return;
-  const exists = await db.job.count({ where: { id: jobId } });
+  const exists = await db.job.count({ where });
   if (!exists) throw new AppError("NOT_FOUND", "Không tìm thấy tác vụ");
   throw new AppError("CONFLICT", "Chỉ hủy được tác vụ đang chờ");
 }
 
-export async function retryJob(jobId: string): Promise<Job> {
+export async function retryJob(jobId: string, userId?: string): Promise<Job> {
   const job = await db.job.findUnique({ where: { id: jobId } });
-  if (!job) throw new AppError("NOT_FOUND", "Không tìm thấy tác vụ");
+  if (!job || (userId && job.userId !== userId)) throw new AppError("NOT_FOUND", "Không tìm thấy tác vụ");
   if (job.status !== "FAILED") throw new AppError("CONFLICT", "Chỉ chạy lại được tác vụ lỗi");
   return createJob(job.userId, job.params as GenerationParams);
 }

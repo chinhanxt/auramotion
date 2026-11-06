@@ -19,7 +19,9 @@ import {
   cleanupExpiredResults,
   createJob,
   deleteJob,
+  failJob,
   processJob,
+  retryJob,
   sweepStuckJobs,
 } from "@/server/services/job";
 import { startFree } from "@/server/services/plan";
@@ -317,6 +319,44 @@ describe("job", () => {
     await db.job.update({ where: { id: running.id }, data: { status: "RUNNING", startedAt: new Date() } });
     await expectAppError(cancelJob(running.id), "CONFLICT");
     await expectAppError(cancelJob("missing"), "NOT_FOUND");
+  });
+
+  it("cancelJob and retryJob with userId reject other user's job", async () => {
+    const job = await createJob(userId, imageParams());
+    await expectAppError(cancelJob(job.id, otherId), "NOT_FOUND");
+    expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).status).toBe("PENDING");
+    await cancelJob(job.id, userId);
+    expect((await db.job.findUniqueOrThrow({ where: { id: job.id } })).status).toBe("CANCELED");
+
+    const failed = await createJob(userId, imageParams());
+    await failJob(failed.id, "MUSE_FAILED");
+    await expectAppError(retryJob(failed.id, otherId), "NOT_FOUND");
+    expect(await db.job.count({ where: { userId } })).toBe(2);
+    const retried = await retryJob(failed.id, userId);
+    expect(retried.userId).toBe(userId);
+    expect(retried.status).toBe("PENDING");
+  });
+
+  it("processJob fails BAD_INPUT without retry when input file was deleted", async () => {
+    const input = await putFile(SAMPLE_PNG, `uploads/${userId}/${randomUUID()}.png`);
+    const job = await createJob(userId, imageParams({ inputUrl: input }));
+    await fs.rm(storagePath(input.slice("/media/".length)));
+    const stub = stubMuse([{ status: "succeeded", urls: resultUrls(2) }]);
+    await processJob(job.id, { muse: stub.muse, pollMs: 1 });
+    const done = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(done.status).toBe("FAILED");
+    expect(done.error).toBe("BAD_INPUT");
+    expect(stub.raw.submit).not.toHaveBeenCalled();
+    expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
+
+    const agyJob = await createJob(userId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1, inputUrl: await putFile(SAMPLE_PNG, `uploads/${userId}/${randomUUID()}.png`) }));
+    await fs.rm(storagePath(agyJob.inputUrl!.slice("/media/".length)));
+    const engine: FileEngine = { generate: vi.fn(async () => ({ files: [SAMPLE_PNG] })) };
+    await processJob(agyJob.id, { engines: { AGY: engine } });
+    const agyDone = await db.job.findUniqueOrThrow({ where: { id: agyJob.id } });
+    expect(agyDone.status).toBe("FAILED");
+    expect(agyDone.error).toBe("BAD_INPUT");
+    expect(engine.generate).not.toHaveBeenCalled();
   });
 
   it("deleteJob other user", async () => {
