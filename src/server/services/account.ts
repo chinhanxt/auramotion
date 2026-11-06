@@ -72,6 +72,7 @@ export async function upsertGoogleUser(input: {
 
   const byEmail = await db.user.findUnique({ where: { email } });
   if (byEmail) {
+    if (byEmail.googleId) throw new AppError("CONFLICT", "Email đã liên kết với tài khoản Google khác");
     return db.user.update({
       where: { id: byEmail.id },
       data: { googleId: input.googleId, avatarUrl: byEmail.avatarUrl ?? input.avatarUrl ?? null },
@@ -106,6 +107,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
     data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + RESET_TTL_MS) },
   });
   const link = `${process.env.APP_URL ?? "http://localhost:3000"}/reset-password?token=${token}`;
+  // Lỗi gửi mail không được lộ ra response, nếu không sẽ phân biệt được email có tồn tại.
   await sendMail(
     user.email,
     "Đặt lại mật khẩu AuraMotion",
@@ -113,7 +115,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
       `<p>Bấm vào liên kết sau để đặt lại mật khẩu (hiệu lực 1 giờ):</p>` +
       `<p><a href="${link}">${link}</a></p>` +
       `<p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>`,
-  );
+  ).catch((err: unknown) => console.error("[account] gửi mail đặt lại mật khẩu lỗi", err));
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {

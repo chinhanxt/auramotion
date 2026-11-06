@@ -70,6 +70,11 @@ describe("account", () => {
     const again = await upsertGoogleUser({ googleId: "gid-1", email: "doi-email@test.local", name: "G" });
     expect(again.id).toBe(existing.id);
 
+    await expect(upsertGoogleUser({ googleId: "gid-khac", email: "g@test.local", name: "G" })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect((await db.user.findUniqueOrThrow({ where: { id: existing.id } })).googleId).toBe("gid-1");
+
     const fresh = await upsertGoogleUser({ googleId: "gid-2", email: "new@test.local", name: "New", avatarUrl: "https://x/a.png" });
     expect(fresh.passwordHash).toBeNull();
     expect(fresh.avatarUrl).toBe("https://x/a.png");
@@ -93,6 +98,14 @@ describe("account", () => {
     expect(await verifyCredentials("r@test.local", PASSWORD)).toBeNull();
     await expect(resetPassword(token!, "matkhaumoi2")).rejects.toMatchObject({ code: "VALIDATION" });
     await expect(resetPassword("token-sai", "matkhaumoi2")).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("forgot password hides mail failure", async () => {
+    await registerUser({ email: "m@test.local", password: PASSWORD, name: "M" });
+    vi.mocked(sendMail).mockRejectedValueOnce(new Error("smtp down"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(requestPasswordReset("m@test.local")).resolves.toBeUndefined();
+    spy.mockRestore();
   });
 
   it("reset token expires after 1 hour", async () => {
