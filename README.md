@@ -1,6 +1,6 @@
 # AuraMotion AI Studio
 
-Hệ thống tạo ảnh & video AI đơn giản, tính phí bằng Credit theo gói **Free / Pro / Ultra**, có cổng quản trị **MUSE** cho Admin.
+Hệ thống tạo ảnh & video AI đơn giản, tính phí bằng Credit theo gói **Free / Pro / Ultra**, AI engine **MUSE** tạo ảnh/video, kèm cổng quản trị cho Admin.
 
 **Stack:** Next.js · PostgreSQL + Prisma · Redis + BullMQ · Cloudflare R2
 

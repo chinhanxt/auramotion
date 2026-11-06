@@ -116,7 +116,7 @@ Pricing page có **wizard chọn gói**: chọn mục đích (sản phẩm, cine
 ## 4. Đối chiếu với plan.md & đề xuất cho MVP
 
 ### Sửa trong plan hiện tại
-1. **Credit cố định (1 ảnh = 1, 1 video = 3) → bảng giá động**: bảng `credit_rules(task_type, model, resolution, duration_unit, cost)`. Admin chỉnh trong MUSE. Credit dùng số thập phân.
+1. **Credit cố định (1 ảnh = 1, 1 video = 3) → bảng giá động**: bảng `credit_rules(task_type, model, resolution, duration_unit, cost)`. Admin chỉnh trong cổng quản trị. Credit dùng số thập phân.
 2. **Phân biệt gói bằng concurrent jobs + độ phân giải tối đa + model được mở**, không chỉ số credit.
 3. **Giữ credit tạm (hold) khi submit job → trừ thật khi xong → hoàn khi lỗi.** Higgsfield không nói, nhưng bắt buộc khi có hàng đợi.
 
@@ -138,7 +138,7 @@ Pricing page có **wizard chọn gói**: chọn mục đích (sản phẩm, cine
 ### Giai đoạn 3 (để sau)
 - Canvas node-based, Agent tự động (kiểu Supercomputer), Studio đóng gói, API/MCP cho bên ngoài.
 
-### Bổ sung Admin (MUSE)
+### Bổ sung Admin
 - [ ] CRUD **danh sách model**: provider, tên, bật/tắt, gói nào được dùng, giá credit theo độ phân giải/thời lượng.
 - [ ] CRUD **preset** (style ảnh, camera, effect) kèm ảnh/video demo.
 - [ ] Cấu hình concurrent jobs + model mở khóa cho từng gói.
