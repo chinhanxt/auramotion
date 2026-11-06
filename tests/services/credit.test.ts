@@ -132,6 +132,33 @@ describe("credit ledger", () => {
     expect(await db.creditTransaction.count({ where: { userId, type: "expire" } })).toBe(1);
   });
 
+  it("refund after plan expired does not revive plan credits", async () => {
+    await grant(userId, 10, { type: "grant" });
+    await grant(userId, 5, { type: "purchase" });
+    const jobId = await newJob();
+    await holdTx(jobId, 12);
+    await expirePlanCredits(userId);
+    await grant(userId, 500, { type: "grant" });
+    await refund(jobId);
+    await refund(jobId);
+    expect(await balance()).toEqual({ available: "505.00", plan: "500.00", purchased: "5.00", held: "0.00" });
+  });
+
+  it("refund after partial plan expiry keeps plan at zero", async () => {
+    await grant(userId, 10, { type: "grant" });
+    const jobId = await newJob();
+    await holdTx(jobId, 4);
+    await expirePlanCredits(userId);
+    await refund(jobId);
+    expect(await balance()).toEqual({ available: "0.00", plan: "0.00", purchased: "0.00", held: "0.00" });
+  });
+
+  it("amounts round HALF_UP to 2 decimals", async () => {
+    await grant(userId, 1.005, { type: "grant" });
+    await grant(userId, "2.004", { type: "purchase" });
+    expect(await balance()).toMatchObject({ plan: "1.01", purchased: "2.00" });
+  });
+
   it("adminAdjust requires reason", async () => {
     await expect(adminAdjust(userId, 10, adminId, "  ")).rejects.toMatchObject({ code: "VALIDATION" });
     await adminAdjust(userId, 10, adminId, "bonus");

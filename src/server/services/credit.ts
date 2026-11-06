@@ -89,9 +89,20 @@ export async function expirePlanCredits(userId: string, tx?: Tx): Promise<void> 
   await inTx(tx, async (t) => {
     await lockUser(t, userId);
     const { plan } = await bucketBalances(t, userId);
-    if (plan.lte(0)) return;
+    if (plan.lte(0)) {
+      // Plan credits may all be held: still write a 0 marker so refund() knows they expired.
+      const heldPlan = await t.creditTransaction.count({
+        where: {
+          userId,
+          type: "hold",
+          bucket: CreditBucket.PLAN,
+          job: { transactions: { none: { type: { in: ["charge", "refund"] } } } },
+        },
+      });
+      if (heldPlan === 0) return;
+    }
     await t.creditTransaction.create({
-      data: { userId, type: "expire", bucket: CreditBucket.PLAN, amount: plan.negated() },
+      data: { userId, type: "expire", bucket: CreditBucket.PLAN, amount: plan.gt(0) ? plan.negated() : ZERO },
     });
   });
 }
@@ -136,15 +147,24 @@ export async function refund(jobId: string, tx?: Tx): Promise<void> {
     if (holds.length === 0) return;
     await lockUser(t, holds[0].userId);
     if (await isSettled(t, jobId)) return;
-    await t.creditTransaction.createMany({
-      data: holds.map((h) => ({
-        userId: h.userId,
-        jobId,
-        type: "refund" as const,
-        bucket: h.bucket,
-        amount: h.amount.negated(),
-      })),
-    });
+    const rows: Prisma.CreditTransactionCreateManyInput[] = holds.map((h) => ({
+      userId: h.userId,
+      jobId,
+      type: "refund",
+      bucket: h.bucket,
+      amount: h.amount.negated(),
+    }));
+    // Plan credits that expired while held must not come back: expire the refunded part again.
+    const planHold = holds.find((h) => h.bucket === CreditBucket.PLAN);
+    if (planHold) {
+      const expiredSince = await t.creditTransaction.count({
+        where: { userId: planHold.userId, type: "expire", createdAt: { gt: planHold.createdAt } },
+      });
+      if (expiredSince > 0) {
+        rows.push({ userId: planHold.userId, jobId, type: "expire", bucket: CreditBucket.PLAN, amount: planHold.amount });
+      }
+    }
+    await t.creditTransaction.createMany({ data: rows });
   });
 }
 
