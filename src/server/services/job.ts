@@ -13,6 +13,7 @@ import { charge, hold, refund } from "@/server/services/credit";
 import { getActivePlan } from "@/server/services/plan";
 import { generationParamsSchema, quote, validateParams, type GenerationParams } from "@/server/services/pricing";
 import { getSetting } from "@/server/services/settings";
+import { processAssemble } from "../../../worker/processors/assemble";
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -313,7 +314,7 @@ export async function processJob(jobId: string, deps: ProcessDeps = {}): Promise
 
   if (provider === "MUSE") return runMuse(job, deps);
   if (provider === "LOCAL") {
-    if (await claim(job.id)) await failJob(job.id, "NOT_IMPLEMENTED");
+    if (await claim(job.id)) await processAssemble({ ...job, status: "RUNNING" });
     return;
   }
   return runFileEngine(job, deps);

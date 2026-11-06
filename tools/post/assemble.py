@@ -13,11 +13,14 @@ Spec (JSON):
   "voice": {"lines": ["Câu 1.", "Câu 2."], "voice": "Trúc Ly"},   # hoặc "ref": "mau.wav"; bỏ trống = không lồng tiếng
   "music": {"src": "nhac.mp3", "volume_db": -14},                 # tự hạ khi có giọng
   "subtitles": true,                      # phụ đề lấy từ voice.lines, đúng mốc giờ từng câu
-  "out": "final.mp4"
+  "out": "final.mp4",
+  "tmp_dir": null                         # thư mục chứa file làm việc tạm; null = mặc định của hệ thống
 }
+Giọng đọc gọi `$VIENEU_BIN` (mặc định `vieneu-say` trong PATH).
 In ra JSON {"output", "duration", "elapsed"}.
 """
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -94,7 +97,7 @@ def make_voice(voice: dict, tmp: Path) -> tuple[Path, list[dict]]:
     script = tmp / "voice.txt"
     script.write_text("\n".join(voice["lines"]), encoding="utf-8")
     wav, seg = tmp / "voice.wav", tmp / "voice-seg.json"
-    cmd = [shutil.which("vieneu-say") or "vieneu-say", "-f", str(script), "-o", str(wav), "--segments", str(seg)]
+    cmd = [os.environ.get("VIENEU_BIN") or shutil.which("vieneu-say") or "vieneu-say", "-f", str(script), "-o", str(wav), "--segments", str(seg)]
     if voice.get("ref"):
         cmd += ["--ref", voice["ref"]]
     elif voice.get("voice"):
@@ -132,7 +135,7 @@ def assemble(spec: dict) -> dict:
     if not spec.get("clips"):
         raise AssembleError("spec không có clip nào")
 
-    with tempfile.TemporaryDirectory(prefix="aura-post-") as d:
+    with tempfile.TemporaryDirectory(prefix="aura-post-", dir=spec.get("tmp_dir")) as d:
         tmp = Path(d)
         parts = []
         for i, clip in enumerate(spec["clips"]):
