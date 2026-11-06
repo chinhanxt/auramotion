@@ -1,0 +1,76 @@
+import { createReadStream } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { Readable } from "node:stream";
+import { storagePath } from "@/lib/storage";
+
+const CONTENT_TYPES: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+};
+
+function notFound(): Response {
+  return new Response("Not found", { status: 404 });
+}
+
+// Chỉ hỗ trợ một khoảng: "bytes=a-b", "bytes=a-", "bytes=-n". null = khoảng không hợp lệ.
+function parseRange(header: string, size: number): { start: number; end: number } | null {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m || (m[1] === "" && m[2] === "")) return null;
+  let start: number;
+  let end: number;
+  if (m[1] === "") {
+    const suffix = Number(m[2]);
+    if (suffix === 0) return null;
+    start = Math.max(size - suffix, 0);
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+  }
+  if (start >= size || start > end) return null;
+  return { start, end };
+}
+
+export async function GET(req: Request, { params }: { params: Promise<{ key: string[] }> }): Promise<Response> {
+  const { key } = await params;
+  let filePath: string;
+  try {
+    filePath = storagePath(key.join("/"));
+  } catch {
+    return notFound();
+  }
+  const stat = await fs.stat(filePath).catch(() => null);
+  if (!stat?.isFile()) return notFound();
+
+  const size = stat.size;
+  const headers = new Headers({
+    "Content-Type": CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream",
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "public, max-age=86400",
+    "X-Content-Type-Options": "nosniff",
+  });
+
+  const rangeHeader = req.headers.get("range");
+  if (rangeHeader) {
+    const range = parseRange(rangeHeader, size);
+    if (!range) {
+      headers.set("Content-Range", `bytes */${size}`);
+      return new Response(null, { status: 416, headers });
+    }
+    headers.set("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
+    headers.set("Content-Length", String(range.end - range.start + 1));
+    const stream = createReadStream(filePath, range);
+    return new Response(Readable.toWeb(stream) as ReadableStream, { status: 206, headers });
+  }
+
+  headers.set("Content-Length", String(size));
+  return new Response(Readable.toWeb(createReadStream(filePath)) as ReadableStream, { status: 200, headers });
+}
