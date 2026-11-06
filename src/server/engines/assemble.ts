@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { runCli } from "@/server/engines/cli";
 import { EngineError } from "@/server/engines/types";
+import { vieneuBin } from "@/server/engines/voice";
 import type { AssembleParams } from "@/server/services/pricing";
 
 // VieNeu chạy CPU: ghép 20 câu có thể mất hơn 10 phút. Bằng thời hạn hàng đợi `post`.
@@ -55,7 +56,7 @@ export function buildAssembleSpec(
 
 // Chạy assemble.py trong thư mục tạm của runCli; file làm việc của script cũng nằm trong đó (`tmp_dir`)
 // để quá giờ bị kill vẫn được dọn. Script tự gọi vieneu-say qua biến môi trường VIENEU_BIN.
-export async function runAssemble(spec: object): Promise<{ output: string; duration: number }> {
+export async function runAssemble(spec: object, signal?: AbortSignal): Promise<{ output: string; duration: number }> {
   const script = path.resolve("tools/post/assemble.py");
   let stdout: string;
   try {
@@ -63,7 +64,10 @@ export async function runAssemble(spec: object): Promise<{ output: string; durat
       bin: process.env.ASSEMBLE_PY || "python3",
       args: (dir) => [script, path.join(dir, "spec.json")],
       setup: (dir) => writeFile(path.join(dir, "spec.json"), JSON.stringify({ ...spec, tmp_dir: dir }), "utf8"),
+      // runCli chỉ truyền biến hệ thống: VIENEU_BIN phải chuyển tường minh cho assemble.py.
+      env: { VIENEU_BIN: vieneuBin() },
       timeoutMs: ASSEMBLE_TIMEOUT_MS,
+      signal,
     }));
   } catch (err) {
     if (err instanceof EngineError && err.code === "CLI_FAILED") throw new EngineError("ASSEMBLE_FAILED", err.message);

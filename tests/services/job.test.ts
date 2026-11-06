@@ -286,6 +286,37 @@ describe("job", () => {
     expect(await balance()).toEqual({ available: "19.00", held: "0.00" });
   });
 
+  it("file engine is aborted when the job stops running", async () => {
+    const job = await createJob(userId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1 }));
+    let aborted = false;
+    const agy: FileEngine = {
+      generate: (_req, signal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(new EngineError("CANCELED", "canceled"));
+          });
+          void failJob(job.id, "TIMEOUT");
+        }),
+    };
+    await processJob(job.id, { engines: { AGY: agy }, pollMs: 20 });
+
+    expect(aborted).toBe(true);
+    expect(await db.job.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({ status: "FAILED", error: "TIMEOUT" });
+    expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
+  });
+
+  it("file engine output is removed when saving fails", async () => {
+    const job = await createJob(userId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1 }));
+    const out = path.join(os.tmpdir(), `aura-out-${randomUUID()}.png`);
+    await fs.copyFile(SAMPLE_PNG, out);
+    const storage = await import("@/lib/storage");
+    vi.spyOn(storage, "putFile").mockRejectedValue(new Error("disk full"));
+    const agy: FileEngine = { generate: async () => ({ files: [out] }) };
+    await expect(processJob(job.id, { engines: { AGY: agy } })).rejects.toThrow("disk full");
+    expect(existsSync(out)).toBe(false);
+  });
+
   it("sweepStuckJobs refunds timed-out jobs", async () => {
     const now = new Date();
     const museJob = await createJob(userId, imageParams());

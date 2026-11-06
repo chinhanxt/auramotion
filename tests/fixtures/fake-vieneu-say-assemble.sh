@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # vieneu-say giả cho test ghép video: `-f script.txt -o out.wav --segments seg.json [--voice X | --ref Y]`.
 # Mỗi dòng của script đọc 1 giây (sine 440 Hz), --segments ghi mốc giờ [{text,start,end}].
+# FAKE_SLEEP=<giây>: ngủ trước khi đọc, ghi pid vào FAKE_PIDS (test hủy).
 set -eu
 
 file="" out="" seg=""
@@ -12,6 +13,11 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
+
+if [ -n "${FAKE_SLEEP:-}" ]; then
+  echo $$ >> "$FAKE_PIDS"
+  sleep "$FAKE_SLEEP"
+fi
 
 n=$(grep -c . "$file" || true)
 [ "$n" -gt 0 ] || { echo "vieneu-say: không có câu nào" >&2; exit 1; }

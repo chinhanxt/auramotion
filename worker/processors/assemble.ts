@@ -72,7 +72,7 @@ async function musicFile(musicId: string | undefined): Promise<string | null> {
 
 // Job đã được processJob chuyển sang RUNNING. Mọi lỗi đều đánh FAILED và hoàn Credit (ghép lại từ đầu
 // tốn tới 20 phút, không để BullMQ tự chạy lại).
-export async function processAssemble(job: Job): Promise<void> {
+export async function processAssemble(job: Job, signal?: AbortSignal): Promise<void> {
   const out = path.join(os.tmpdir(), `aura-out-${randomUUID()}.mp4`);
   try {
     const parsed = generationParamsSchema.safeParse(job.params);
@@ -81,7 +81,7 @@ export async function processAssemble(job: Job): Promise<void> {
     const files = await clipFiles(job, p.clips);
     const music = await musicFile(p.musicId);
     const ref = p.voice?.refUrl ? await mediaFile(p.voice.refUrl, "BAD_INPUT", `uploads/${job.userId}/`) : null;
-    const { output } = await runAssemble(buildAssembleSpec(p, files, music, ref, out));
+    const { output } = await runAssemble(buildAssembleSpec(p, files, music, ref, out), signal);
     await finishJob(job.id, [{ path: output }]);
   } catch (err) {
     const code = err instanceof InputError || err instanceof EngineError || err instanceof AppError ? err.code : "INTERNAL";

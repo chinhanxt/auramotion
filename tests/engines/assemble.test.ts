@@ -12,7 +12,7 @@ import { redis } from "@/lib/redis";
 import { putFile, storagePath } from "@/lib/storage";
 import { buildAssembleSpec, runAssemble } from "@/server/engines/assemble";
 import { getBalance, hold } from "@/server/services/credit";
-import { processJob } from "@/server/services/job";
+import { failJob, processJob } from "@/server/services/job";
 import { startFree } from "@/server/services/plan";
 import type { AssembleParams } from "@/server/services/pricing";
 import { setSetting } from "@/server/services/settings";
@@ -201,6 +201,36 @@ describe("assemble", () => {
       const file = storagePath(done.resultUrls[0].slice("/media/".length));
       expect(probe(file).streams).toEqual(expect.arrayContaining(["video", "audio"]));
       expect(await balance()).toEqual({ available: "16.00", held: "0.00" });
+    },
+    SLOW,
+  );
+
+  it(
+    "assemble is killed when the job stops running",
+    async () => {
+      const pids = path.join(os.tmpdir(), `aura-test-pids-${randomUUID()}`);
+      vi.stubEnv("FAKE_SLEEP", "60");
+      vi.stubEnv("FAKE_PIDS", pids);
+      try {
+        const clip = await doneClip(userId, "IMAGE", SAMPLE_PNG);
+        const jobId = await pendingAssemble(params([{ jobId: clip }], { musicId: undefined }));
+        const started = Date.now();
+        const run = processJob(jobId, { pollMs: 50 });
+        let settled = false;
+        void run.finally(() => (settled = true));
+        while (!existsSync(pids) && !settled) await new Promise((r) => setTimeout(r, 50));
+        await failJob(jobId, "TIMEOUT");
+        await run;
+
+        expect(Date.now() - started).toBeLessThan(30_000);
+        const pid = Number((await fs.readFile(pids, "utf8")).trim());
+        expect(() => process.kill(pid, 0)).toThrow();
+        expect(await db.job.findUniqueOrThrow({ where: { id: jobId } })).toMatchObject({ status: "FAILED", error: "TIMEOUT" });
+        expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
+      } finally {
+        vi.stubEnv("FAKE_SLEEP", "");
+        await fs.rm(pids, { force: true });
+      }
     },
     SLOW,
   );

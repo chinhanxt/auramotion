@@ -289,18 +289,39 @@ async function runMuse(job: Job & { model: { engineModel: string } }, deps: Proc
   }
 }
 
+// Job không còn RUNNING (sweeper đánh TIMEOUT, bị hủy…) thì abort để runCli kill lệnh đang chạy.
+function watchJob(jobId: string, pollMs: number): { signal: AbortSignal; stop: () => void } {
+  const ac = new AbortController();
+  const timer = setInterval(() => {
+    db.job.findUnique({ where: { id: jobId }, select: { status: true } }).then(
+      (cur) => {
+        if (cur?.status !== "RUNNING") ac.abort();
+      },
+      () => {},
+    );
+  }, pollMs);
+  timer.unref();
+  return { signal: ac.signal, stop: () => clearInterval(timer) };
+}
+
 async function runFileEngine(job: Job & { model: { engineModel: string; provider: ModelProvider } }, deps: ProcessDeps) {
   if (!(await claim(job.id))) return;
   const provider = job.model.provider as FileProvider;
+  const watch = watchJob(job.id, deps.pollMs ?? DEFAULT_POLL_MS);
+  let files: string[] = [];
   try {
     const engine = deps.engines?.[provider] ?? getFileEngine(provider);
-    const { files } = await engine.generate(await buildRequest(job));
+    ({ files } = await engine.generate(await buildRequest(job), watch.signal));
     if (files.length === 0) return failJob(job.id, "NO_RESULT");
     await finishJob(job.id, files.map((p) => ({ path: p })));
   } catch (err) {
     if (isFatal(err)) return failJob(job.id, err.code);
     await release(job.id);
     throw err;
+  } finally {
+    watch.stop();
+    // finishJob lỗi giữa chừng: file aura-out-* chưa được xóa.
+    for (const f of files) await removeTempOutput(f);
   }
 }
 
@@ -314,7 +335,13 @@ export async function processJob(jobId: string, deps: ProcessDeps = {}): Promise
 
   if (provider === "MUSE") return runMuse(job, deps);
   if (provider === "LOCAL") {
-    if (await claim(job.id)) await processAssemble({ ...job, status: "RUNNING" });
+    if (!(await claim(job.id))) return;
+    const watch = watchJob(job.id, deps.pollMs ?? DEFAULT_POLL_MS);
+    try {
+      await processAssemble({ ...job, status: "RUNNING" }, watch.signal);
+    } finally {
+      watch.stop();
+    }
     return;
   }
   return runFileEngine(job, deps);
