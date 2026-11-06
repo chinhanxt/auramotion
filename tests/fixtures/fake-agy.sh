@@ -4,6 +4,7 @@
 #   FAKE_FAIL=1         thoát mã 1
 #   FAKE_RESPONSE=<chuỗi JSON>  giá trị trường response (mặc định "{\"prompt\":\"fake prompt\"}")
 #   FAKE_LOG=<file>     ghi tham số và quyền file token để test kiểm
+#   FAKE_NO_IMAGE=1     --agent imagegen: không tạo ảnh, trả câu từ chối
 set -u
 
 if [ "${1:-}" = "--version" ]; then
@@ -28,6 +29,7 @@ if [ -n "${FAKE_LOG:-}" ]; then
     echo "agent=$agent"
     echo "agent_file=$([ -f ".agents/agents/$agent.md" ] && echo yes || echo no)"
     echo "token_mode=$(stat -c %a "$gemini_dir/antigravity-cli/antigravity-oauth-token" 2>/dev/null || echo missing)"
+    echo "refs=$(ls ref-* 2>/dev/null | tr "\n" " ")"
     echo "prompt=$prompt"
   } >> "$FAKE_LOG"
 fi
@@ -44,5 +46,15 @@ if [ -n "${FAKE_FAIL:-}" ]; then
 fi
 
 echo "Loading..."
+if [ "$agent" = "imagegen" ]; then
+  if [ -n "${FAKE_NO_IMAGE:-}" ]; then
+    printf '{"status":"SUCCESS","response":"I cannot generate this"}\n'
+  else
+    mkdir -p "$gemini_dir/antigravity-cli/brain/conv1"
+    cp "$(dirname "$0")/sample.png" "$gemini_dir/antigravity-cli/brain/conv1/image_1.png"
+    printf '{"status":"SUCCESS","response":"done"}\n'
+  fi
+  exit 0
+fi
 default_response='"{\"prompt\":\"fake prompt\"}"'
 printf '{"status":"SUCCESS","response":%s}\n' "${FAKE_RESPONSE:-$default_response}"
