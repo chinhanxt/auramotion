@@ -87,7 +87,7 @@ export async function seed(): Promise<void> {
     await db.setting.upsert({ where: { key }, create: { key, value }, update: {} });
   }
 
-  const email = process.env.SEED_ADMIN_EMAIL;
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD;
   if (!email || !password) throw new Error("Thiếu SEED_ADMIN_EMAIL hoặc SEED_ADMIN_PASSWORD");
   await db.user.upsert({
