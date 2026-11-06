@@ -33,13 +33,15 @@ const assembleParams = z.object({
   aspect: z.enum(["9:16", "16:9", "1:1"]),
   clips: z
     .array(
-      z.object({
-        jobId: z.string().min(1),
-        index: z.number().int().min(0).optional(),
-        in: z.number().min(0).optional(),
-        out: z.number().positive().optional(),
-        duration: z.number().positive().optional(),
-      }),
+      z
+        .object({
+          jobId: z.string().min(1),
+          index: z.number().int().min(0).optional(),
+          in: z.number().min(0).optional(),
+          out: z.number().positive().optional(),
+          duration: z.number().min(1).max(10).optional(),
+        })
+        .refine((c) => c.in === undefined || c.out === undefined || c.in < c.out, { message: "in phải nhỏ hơn out" }),
     )
     .min(1)
     .max(12),

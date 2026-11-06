@@ -146,5 +146,15 @@ describe("pricing", () => {
       expect(generationParamsSchema.safeParse({ ...assemble(["x".repeat(201)]), modelId: "m" }).success).toBe(false);
       expect(generationParamsSchema.safeParse({ ...assemble([""]), modelId: "m" }).success).toBe(false);
     });
+
+    it("rejects bad clip ranges", () => {
+      const withClip = (clip: Record<string, unknown>) => ({ ...assemble([]), modelId: "m", clips: [{ jobId: "j", ...clip }] });
+      expect(generationParamsSchema.safeParse(withClip({ in: 1, out: 4, duration: 3 })).success).toBe(true);
+      expect(generationParamsSchema.safeParse(withClip({ in: 5, out: 1 })).success).toBe(false);
+      expect(generationParamsSchema.safeParse(withClip({ in: 2, out: 2 })).success).toBe(false);
+      expect(generationParamsSchema.safeParse(withClip({ in: -1 })).success).toBe(false);
+      expect(generationParamsSchema.safeParse(withClip({ duration: 0.5 })).success).toBe(false);
+      expect(generationParamsSchema.safeParse(withClip({ duration: 1e9 })).success).toBe(false);
+    });
   });
 });
