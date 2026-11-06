@@ -1,8 +1,10 @@
 # Kế Hoạch Chức Năng Dự Án MVP (AuraMotion AI Studio)
 
-Hệ thống tạo ảnh/video AI đơn giản: người dùng mua gói → nhận Credit → nhập Prompt → tạo Ảnh/Video. Admin quản lý người dùng, giá Credit và model qua cổng quản trị (MUSE).
+Hệ thống tạo ảnh/video AI đơn giản: người dùng mua gói → nhận Credit → nhập Prompt → **MUSE** tạo Ảnh/Video. Admin quản lý người dùng, giá Credit và cấu hình qua cổng quản trị.
 
-**Nguyên tắc:** không tự huấn luyện hay vận hành GPU. Hệ thống chỉ gọi API của các nhà cung cấp model (Kling, Veo, Seedance, Nano Banana, Flux…), tính phí bằng Credit và lưu kết quả.
+**MUSE** là AI engine tạo ảnh và video của dự án.
+
+**Nguyên tắc:** web app không tự chạy AI. App nhận yêu cầu, tính và trừ Credit, đưa job vào hàng đợi; worker gọi MUSE qua API rồi lưu kết quả. Web và MUSE tách rời, nâng cấp MUSE không phải sửa web.
 
 ---
 
@@ -12,7 +14,7 @@ Hệ thống tạo ảnh/video AI đơn giản: người dùng mua gói → nh�
 Đăng ký → Nhận Credit gói Free
    → Chọn Tạo Ảnh / Tạo Video → Chọn model, tỷ lệ khung, độ phân giải, thời lượng
    → Nhập Prompt (+ ảnh tham chiếu nếu có) → Thấy trước giá Credit → Bấm Tạo
-   → Hệ thống giữ Credit → Đưa vào hàng đợi → Gọi API model
+   → Hệ thống giữ Credit → Đưa vào hàng đợi → Worker gọi MUSE
    → Thành công: trừ Credit, lưu kết quả vào Thư viện
    → Thất bại: hoàn Credit, báo lỗi
 ```
@@ -113,7 +115,7 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 
 ---
 
-## 3. Phân Hệ Quản Trị (Admin / MUSE)
+## 3. Phân Hệ Quản Trị (Admin)
 
 ### 3.1 Dashboard
 - [ ] Số liệu hôm nay, 7 ngày, 30 ngày: người dùng mới, số ảnh/video đã tạo, Credit đã tiêu, doanh thu.
@@ -127,24 +129,25 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 - [ ] Đổi gói thủ công.
 - [ ] Khóa / mở khóa tài khoản.
 
-### 3.3 Cấu hình (MUSE)
-- [ ] **Model**: thêm, sửa, bật/tắt model. Thông tin của mỗi model: nhà cung cấp, loại (ảnh/video), gói tối thiểu, độ phân giải và thời lượng hỗ trợ, có hỗ trợ khung cuối/âm thanh không.
+### 3.3 Cấu hình
+- [ ] **Model MUSE**: thêm, sửa, bật/tắt các model/phiên bản MUSE (ví dụ MUSE Image, MUSE Video, MUSE Video Pro). Thông tin của mỗi model: loại (ảnh/video), gói tối thiểu, độ phân giải và thời lượng hỗ trợ, có hỗ trợ khung cuối/âm thanh không.
 - [ ] **Bảng giá Credit**: giá gốc từng model, hệ số theo độ phân giải.
 - [ ] **Gói dịch vụ**: giá, Credit/tháng, số tác vụ chạy cùng lúc, độ phân giải tối đa.
 - [ ] **Preset**: thêm/sửa preset phong cách và camera, gồm tên, ảnh demo, đoạn prompt thêm vào.
-- [ ] **API Key nhà cung cấp**: lưu mã hóa, test kết nối.
+- [ ] **Kết nối MUSE**: URL endpoint, API key (lưu mã hóa), nút test kết nối, xem MUSE đang online hay offline.
 - [ ] Bật/tắt chế độ bảo trì.
 
 ### 3.4 Hàng đợi & Lỗi
 - [ ] Danh sách tác vụ: lọc theo trạng thái, người dùng, model.
 - [ ] Hủy tác vụ bị treo (tự hoàn Credit), chạy lại tác vụ lỗi.
-- [ ] Nhật ký lỗi: lỗi nhà cung cấp trả về và lỗi hệ thống.
+- [ ] Nhật ký lỗi: lỗi MUSE trả về và lỗi hệ thống.
+- [ ] Thời gian xử lý trung bình của MUSE theo loại tác vụ.
 
 ### 3.5 Thanh toán
 - [ ] Danh sách đơn thanh toán với các trạng thái: Chờ / Thành công / Hủy.
 - [ ] Xác nhận đơn QR thủ công khi webhook không khớp.
 - [ ] Báo cáo doanh thu theo ngày/tháng.
-- [ ] Báo cáo chi phí API theo model, so với Credit thu được, để biết lãi/lỗ của từng model.
+- [ ] Báo cáo Credit tiêu thụ theo model MUSE và theo loại tác vụ.
 
 ---
 
@@ -156,21 +159,21 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 | `plans` | id, code (free/pro/ultra), price_month, price_year, monthly_credits, max_concurrent, max_resolution |
 | `subscriptions` | id, user_id, plan_id, period (month/year), start_at, end_at, status |
 | `credit_transactions` | id, user_id, type, amount, job_id, note, created_at |
-| `models` | id, name, provider, kind (image/video), min_plan, base_cost, options (JSON), enabled |
+| `models` | id, name, muse_model_id, kind (image/video), min_plan, base_cost, options (JSON), enabled |
 | `presets` | id, kind (style/camera), name, prompt_suffix, thumbnail, enabled |
 | `jobs` | id, user_id, model_id, kind, prompt, params (JSON), input_url, status, cost, result_urls, error, created_at, finished_at |
 | `payments` | id, user_id, type (plan/credit), amount, ref_code, status, created_at |
-| `settings` | key, value (hệ số độ phân giải, chế độ bảo trì, API key mã hóa…) |
+| `settings` | key, value (hệ số độ phân giải, chế độ bảo trì, endpoint + API key MUSE mã hóa…) |
 
 ---
 
 ## 5. Kỹ Thuật (đề xuất gọn)
 
-- **Frontend + Backend**: Next.js (App Router + API routes) hoặc FastAPI + React. Chọn một, không tách microservice.
+- **Frontend + Backend**: Next.js (App Router + API routes), không tách microservice. Chi tiết thư mục xem [architecture.md](architecture.md).
 - **DB**: PostgreSQL. **Hàng đợi**: Redis + 1 worker (BullMQ / RQ).
 - **Lưu file**: S3 / Cloudflare R2.
-- **Worker**: lấy job → gọi API nhà cung cấp → poll kết quả → tải file về R2 → cập nhật job và Credit.
-- **Adapter model**: mỗi nhà cung cấp là 1 file, cùng chung interface `generate(params) → result_urls`. Muốn thêm model thì chỉ thêm 1 adapter và 1 dòng trong bảng `models`.
+- **Worker**: lấy job → gửi sang MUSE → chờ kết quả (poll hoặc MUSE gọi webhook) → lưu file lên R2 → cập nhật job và Credit.
+- **MUSE client**: 1 module duy nhất `src/server/muse/` bọc toàn bộ API MUSE (`generateImage`, `generateVideo`, `getStatus`). Web chỉ gọi qua module này.
 - Giới hạn tác vụ chạy cùng lúc: đếm các job `pending`/`running` của user, so với `plans.max_concurrent`.
 
 ---
@@ -183,7 +186,7 @@ Credit có 3 bước: **Giữ → Trừ hoặc Hoàn**.
 - Tạo Video (Text-to-Video, Image-to-Video, Preset camera).
 - Thư viện + Tạo lại.
 - Admin: người dùng, model, bảng giá, gói, preset, hàng đợi, thanh toán, dashboard.
-- Tích hợp 1 model ảnh + 1 model video. Thêm model sau.
+- Tích hợp MUSE: 1 model ảnh + 1 model video. Thêm model MUSE sau.
 
 ### Giai đoạn 2 — Mở rộng
 - Khung đầu/cuối, Upscale, Bật âm thanh.
