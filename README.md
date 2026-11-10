@@ -145,8 +145,9 @@ bash scripts/svc.sh status | stop
 | Story 3 cảnh · Song song + tự ghép | 139 s | 1080×1920, 15 s |
 | Story 3 cảnh · Nối cảnh + tự ghép (qua giao diện) | 287 s | khung cuối cảnh trước = khung đầu cảnh sau, nhân vật giữ nguyên |
 | Lập kịch bản bằng chat chính Muse | 14–23 s | JSON hỏng được tự sửa / hỏi lại trong cùng thread |
+| Ghép 2 clip + 2 câu VieNeu + nhạc + phụ đề | 72 s | 1080×1920, giọng "Trúc Ly", phụ đề đốt vào video |
 
-Chưa chạy thật: thanh toán qua webhook ngân hàng, ghép có lồng tiếng VieNeu trên bản v2, Codex Ảnh (cần gói Pro).
+Chưa chạy thật: thanh toán qua webhook ngân hàng thật, Codex Ảnh (cần gói Pro).
 
 ## Nhánh
 - `main` — bản ổn định, chỉ merge qua PR
