@@ -83,7 +83,7 @@ describe("GET /api/catalog", () => {
 
   it("story kind: video models, style+camera presets with theme fields, story skills, plan cost", async () => {
     const res = await GET(new Request("http://localhost/api/catalog?kind=story"));
-    const body = (await res.json()) as CatalogBody & {
+    const body = (await res.json()) as Omit<CatalogBody, "presets"> & {
       skills: { kind: string; locked: boolean; slug: string }[];
       presets: { kind: string; palette: string[]; cover: string }[];
       story: { planCost: number; maxShots: number };
