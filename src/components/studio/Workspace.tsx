@@ -19,6 +19,7 @@ import { describeError, toApiError, useErrorToast } from "./errors";
 import { GenerationFeed, JustifiedSkeleton } from "./GenerationFeed";
 import { PresetCover, PresetGallery } from "./PresetGallery";
 import { RefSlot } from "./RefSlot";
+import { usePrewrite } from "./usePrewrite";
 
 type Kind = "image" | "video";
 
@@ -120,6 +121,20 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
   const preset = catalog?.presets.find((p) => p.id === presetId);
   const skills = useMemo(() => (catalog?.skills ?? []).filter((s) => s.kind === (kind === "image" ? "IMAGE" : "VIDEO")), [catalog, kind]);
   const videoBlocked = kind === "video" && catalog?.videoUnavailable === true;
+  // Viết trước cùng tham số job sẽ gửi (Tạo → backend dùng cache).
+  const prewrite = usePrewrite(
+    autoWrite && catalog && aspectRatio
+      ? {
+          idea: prompt,
+          kind,
+          aspect: aspectRatio,
+          ...(kind === "video" ? { durationSec } : {}),
+          ...(skillId ? { skillId } : {}),
+          ...(presetId ? (kind === "image" ? { styleId: presetId } : { cameraId: presetId }) : {}),
+          hasRef: Boolean(inputUrl),
+        }
+      : null,
+  );
 
   function applyModel(m: CatalogModel, maxDur: number, saved: { aspectRatio?: string; imageCount?: number; durationSec?: number } = {}) {
     setModelId(m.id);
@@ -411,6 +426,11 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
                     onToggle={onToggleWrite}
                     onWrite={onAiWrite}
                     pending={aiWriting}
+                    prewrite={prewrite}
+                    onUsePrewrite={(text) => {
+                      setPrompt(text);
+                      setAutoWrite(false);
+                    }}
                   />
                   {/* Luồng: AI viết prompt → engine người dùng chọn tạo kết quả */}
                   {catalog && (

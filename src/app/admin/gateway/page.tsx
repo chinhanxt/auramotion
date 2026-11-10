@@ -1,8 +1,6 @@
-import { GatewayView } from "@/components/admin/engine/GatewayView";
-import { getGatewayAdmin } from "@/server/services/admin-ops";
-import { adminPage } from "../guard";
+import { redirect } from "next/navigation";
 
-export default async function AdminGatewayPage() {
-  await adminPage();
-  return <GatewayView initial={await getGatewayAdmin()} />;
+// Trang AI Gateway cũ đã gộp vào AI & Model.
+export default function AdminGatewayPage() {
+  redirect("/admin/ai");
 }

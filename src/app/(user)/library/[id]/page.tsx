@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { JobPrompt } from "@/components/library/JobPrompt";
+import { JobTraceCard } from "@/components/library/JobTraceCard";
 import { ACTIVE_STATUSES, STATUS_LABEL, STATUS_TONE, formatCredit, jobErrorText, type WriteParams } from "@/lib/api-client";
 
 export const metadata = { title: "Chi tiết · AuraMotion" };
@@ -69,6 +70,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               Tạo thất bại{job.error ? `: ${jobErrorText(job.error)}` : ""}. Credit đã được hoàn.
             </Notice>
           )}
+          <JobTraceCard jobId={job.id} initial={(job.params as { trace?: unknown } | null)?.trace} active={ACTIVE_STATUSES.includes(job.status)} />
           {job.inputUrl && (
             <div className="space-y-2">
               <h2 className="t-label">{job.kind === "VIDEO" ? "Khung đầu" : "Tham chiếu"}</h2>

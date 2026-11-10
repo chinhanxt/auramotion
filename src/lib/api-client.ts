@@ -32,7 +32,17 @@ export type CatalogPreset = {
 };
 
 export type SkillKind = "IMAGE" | "VIDEO" | "STORY" | "SCRIPT";
-export type CatalogSkill = { id: string; slug: string; name: string; kind: SkillKind; description: string; locked: boolean };
+export type CatalogSkill = {
+  id: string;
+  slug: string;
+  name: string;
+  kind: SkillKind;
+  description: string;
+  locked: boolean;
+  // Nhóm hiển thị ("Review sản phẩm", "Bán hàng", "Thời trang"…) + từ khóa tìm.
+  category?: string;
+  tags?: string[];
+};
 
 export type CatalogPlan = { code: "free" | "pro" | "ultra"; name: string; rank: number; maxDurationSec: number; maxConcurrent: number };
 
@@ -87,7 +97,111 @@ export type JobEvent = {
   stage?: JobStage;
   prompt?: string;
   written?: WrittenInfo;
+  trace?: JobTrace;
 };
+
+// ───────── Trace job (`params.trace`, ms epoch — docs/v2-ai-runtime.md) ─────────
+
+export type JobTrace = {
+  createdAt?: number;
+  queuedAt?: number;
+  writeStart?: number;
+  writeEnd?: number;
+  writer?: { provider: string; model?: string | null; skill?: string | null; cache?: boolean };
+  slotAt?: number;
+  submitAt?: number;
+  engine?: { provider: string; model?: string | null; account?: string | null };
+  // Chọn skill 2 bước: lọc luật (~10 ứng viên) → AI router chọn 1.
+  router?: { method: "rule" | "ai"; candidates?: string[]; chosen?: string; ms?: number };
+  // Kiểm prompt sau khi viết: lint luật + tự sửa.
+  guard?: { fixes?: string[] };
+  doneAt?: number;
+  failedAt?: number;
+  error?: string | null;
+};
+
+export type TraceStageKey = "queue" | "write" | "slot" | "gap" | "engine";
+export type TraceStage = { key: TraceStageKey; label: string; start: number; end: number; ms: number };
+
+const ms = (v: unknown): number | undefined => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v) {
+    const t = Date.parse(v);
+    return Number.isFinite(t) ? t : undefined;
+  }
+  return undefined;
+};
+
+// Chuẩn hóa trace từ API (`{trace}` hoặc trace trần; mốc có thể là ISO string).
+export function toTrace(raw: unknown): JobTrace | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = ("trace" in raw ? (raw as { trace: unknown }).trace : raw) as Record<string, unknown> | null;
+  if (!r || typeof r !== "object") return null;
+  const t: JobTrace = {
+    createdAt: ms(r.createdAt),
+    queuedAt: ms(r.queuedAt),
+    writeStart: ms(r.writeStart),
+    writeEnd: ms(r.writeEnd),
+    slotAt: ms(r.slotAt),
+    submitAt: ms(r.submitAt),
+    doneAt: ms(r.doneAt),
+    failedAt: ms(r.failedAt),
+    writer: (r.writer as JobTrace["writer"]) ?? undefined,
+    engine: (r.engine as JobTrace["engine"]) ?? undefined,
+    router: (r.router as JobTrace["router"]) ?? undefined,
+    guard: (r.guard as JobTrace["guard"]) ?? undefined,
+    error: typeof r.error === "string" ? r.error : null,
+  };
+  return t.createdAt || t.writeStart || t.submitAt || t.doneAt ? t : null;
+}
+
+// Các chặng có thời lượng: xếp hàng → AI viết → chờ slot → giãn cách gửi → engine.
+export function traceStages(t: JobTrace): TraceStage[] {
+  const end = t.doneAt ?? t.failedAt;
+  const out: TraceStage[] = [];
+  const push = (key: TraceStageKey, label: string, a?: number, b?: number) => {
+    if (a === undefined || b === undefined || b < a) return;
+    out.push({ key, label, start: a, end: b, ms: b - a });
+  };
+  const start = t.createdAt ?? t.queuedAt;
+  push("queue", "Xếp hàng", start, t.writeStart ?? t.slotAt ?? t.submitAt);
+  push("write", "AI viết", t.writeStart, t.writeEnd);
+  push("slot", "Chờ slot", t.writeEnd ?? t.queuedAt ?? start, t.slotAt);
+  push("gap", "Giãn cách", t.slotAt, t.submitAt);
+  push("engine", "Engine", t.submitAt ?? t.slotAt, end);
+  return out;
+}
+
+export function traceTotal(t: JobTrace): number | null {
+  const a = t.createdAt ?? t.queuedAt ?? t.writeStart;
+  const b = t.doneAt ?? t.failedAt;
+  return a !== undefined && b !== undefined ? Math.max(0, b - a) : null;
+}
+
+// ───────── Viết trước (prewrite) ─────────
+
+export type PrewriteRequest = {
+  idea: string;
+  kind: "image" | "video";
+  skillId?: string;
+  styleId?: string;
+  cameraId?: string;
+  aspect: string;
+  durationSec?: number;
+  hasRef?: boolean;
+};
+export type PrewriteResult = {
+  key: string;
+  status: "ready" | "pending";
+  prompt?: string;
+  skill?: string | { slug?: string; name?: string } | null;
+  provider?: string;
+};
+
+export function prewriteSkillName(r: Pick<PrewriteResult, "skill"> | null | undefined): string | undefined {
+  const s = r?.skill;
+  return typeof s === "string" ? s : (s?.name ?? s?.slug ?? undefined);
+}
 
 export type StoryStatus = "PLANNING" | "READY" | "RENDERING" | "ASSEMBLING" | "DONE" | "FAILED" | "CANCELED";
 export type StoryShot = { index: number; title: string; prompt: string; camera?: string; durationSec: number };

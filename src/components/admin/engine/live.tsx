@@ -130,7 +130,7 @@ export function HealthPanel({ className }: { className?: string }) {
             const ph = gateway.data?.health[p];
             const st = providerState(ph);
             return (
-              <Link key={p} href="/admin/gateway" className="press min-w-0 rounded-m1 bg-white/[.03] px-2.5 py-2 hairline hover:bg-white/[.06]">
+              <Link key={p} href="/admin/ai" className="press min-w-0 rounded-m1 bg-white/[.03] px-2.5 py-2 hairline hover:bg-white/[.06]">
                 <span className="flex items-center gap-1.5 text-xs font-medium">
                   <Dot tone={st} />
                   <span className="truncate">{PROVIDER_LABEL[p]}</span>
