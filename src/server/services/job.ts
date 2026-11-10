@@ -12,7 +12,9 @@ import { mediaKindOf, validateMedia } from "@/server/engines/media";
 import type { HttpMuseClient } from "@/server/engines/muse";
 import { getVideoBlocked, setVideoBlocked } from "@/server/engines/muse-block";
 import { getScheduler, SlotBusyError, type Lease, type MuseScheduler } from "@/server/engines/muse-scheduler";
-import { loadSkill, writePrompt } from "@/server/engines/prompt-writer";
+import { getCachedWrite, isWritePending, resolvePrewrite, storeWrite, waitCachedWrite } from "@/server/ai/prewrite";
+import { getAiRoles } from "@/server/ai/roles";
+import { loadSkill, writePrompt, type WritePromptResult } from "@/server/engines/prompt-writer";
 import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
 import { assembleErrorCode, runAssembleJob } from "@/server/services/assemble";
 import { charge, hold, publishCredit, refund } from "@/server/services/credit";
@@ -25,6 +27,7 @@ import {
   type GenerationParams,
 } from "@/server/services/pricing";
 import { getSetting } from "@/server/services/settings";
+import { markTrace, traceOf, type JobTrace } from "@/server/services/trace";
 
 export { SlotBusyError };
 
@@ -104,6 +107,7 @@ export function jobEventData(job: Job, extra: { stage?: "writing" | "rendering" 
     progress: job.progress,
     prompt: job.prompt,
     ...(params.written ? { written: params.written } : {}),
+    ...(traceOf(job.params) ? { trace: traceOf(job.params) } : {}),
     ...(extra.stage ? { stage: extra.stage } : params.autoWrite && !params.written && (job.status === "PENDING" || job.status === "RUNNING") ? { stage: "writing" as const } : {}),
     resultUrls: job.resultUrls,
     error: job.error,
@@ -279,7 +283,11 @@ async function insertJobs(userId: string, plan: Plan, items: Prepared[]): Promis
           modelId: model.id,
           kind: KIND[p.kind],
           prompt: p.kind === "assemble" ? p.lines.join("\n") : p.prompt,
-          params: { ...p, ...(opts.extraParams ?? {}) } as Prisma.InputJsonObject,
+          params: {
+            ...p,
+            ...(opts.extraParams ?? {}),
+            trace: { createdAt: now.getTime(), ...(opts.enqueue === false ? {} : { queuedAt: now.getTime() }) },
+          } as Prisma.InputJsonObject,
           inputUrl: p.kind === "assemble" ? null : (p.inputUrl ?? null),
           cost,
           expiresAt: plan.code === "free" && !opts.free ? new Date(now.getTime() + FREE_RESULT_TTL_MS) : null,
@@ -345,6 +353,7 @@ export async function enqueueCreatedJob(jobId: string, patch: { inputUrl?: strin
     },
   });
   if (claimed.count === 0) return false;
+  await markTrace(jobId, { queuedAt: Date.now() });
   const { plan } = await getActivePlan(job.userId);
   try {
     await enqueue(job, job.model.provider, plan);
@@ -424,6 +433,9 @@ export async function finishJob(
     throw err;
   }
   const done = await db.$transaction(async (tx) => {
+    // Đọc lại params trong transaction: trace có thể đã thêm mốc sau lúc đọc job ở trên.
+    const current = await tx.job.findUnique({ where: { id: jobId }, select: { params: true } });
+    const params = (current?.params ?? job.params ?? {}) as Prisma.JsonObject;
     const updated = await tx.job.updateMany({
       where: { id: jobId, status: "RUNNING" },
       data: {
@@ -433,7 +445,11 @@ export async function finishJob(
         error: null,
         progress: 100,
         // Kích thước / thời lượng thật đo bằng ffprobe (params.result).
-        ...(meta ? { params: { ...(job.params as Prisma.JsonObject), result: meta } as Prisma.InputJsonObject } : {}),
+        params: {
+          ...params,
+          ...(meta ? { result: meta } : {}),
+          trace: { ...(traceOf(params) ?? {}), doneAt: Date.now() },
+        } as Prisma.InputJsonObject,
       },
     });
     if (updated.count === 0) return false;
@@ -460,7 +476,10 @@ export async function failJob(jobId: string, error: string): Promise<void> {
     if (updated.count > 0) await refund(jobId, tx);
     return updated.count > 0;
   });
-  if (failed) await afterSettled(jobId);
+  if (failed) {
+    await markTrace(jobId, { failedAt: Date.now(), error: error.slice(0, 300) });
+    await afterSettled(jobId);
+  }
 }
 
 async function claim(jobId: string): Promise<boolean> {
@@ -556,10 +575,15 @@ async function runMuse(job: Job & { model: { engineModel: string; options?: unkn
       await scheduler.release(lease);
       return;
     }
+    await markTrace(job.id, { slotAt: Date.now() });
     try {
       const slots = await scheduler.getSlots();
       const req = await buildRequest(job, { omitVideoSize: !slots.sendVideoAspect });
       taskId = (await muse.submit(req)).taskId;
+      await markTrace(job.id, {
+        submitAt: Date.now(),
+        engine: { provider: "muse", model: job.model.engineModel, ...(req.museAccount ? { account: req.museAccount } : {}) },
+      });
     } catch (err) {
       await scheduler.release(lease);
       if (isFatal(err)) return failMuse(job, kind, err.code, err.message);
@@ -632,7 +656,10 @@ async function runFileEngine(job: Job & { model: { engineModel: string; provider
   let files: string[] = [];
   try {
     const engine = deps.engines?.[provider] ?? getFileEngine(provider);
-    ({ files } = await engine.generate(await buildRequest(job), watch.signal));
+    const req = await buildRequest(job);
+    const at = Date.now();
+    await markTrace(job.id, { slotAt: at, submitAt: at, engine: { provider: provider.toLowerCase(), model: job.model.engineModel } });
+    ({ files } = await engine.generate(req, watch.signal));
     if (files.length === 0) return failJob(job.id, "NO_RESULT");
     await finishJob(job.id, files.map((p) => ({ path: p })));
   } catch (err) {
@@ -683,31 +710,47 @@ export async function processJob(jobId: string, deps: ProcessDeps = {}): Promise
   return runFileEngine(ready, deps);
 }
 
-export type WrittenInfo = { provider: string; skillSlug: string; skillName: string; ms: number };
+export type WrittenInfo = { provider: string; model?: string; skillSlug: string; skillName: string; ms: number; cache?: boolean };
 
-// params.autoWrite: `prompt` đang là ý tưởng gốc → AI Gateway (agy → codex → muse) áp skill viết prompt cho engine.
+// params.autoWrite: `prompt` đang là ý tưởng gốc → AI Gateway (vai writer) áp skill viết prompt cho engine.
+// Có bản viết trước (prewrite) cùng khóa thì dùng luôn; đang viết dở thì chờ nó. Viết xong lưu cache cho lần chạy lại.
 // Đã viết (params.written) thì bỏ qua — an toàn khi BullMQ chạy lại. Lỗi viết: FAILED + hoàn Credit.
 async function ensureWritten<J extends Job>(job: J, deps: ProcessDeps): Promise<J | null> {
   const params = (job.params ?? {}) as Record<string, unknown>;
   if (!params.autoWrite || params.written || (job.kind !== "IMAGE" && job.kind !== "VIDEO")) return job;
-  await publishEvent(job.userId, "job", jobEventData(job, { stage: "writing" }));
+  const writeStart = Date.now();
+  await markTrace(job.id, { writeStart });
+  const trace: JobTrace = { ...(traceOf(params) ?? {}), writeStart };
+  await publishEvent(job.userId, "job", jobEventData({ ...job, params: { ...params, trace } as Prisma.JsonObject }, { stage: "writing" }));
   const kind = job.kind === "IMAGE" ? "image" : "video";
-  const { plan } = await getActivePlan(job.userId);
+  const [{ plan }, roles] = await Promise.all([getActivePlan(job.userId), getAiRoles()]);
   const idea = typeof params.idea === "string" && params.idea ? params.idea : job.prompt;
-  let res: Awaited<ReturnType<typeof writePrompt>>;
+  const input = {
+    idea,
+    kind,
+    skillId: typeof params.skillId === "string" ? params.skillId : undefined,
+    autoSkill: true,
+    styleId: kind === "image" && typeof params.presetId === "string" ? params.presetId : undefined,
+    cameraId: kind === "video" && typeof params.presetId === "string" ? params.presetId : undefined,
+    aspect: typeof params.aspectRatio === "string" ? params.aspectRatio : undefined,
+    durationSec: typeof params.durationSec === "number" ? params.durationSec : undefined,
+    hasRef: Boolean(job.inputUrl),
+    planRank: plan.rank,
+  } as const;
+  let res: WritePromptResult;
+  let cache = false;
   try {
-    res = await (deps.writePrompt ?? writePrompt)({
-      idea,
-      kind,
-      skillId: typeof params.skillId === "string" ? params.skillId : undefined,
-      autoSkill: true,
-      styleId: kind === "image" && typeof params.presetId === "string" ? params.presetId : undefined,
-      cameraId: kind === "video" && typeof params.presetId === "string" ? params.presetId : undefined,
-      aspect: typeof params.aspectRatio === "string" ? params.aspectRatio : undefined,
-      durationSec: typeof params.durationSec === "number" ? params.durationSec : undefined,
-      hasRef: Boolean(job.inputUrl),
-      planRank: plan.rank,
-    });
+    const { key, skill } = await resolvePrewrite(input);
+    let hit = await getCachedWrite(key);
+    if (!hit && (await isWritePending(key))) hit = await waitCachedWrite(key, roles.writer.timeoutSec * 1000);
+    if (hit) {
+      cache = true;
+      res = { prompt: hit.prompt, provider: hit.provider as WritePromptResult["provider"], model: hit.model, ms: hit.ms, skill: hit.skill };
+    } else {
+      res = await (deps.writePrompt ?? writePrompt)({ ...input }, {}, skill ?? null);
+      if (!res.skill && skill) res = { ...res, skill: { id: skill.id, slug: skill.slug, name: skill.name } };
+      await storeWrite(key, res, roles.cacheHours);
+    }
   } catch (err) {
     console.warn(`[job] ${job.id} AI viết prompt lỗi: ${(err as Error).message.slice(0, 300)}`);
     await failJob(job.id, "WRITE_FAILED");
@@ -719,15 +762,26 @@ async function ensureWritten<J extends Job>(job: J, deps: ProcessDeps): Promise<
   }
   const written: WrittenInfo = {
     provider: res.provider,
+    ...(res.model ? { model: res.model } : {}),
     skillSlug: res.skill?.slug ?? "",
     skillName: res.skill?.name ?? "",
     ms: res.ms ?? 0,
+    ...(cache ? { cache: true } : {}),
+  };
+  // Đọc lại trace mới nhất (mốc khác có thể đã ghi trong lúc viết) rồi ghi cùng prompt.
+  const latest = await db.job.findUnique({ where: { id: job.id }, select: { params: true } });
+  const doneTrace: JobTrace = {
+    ...trace,
+    ...(traceOf(latest?.params) ?? {}),
+    writeStart,
+    writeEnd: Date.now(),
+    writer: { provider: res.provider, ...(res.model ? { model: res.model } : {}), ...(res.skill ? { skill: res.skill.slug } : {}), cache, ...(res.ms !== undefined ? { ms: res.ms } : {}) },
   };
   const updated = await db.job.updateMany({
     where: { id: job.id, status: { in: ["PENDING", "RUNNING"] } },
     data: {
       prompt: res.prompt.slice(0, 2000),
-      params: { ...params, idea, written } as Prisma.InputJsonObject,
+      params: { ...params, idea, written, trace: doneTrace } as Prisma.InputJsonObject,
     },
   });
   if (updated.count === 0) return null;
