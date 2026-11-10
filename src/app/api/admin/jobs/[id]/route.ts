@@ -1,10 +1,18 @@
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { handle, readJson } from "@/lib/http";
+import { getAdminJob } from "@/server/services/admin";
 import { setJobFeatured } from "@/server/services/admin-ops";
 import { cancelJob, retryJob } from "@/server/services/job";
 
 const actionSchema = z.object({ action: z.enum(["cancel", "retry"], { message: "Thao tác không hợp lệ" }) });
+
+export function GET(_req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
+  return handle(async () => {
+    await requireAdmin();
+    return getAdminJob((await params).id);
+  });
+}
 
 // Admin không truyền userId: thao tác được trên job của mọi user.
 export function POST(req: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {

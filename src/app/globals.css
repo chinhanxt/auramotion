@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ───────── AuraMotion design tokens ─────────
-   Màu tối chỉ áp cho vùng `.am` (app người dùng, landing, auth); /admin giữ giao diện sáng riêng. */
+   Màu tối chỉ áp cho vùng `.am` (app người dùng, landing, auth, /admin). */
 @theme {
   --color-bg: #070708;
   --color-s1: #0d0d10;
@@ -703,4 +703,38 @@ body {
 }
 :root:has(.dock-in) {
   --dock-h: 128px;
+}
+
+/* Drawer (ngăn trượt cạnh phải / trái) */
+@keyframes am-drawer-r {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes am-drawer-l {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.drawer-panel {
+  animation: am-drawer-r var(--d3) var(--ease-out) backwards;
+}
+.drawer-panel[data-side="left"] {
+  animation-name: am-drawer-l;
+}
+[data-closing] .drawer-panel {
+  opacity: 0;
+  transform: translateX(32px);
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+}
+[data-closing] .drawer-panel[data-side="left"] {
+  transform: translateX(-32px);
 }

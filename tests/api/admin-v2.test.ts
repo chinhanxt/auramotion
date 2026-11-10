@@ -58,6 +58,7 @@ const ROUTES: Record<string, Record<string, unknown>> = {
   "muse/status": await import("@/app/api/admin/muse/status/route"),
   "muse/video-block/clear": await import("@/app/api/admin/muse/video-block/clear/route"),
   gateway: await import("@/app/api/admin/gateway/route"),
+  "gateway/test": await import("@/app/api/admin/gateway/test/route"),
   queues: await import("@/app/api/admin/queues/route"),
   "queues/[name]/[action]": await import("@/app/api/admin/queues/[name]/[action]/route"),
   "jobs/[id]": await import("@/app/api/admin/jobs/[id]/route"),
@@ -300,6 +301,55 @@ describe("admin v2 routes", () => {
     expect(status.body.videoBlocked).toBeNull();
   });
 
+  it("muse PATCH passes kinds through ([] = mọi loại), rejects unknown kind", async () => {
+    await call("muse/accounts/[id]", "PATCH", { kinds: ["video", "image", "video"] }, { id: "acc_1" });
+    expect(museCalls.at(-1)).toMatchObject({ method: "PATCH", url: "/admin/accounts/acc_1" });
+    expect(JSON.parse(museCalls.at(-1)!.body)).toEqual({ kinds: ["video", "image"] });
+    await call("muse/accounts/[id]", "PATCH", { kinds: [] }, { id: "acc_1" });
+    expect(JSON.parse(museCalls.at(-1)!.body)).toEqual({ kinds: [] });
+    const n = museCalls.length;
+    expect((await call("muse/accounts/[id]", "PATCH", { kinds: ["audio"] }, { id: "acc_1" })).status).toBe(400);
+    expect(museCalls).toHaveLength(n);
+  });
+
+  it("gateway test: validates prompt, runs through providers", async () => {
+    expect((await call("gateway/test", "POST", { prompt: " " })).status).toBe(400);
+    expect((await call("gateway/test", "POST", { prompt: "x", provider: "gpt" })).status).toBe(400);
+    const { testGateway } = await import("@/server/services/admin-ops");
+    const res = await testGateway(
+      { prompt: "chào", provider: "codex" },
+      { setting: { order: ["agy", "codex"], timeoutSec: 5 }, runners: { codex: async ({ prompt }) => `ok:${prompt}`, agy: async () => "agy" } },
+    );
+    expect(res).toMatchObject({ text: "ok:chào", provider: "codex" });
+    await expect(
+      testGateway({ prompt: "x" }, { setting: { order: ["agy"], timeoutSec: 5 }, runners: { agy: async () => Promise.reject(new Error("down")) } }),
+    ).rejects.toBeTruthy();
+  });
+
+  it("job detail, list filters (kind / featured) and ops snapshot", async () => {
+    const { listAdminJobs } = await import("@/server/services/admin");
+    const { getOpsSnapshot } = await import("@/server/services/admin-ops");
+    const image = await db.aiModel.findFirstOrThrow({ where: { kind: "IMAGE" } });
+    const base = { userId: member.id, modelId: image.id, kind: "IMAGE" as const, prompt: "p", cost: 1 };
+    const a = await db.job.create({ data: { ...base, status: "SUCCEEDED", featured: true, finishedAt: new Date() } });
+    await db.job.create({ data: { ...base, status: "SUCCEEDED", finishedAt: new Date() } });
+    await db.job.create({ data: { ...base, status: "FAILED", error: "TIMEOUT", finishedAt: new Date() } });
+
+    const detail = await json(call("jobs/[id]", "GET", undefined, { id: a.id }));
+    expect(detail.body.job).toMatchObject({ id: a.id, featured: true, user: { email: "m@test.local" } });
+    expect((await call("jobs/[id]", "GET", undefined, { id: "nope" })).status).toBe(404);
+
+    expect((await listAdminJobs({ status: "SUCCEEDED", featured: "1" })).items.map((j) => j.id)).toEqual([a.id]);
+    expect((await listAdminJobs({ status: "SUCCEEDED", featured: "0" })).total).toBe(1);
+    expect((await listAdminJobs({ kind: "VIDEO" })).total).toBe(0);
+    expect((await listAdminJobs({ pageSize: 2 })).items).toHaveLength(2);
+
+    const snap = await getOpsSnapshot();
+    expect(snap).toMatchObject({ jobsToday: 3, succeededToday: 2, failedToday: 1, successRate: 66.7 });
+    expect(snap.users).toBeGreaterThanOrEqual(2);
+    expect(snap.recentFailed[0]).toMatchObject({ error: "TIMEOUT", user: { email: "m@test.local" } });
+  });
+
   it("music used by a pending assemble job cannot be deleted", async () => {
     const { deleteMusicTrack } = await import("@/server/services/admin");
     const model = await db.aiModel.findFirstOrThrow({ where: { kind: "ASSEMBLE" } });
@@ -314,7 +364,15 @@ describe("admin v2 routes", () => {
     const { createStory } = await import("@/server/services/story");
     const story = await createStory(member.id, { idea: "x", aspect: "9:16", shotCount: 2, shotDurationSec: 5 });
     const list = await json(call("stories", "GET"));
-    expect(list.body.items[0]).toMatchObject({ id: story.id, user: { email: "m@test.local" } });
+    expect(list.body.items[0]).toMatchObject({ id: story.id, user: { email: "m@test.local" }, doneCount: 0 });
+    const video = await db.aiModel.findFirstOrThrow({ where: { kind: "VIDEO" } });
+    for (const [i, status] of (["SUCCEEDED", "RUNNING"] as const).entries()) {
+      await db.job.create({ data: { userId: member.id, modelId: video.id, kind: "VIDEO", prompt: "s", cost: 2.5, status, storyId: story.id, shotIndex: i } });
+    }
+    // Quay lại cảnh 0 thành công thêm lần nữa + job ghép không có shotIndex: vẫn 1 cảnh xong.
+    await db.job.create({ data: { userId: member.id, modelId: video.id, kind: "VIDEO", prompt: "s", cost: 2.5, status: "SUCCEEDED", storyId: story.id, shotIndex: 0 } });
+    await db.job.create({ data: { userId: member.id, modelId: video.id, kind: "VIDEO", prompt: "s", cost: 0, status: "SUCCEEDED", storyId: story.id } });
+    expect((await json(call("stories", "GET"))).body.items[0]).toMatchObject({ jobCount: 4, doneCount: 1, cost: 7.5 });
     expect((await json(call("stories/[id]", "GET", undefined, { id: story.id }))).body.story.id).toBe(story.id);
     expect((await call("stories/[id]", "DELETE", undefined, { id: story.id })).status).toBe(200);
     expect((await db.story.findUniqueOrThrow({ where: { id: story.id } })).status).toBe("CANCELED");

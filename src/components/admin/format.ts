@@ -1,8 +1,10 @@
-// Định dạng dùng chung cho trang quản trị (chạy được cả server lẫn client).
+// Định dạng + nhãn dùng chung cho trang quản trị (chạy được cả server lẫn client).
+import type { Tone } from "@/components/ui/Bits";
 
 export const PLAN_RANK_LABEL: Record<number, string> = { 0: "Free", 1: "Pro", 2: "Ultra" };
 
-export const KIND_LABEL = { IMAGE: "Ảnh", VIDEO: "Video", ASSEMBLE: "Ghép video" } as const;
+export const KIND_LABEL = { IMAGE: "Ảnh", VIDEO: "Video", ASSEMBLE: "Ghép" } as const;
+export const KIND_ICON = { IMAGE: "image", VIDEO: "video", ASSEMBLE: "cut" } as const;
 
 export const TXN_LABEL: Record<string, string> = {
   grant: "Cấp theo gói",
@@ -15,26 +17,51 @@ export const TXN_LABEL: Record<string, string> = {
 };
 
 export const PAYMENT_STATUS_LABEL = { PENDING: "Chờ", SUCCEEDED: "Thành công", CANCELED: "Hủy" } as const;
+export const PAYMENT_STATUS_TONE: Record<keyof typeof PAYMENT_STATUS_LABEL, Tone> = { PENDING: "warn", SUCCEEDED: "ok", CANCELED: "neutral" };
 
-export const PAYMENT_STATUS_COLOR = {
-  PENDING: "bg-amber-100 text-amber-800",
-  SUCCEEDED: "bg-green-100 text-green-800",
-  CANCELED: "bg-neutral-200 text-neutral-700",
-} as const;
+export const STORY_TONE: Record<string, Tone> = {
+  PLANNING: "info",
+  READY: "aura",
+  RENDERING: "info",
+  ASSEMBLING: "info",
+  DONE: "ok",
+  FAILED: "danger",
+  CANCELED: "neutral",
+};
+
+export const PROVIDER_LABEL: Record<string, string> = { agy: "agy", codex: "Codex", muse: "Muse chat" };
 
 export function formatVnd(value: number): string {
   return `${value.toLocaleString("vi-VN")} ₫`;
 }
 
-export function formatDateTime(value: Date | string | null | undefined): string {
-  if (!value) return "—";
+export function formatNumber(value: number): string {
+  return value.toLocaleString("vi-VN");
+}
+
+export function formatDateTime(value: Date | string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
   return new Date(value).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" });
 }
 
-export const buttonClass =
-  "rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50";
-export const secondaryButtonClass =
-  "rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-800 hover:bg-neutral-100 disabled:opacity-50";
-export const inputClass =
-  "w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900";
-export const cardClass = "rounded-xl border border-neutral-200 bg-white p-4";
+// "vừa xong", "5 phút", "3 giờ", "2 ngày" (trước / tới).
+export function timeAgo(value: Date | string | number | null | undefined, now: number = Date.now()): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const t = new Date(value).getTime();
+  if (!Number.isFinite(t)) return "—";
+  const diff = Math.round((now - t) / 1000);
+  const abs = Math.abs(diff);
+  const unit = abs < 45 ? null : abs < 3600 ? `${Math.round(abs / 60)} phút` : abs < 86400 ? `${Math.round(abs / 3600)} giờ` : `${Math.round(abs / 86400)} ngày`;
+  if (!unit) return "vừa xong";
+  return diff >= 0 ? `${unit} trước` : `còn ${unit}`;
+}
+
+export function formatMs(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined) return "—";
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
+}
+
+export function durationSec(start: Date | string | null | undefined, end: Date | string | null | undefined): number | null {
+  if (!start || !end) return null;
+  return Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000));
+}

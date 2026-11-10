@@ -261,6 +261,12 @@ export const creditAdjustSchema = z.object({
 // validateParams từ chối mọi giá trị không có trong options, nên danh sách rỗng / thiếu làm engine không dùng được.
 const ratioList = z.array(z.string().trim().min(1)).min(1, { message: "Cần ít nhất 1 tỷ lệ khung hình" });
 const maxRefs = z.number().int().min(0).max(10).optional();
+// Model MUSE: ghim 1 tài khoản muse2api (header X-Muse-Account); rỗng = tài khoản nào cũng được.
+const museAccount = z
+  .string()
+  .trim()
+  .regex(/^([\w.-]{1,100})?$/, { message: "Mã tài khoản Muse không hợp lệ" })
+  .optional();
 const OPTIONS_BY_KIND = {
   IMAGE: z.object({
     aspectRatios: ratioList,
@@ -268,6 +274,7 @@ const OPTIONS_BY_KIND = {
       .array(z.union([z.literal(1), z.literal(2), z.literal(4)], { message: "Số ảnh chỉ gồm 1, 2, 4" }))
       .min(1, { message: "Cần ít nhất 1 lựa chọn số ảnh" }),
     maxRefs,
+    museAccount,
   }),
   VIDEO: z.object({
     aspectRatios: ratioList,
@@ -275,6 +282,7 @@ const OPTIONS_BY_KIND = {
       .array(z.union([z.literal(5), z.literal(10)], { message: "Thời lượng chỉ gồm 5, 10" }))
       .min(1, { message: "Cần ít nhất 1 lựa chọn thời lượng" }),
     maxRefs,
+    museAccount,
   }),
   ASSEMBLE: z.object({
     aspectRatios: z
@@ -284,7 +292,9 @@ const OPTIONS_BY_KIND = {
 } as const;
 
 function parseModelOptions(kind: keyof typeof OPTIONS_BY_KIND, options: unknown): Prisma.InputJsonObject {
-  return OPTIONS_BY_KIND[kind].parse(options);
+  const parsed: Record<string, unknown> = OPTIONS_BY_KIND[kind].parse(options);
+  if (!parsed.museAccount) delete parsed.museAccount;
+  return parsed as Prisma.InputJsonObject;
 }
 
 const modelFields = {
@@ -585,14 +595,20 @@ export const jobListQuery = z.object({
   status: z.enum(JOB_STATUSES).optional(),
   user: z.string().trim().max(200).optional(),
   modelId: z.string().trim().min(1).optional(),
+  kind: z.enum(["IMAGE", "VIDEO", "ASSEMBLE"]).optional(),
+  // "1" = chỉ job nổi bật, "0" = chỉ job chưa nổi bật.
+  featured: z.enum(["0", "1"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(60).default(PAGE_SIZE),
 });
 
 export async function listAdminJobs(input: z.input<typeof jobListQuery>) {
-  const { status, user, modelId, page } = jobListQuery.parse(input);
+  const { status, user, modelId, kind, featured, page, pageSize } = jobListQuery.parse(input);
   const where: Prisma.JobWhereInput = {
     ...(status ? { status: status as JobStatus } : {}),
     ...(modelId ? { modelId } : {}),
+    ...(kind ? { kind } : {}),
+    ...(featured ? { featured: featured === "1" } : {}),
     ...(user ? { user: { email: { contains: user, mode: "insensitive" } } } : {}),
   };
   const [total, items] = await Promise.all([
@@ -600,12 +616,21 @@ export async function listAdminJobs(input: z.input<typeof jobListQuery>) {
     db.job.findMany({
       where,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       include: { user: { select: { id: true, email: true } }, model: { select: { id: true, name: true } } },
     }),
   ]);
-  return { items, total, page, pageSize: PAGE_SIZE };
+  return { items, total, page, pageSize };
+}
+
+export async function getAdminJob(id: string) {
+  const job = await db.job.findUnique({
+    where: { id },
+    include: { user: { select: { id: true, email: true } }, model: { select: { id: true, name: true, provider: true } } },
+  });
+  if (!job) throw new AppError("NOT_FOUND", "Không tìm thấy tác vụ");
+  return { job };
 }
 
 // ---------- Thanh toán ----------
