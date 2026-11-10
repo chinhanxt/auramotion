@@ -122,14 +122,17 @@ export function clearCodexQuotaCache(): void {
   cache.clear();
 }
 
-export async function getCodexQuota(home: string, opts: { active: boolean; refresh?: boolean }): Promise<CodexQuota | null> {
+// `appServer: false` (CODEX_TRANSPORT=exec): chỉ đọc log phiên, không bật tiến trình nào.
+export async function getCodexQuota(home: string, opts: { active: boolean; refresh?: boolean; appServer?: boolean }): Promise<CodexQuota | null> {
   const hit = cache.get(home);
   if (!opts.refresh && hit && Date.now() - hit.at < CACHE_MS) return hit.quota;
   let quota: CodexQuota | null = null;
-  try {
-    quota = await fromAppServer(home, opts.active);
-  } catch {
-    quota = null;
+  if (opts.appServer !== false) {
+    try {
+      quota = await fromAppServer(home, opts.active);
+    } catch {
+      quota = null;
+    }
   }
   quota ??= await quotaFromSessionLog(home).catch(() => null);
   cache.set(home, { at: Date.now(), quota });

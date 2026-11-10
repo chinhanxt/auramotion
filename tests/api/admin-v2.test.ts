@@ -401,12 +401,20 @@ describe("admin v2 routes", () => {
     await saveAiRoles({ ...(await getAiRoles()), writer: { chain: [{ provider: "agy", model: "gemini-3.8-flash-low" }, { provider: "codex", model: "gpt-6-luna", effort: "low" }], strategy: "race", timeoutSec: 30 } });
     const flow = await json(call("flow", "GET"));
     expect(flow.status).toBe(200);
-    const nodes = flow.body.nodes as { id: string; kind: string; ai?: { provider: string; model?: string } }[];
-    expect(nodes.find((n) => n.id === "writer:0")?.ai).toEqual({ provider: "agy", model: "gemini-3.8-flash-low" });
-    expect(nodes.find((n) => n.id === "writer:1")?.ai).toMatchObject({ provider: "codex", model: "gpt-6-luna" });
+    const nodes = flow.body.nodes as { id: string; kind: string; subtitle: string; ai?: { provider: string; model?: string }; stats?: Record<string, unknown> }[];
+    // Chế độ trực tiếp: thẻ AI viết / engine không mang model cố định, chỉ hãng + vai trò + số model bật.
+    expect(nodes.find((n) => n.id === "writer:0")?.ai).toEqual({ provider: "agy" });
+    expect(nodes.find((n) => n.id === "writer:0")?.subtitle).toBe("agy · theo chuỗi AI viết");
+    expect(nodes.find((n) => n.id === "writer:1")?.ai).toEqual({ provider: "codex", account: "default" });
+    expect(nodes.filter((n) => n.kind === "writer" || n.kind === "executor").every((n) => !n.ai?.model && !/gpt-|gemini-|claude-/.test(n.subtitle))).toBe(true);
     const models = await db.aiModel.findMany({ where: { enabled: true } });
-    for (const m of models) expect(nodes.some((n) => n.id === `exec:${m.id}` && n.kind === "executor")).toBe(true);
+    const execs = nodes.filter((n) => n.kind === "executor");
+    expect(execs.map((n) => n.id).sort()).toEqual(["exec:agy:image", "exec:codex:image", "exec:local:assemble", "exec:muse:image", "exec:muse:video"]);
+    expect(execs.find((n) => n.id === "exec:agy:image")?.stats).toMatchObject({ models: 5, vendors: { google: 3, anthropic: 2 }, activeJobs: 0 });
+    expect(execs.find((n) => n.id === "exec:codex:image")?.stats).toMatchObject({ models: models.filter((m) => m.provider === "CODEX").length, vendors: { openai: 8 } });
+    expect(execs.find((n) => n.id === "exec:muse:video")?.subtitle).toBe("muse · model người dùng chọn · 1 model đang bật");
     const edges = flow.body.edges as { from: string; to: string; label?: string }[];
+    expect(edges).toContainEqual({ from: "exec:muse:video", to: "muse2api", label: "video" });
     expect(edges).toContainEqual({ from: "skill", to: "writer:1", label: "race" });
     expect(flow.body.live).toMatchObject({ queues: expect.any(Object), slots: { limits: expect.any(Object), used: expect.any(Object) }, activeJobs: [] });
 
@@ -414,6 +422,11 @@ describe("admin v2 routes", () => {
     const job = await db.job.create({
       data: { userId: member.id, modelId: image.id, kind: "IMAGE", prompt: "p", cost: 1, status: "SUCCEEDED", params: { trace: { createdAt: 1, doneAt: 2 } } },
     });
+    // Job đang chạy ở engine: gắn vào thẻ engine của provider × loại.
+    const running = await db.job.create({ data: { userId: member.id, modelId: image.id, kind: "IMAGE", prompt: "p", cost: 1, status: "RUNNING", museTaskId: "t1" } });
+    const live = await json(call("flow", "GET"));
+    expect(live.body.live.activeJobs).toContainEqual(expect.objectContaining({ id: running.id, stage: "rendering", node: `exec:${image.provider.toLowerCase()}:image` }));
+    await db.job.delete({ where: { id: running.id } });
     const list = await json(call("flow/jobs", "GET"));
     expect(list.body.items.map((j: { id: string }) => j.id)).toContain(job.id);
     const tr = await json(call("jobs/[id]/trace", "GET", undefined, { id: job.id }));

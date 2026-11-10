@@ -16,18 +16,34 @@ const LOGIN_TTL_SEC = 600;
 const STATE_RE = /^[a-f0-9]{16,64}$/;
 
 export type AgyQuota = { group: string; pct: number | null; resetAt: string | null };
-export type AgyAccount = { id: string; email: string; active: boolean; status: string; quota: AgyQuota[]; minQuota?: number | null; error?: string };
+// % CÒN LẠI của cửa sổ 5 giờ / tuần + lúc reset, theo nhóm model (switcher: gemini_5h, gemini_weekly, claude_5h, claude_weekly).
+export type AgyQuotaGroup = { fiveHour: number | null; weekly: number | null; fiveHourResetAt: string | null; weeklyResetAt: string | null };
+export type AgyAccount = {
+  id: string;
+  email: string;
+  active: boolean;
+  status: string;
+  quota: AgyQuota[];
+  groups: { gemini: AgyQuotaGroup; claude: AgyQuotaGroup };
+  minQuota?: number | null;
+  error?: string;
+};
+
+export function quotaGroups(quota: AgyQuota[]): AgyAccount["groups"] {
+  const pick = (family: "gemini" | "claude"): AgyQuotaGroup => {
+    const five = quota.find((q) => q.group === `${family}_5h`);
+    const week = quota.find((q) => q.group === `${family}_weekly`);
+    return { fiveHour: five?.pct ?? null, weekly: week?.pct ?? null, fiveHourResetAt: five?.resetAt ?? null, weeklyResetAt: week?.resetAt ?? null };
+  };
+  return { gemini: pick("gemini"), claude: pick("claude") };
+}
 
 function toAccounts(raw: unknown): AgyAccount[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
-    .map((a) => ({
-      id: String(a.id ?? a.email ?? ""),
-      email: String(a.email ?? ""),
-      active: a.active === true,
-      status: typeof a.status === "string" ? a.status : "VALID",
-      quota: Array.isArray(a.quota)
+    .map((a) => {
+      const quota: AgyQuota[] = Array.isArray(a.quota)
         ? a.quota
             .filter((q): q is Record<string, unknown> => !!q && typeof q === "object")
             .map((q) => ({
@@ -35,10 +51,18 @@ function toAccounts(raw: unknown): AgyAccount[] {
               pct: typeof q.pct === "number" ? q.pct : null,
               resetAt: typeof q.resetAt === "string" ? q.resetAt : null,
             }))
-        : [],
-      ...(typeof a.minQuota === "number" ? { minQuota: a.minQuota } : {}),
-      ...(typeof a.error === "string" ? { error: a.error.slice(0, 300) } : {}),
-    }))
+        : [];
+      return {
+        id: String(a.id ?? a.email ?? ""),
+        email: String(a.email ?? ""),
+        active: a.active === true,
+        status: typeof a.status === "string" ? a.status : "VALID",
+        quota,
+        groups: quotaGroups(quota),
+        ...(typeof a.minQuota === "number" ? { minQuota: a.minQuota } : {}),
+        ...(typeof a.error === "string" ? { error: a.error.slice(0, 300) } : {}),
+      };
+    })
     .filter((a) => a.id);
 }
 
