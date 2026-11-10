@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { copyFile, readFile, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { activeCodexHome } from "@/server/ai/codex-profiles";
 import { cliLock, runCli } from "@/server/engines/cli";
 import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
 
@@ -18,9 +19,10 @@ export function codexBin(): string {
 export async function codexText(
   prompt: string,
   effort = "low",
-  opts: { model?: string; signal?: AbortSignal } = {},
+  opts: { model?: string; signal?: AbortSignal; home?: string } = {},
 ): Promise<string> {
   const { result } = await runCli({
+    ...(opts.home ? { env: { CODEX_HOME: opts.home } } : {}),
     bin: codexBin(),
     lock: cliLock("codex"),
     args: (dir) => [
@@ -47,10 +49,6 @@ export async function codexText(
       }),
   });
   return result;
-}
-
-function codexHome(): string {
-  return process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
 }
 
 function imagePrompt(req: MediaRequest, refName?: string): string {
@@ -131,7 +129,8 @@ function classify(message: string): EngineError {
 // `-i` nuốt các tham số phía sau. Sau khi chép ảnh ra os.tmpdir()/aura-out-*, luôn xóa ảnh và rollout của thread.
 export const codexImage: FileEngine = {
   async generate(req, signal) {
-    const home = codexHome();
+    // Profile codex đang bật trong ai_roles (mặc định ~/.codex).
+    const home = await activeCodexHome();
     const refName = req.inputPath ? `ref-1${path.extname(req.inputPath).toLowerCase()}` : undefined;
     let stdout = "";
     let failure: unknown;

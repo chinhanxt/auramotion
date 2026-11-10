@@ -146,6 +146,8 @@ export async function routeSkill(
         prompt: buildRouterPrompt(input.idea, cands, { kind: input.kind, hasRef: input.hasRef, style: input.style }),
         system: ROUTER_SYSTEM,
         validate: (text) => parseRouterAnswer(text, cands),
+        // Vai riêng trong ai_roles: chuỗi model nhanh, timeout ngắn.
+        role: "router",
       },
       deps,
     );

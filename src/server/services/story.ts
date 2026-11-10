@@ -318,6 +318,8 @@ export async function planStory(storyId: string, deps: GatewayDeps = {}): Promis
         system: skill?.instructions ?? FALLBACK_SYSTEM,
         validate: (text) => parseStoryPlan(text, opts),
         followUp: `${PLAN_FOLLOW_UP} Exactly ${story.shotCount} distinct shots, no repeated shot.`,
+        // Chuỗi `story` của ai_roles; planner của story lên đầu chuỗi.
+        role: "story",
         provider: story.planner as AiProvider,
         threadKey: story.threadKey,
       },

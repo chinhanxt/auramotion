@@ -10,7 +10,7 @@ export type AgentOptions = {
   command: string;
   args: string[];
   cwd: string;
-  env?: NodeJS.ProcessEnv;
+  env?: Record<string, string | undefined>;
   startTimeoutMs?: number;
   /** Thư mục `<gemini_dir>/antigravity-cli`: xoá dữ liệu phiên ở đây khi đóng phiên. */
   dataDir?: string;
@@ -74,9 +74,11 @@ function feed(c: Collector, chunk: string, final = false): void {
 
 /** Chỉ những biến môi trường này được chuyển cho `agy`; khoá API, token cổng… không bao giờ lọt sang. */
 const ENV_ALLOW = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "DBUS_SESSION_BUS_ADDRESS"];
-export function childEnv(extra: Record<string, string | undefined> = {}, base: Record<string, string | undefined> = process.env): NodeJS.ProcessEnv {
-  const env: Record<string, string | undefined> = {};
+export function childEnv(extra: Record<string, string | undefined> = {}, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = {} as NodeJS.ProcessEnv;
   for (const k of ENV_ALLOW) if (base[k] !== undefined) env[k] = base[k];
+  // FAKE_*: tham số cho agent ACP giả trong test.
+  if (base.NODE_ENV === "test") for (const [k, v] of Object.entries(base)) if (k.startsWith("FAKE_")) env[k] = v;
   return { ...env, ...extra } as NodeJS.ProcessEnv;
 }
 type SessionNew = { sessionId: string; models?: { availableModels?: { modelId: string; name: string }[] } };

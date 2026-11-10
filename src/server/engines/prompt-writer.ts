@@ -1,12 +1,11 @@
 import type { PromptSkill } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { aiText, getGatewaySetting, type AiProvider, type GatewayDeps } from "@/server/ai/gateway";
+import { aiText, type AiProvider, type Breakdown, type GatewayDeps } from "@/server/ai/gateway";
 import { guardPrompt } from "@/server/ai/guard";
 import { chooseSkillByRules, routeSkill, type RouteInfo } from "@/server/ai/router";
 import { presetText, renderTemplate } from "@/server/ai/template";
 import { EngineError } from "@/server/engines/types";
-import { getSetting } from "@/server/services/settings";
 
 export type WritePromptInput = {
   idea: string;
@@ -31,11 +30,11 @@ export type WritePromptResult = {
   prompt?: string;
   lines?: string[];
   provider: AiProvider;
+  model?: string;
   skill?: { id: string; slug: string; name: string };
   ms?: number;
+  breakdown?: Breakdown;
 };
-
-type PromptWriterSetting = { provider?: "agy" | "codex"; model?: string };
 
 const SKILL_KIND = { image: "IMAGE", video: "VIDEO", script: "SCRIPT" } as const;
 
@@ -111,31 +110,35 @@ export async function loadPreset(id: string | undefined, kind: "STYLE" | "CAMERA
   return preset;
 }
 
-// Viết prompt / lời thoại qua AI Gateway. Có skill thì dùng instructions + template của skill.
-// Provider ưu tiên lấy từ setting cũ `prompt_writer` (nếu có), lỗi thì gateway tự thử provider kế.
-export async function writePrompt(input: WritePromptInput, deps: GatewayDeps = {}): Promise<WritePromptResult> {
-  const writer = await getSetting<PromptWriterSetting>("prompt_writer").catch(() => ({}) as PromptWriterSetting);
+// Skill áp cho lần viết: skillId người dùng chọn, hoặc bộ chọn 2 tầng (luật → AI vai `router`) theo ý tưởng.
+export async function resolveSkill(
+  input: WritePromptInput,
+  deps: GatewayDeps = {},
+  style?: string,
+): Promise<{ skill?: PromptSkill; route?: RouteInfo }> {
+  if (input.skillId) return { skill: await loadSkill(input.skillId, SKILL_KIND[input.kind], input.planRank) };
+  if (!input.autoSkill) return {};
+  const routed = await routeSkill({ kind: input.kind, idea: input.idea, hasRef: input.hasRef, planRank: input.planRank, style }, deps);
+  return { skill: routed.skill, route: routed.route };
+}
+
+// Dựng câu gửi AI: skill thì instructions (system) + template của skill, không thì hướng dẫn mặc định.
+// `skill`: undefined = tự chọn theo input, null = không dùng skill.
+export async function buildWriterPrompt(
+  input: WritePromptInput,
+  skill?: PromptSkill | null,
+  deps: GatewayDeps = {},
+): Promise<{ prompt: string; system?: string; skill?: PromptSkill; route?: RouteInfo }> {
   const [style, camera] = await Promise.all([loadPreset(input.styleId, "STYLE"), loadPreset(input.cameraId, "CAMERA")]);
   const styleText = presetText(style);
   const cameraText = camera?.promptSuffix;
-
+  const resolved = skill === undefined ? await resolveSkill(input, deps, style?.name) : { skill: skill ?? undefined };
+  const chosen = resolved.skill;
   let prompt: string;
   let system: string | undefined;
-  let skill: PromptSkill | undefined;
-  let route: RouteInfo | undefined;
-  if (input.skillId) {
-    skill = await loadSkill(input.skillId, SKILL_KIND[input.kind], input.planRank);
-  } else if (input.autoSkill) {
-    const routed = await routeSkill(
-      { kind: input.kind, idea: input.idea, hasRef: input.hasRef, planRank: input.planRank, style: style?.name },
-      deps,
-    );
-    skill = routed.skill;
-    route = routed.route;
-  }
-  if (skill) {
-    system = skill.instructions;
-    prompt = renderTemplate(skill.template, {
+  if (chosen) {
+    system = chosen.instructions;
+    prompt = renderTemplate(chosen.template, {
       idea: input.idea,
       style: styleText,
       camera: cameraText,
@@ -146,15 +149,16 @@ export async function writePrompt(input: WritePromptInput, deps: GatewayDeps = {
     prompt = buildTask(input, styleText, cameraText);
   }
   if (input.hasRef && input.kind !== "script") prompt = `${prompt}\n\n${REF_NOTE[input.kind]}`;
+  return { prompt, system, skill: chosen, ...(resolved.route ? { route: resolved.route } : {}) };
+}
 
-  const provider = writer.provider === "agy" || writer.provider === "codex" ? writer.provider : undefined;
-  const gatewayDeps: GatewayDeps = { ...deps };
-  if (!deps.setting && writer.provider === "agy" && writer.model) {
-    gatewayDeps.setting = { ...(await getGatewaySetting()), agyModel: writer.model };
-  }
+// Viết prompt / lời thoại qua AI Gateway (vai `writer` trong ai_roles; setting cũ prompt_writer / ai_gateway
+// được đọc tương thích ngược). `skill`: skill đã chọn sẵn (null = không dùng skill). Prompt ảnh/video qua guard.
+export async function writePrompt(input: WritePromptInput, deps: GatewayDeps = {}, skill?: PromptSkill | null): Promise<WritePromptResult> {
+  const built = await buildWriterPrompt(input, skill, deps);
   let res;
   try {
-    res = await aiText({ prompt, system, json: true, provider }, gatewayDeps);
+    res = await aiText({ prompt: built.prompt, system: built.system, json: true, role: "writer" }, deps);
   } catch (err) {
     if (err instanceof EngineError && err.code === "AI_GATEWAY") throw new EngineError("PROMPT_WRITER", `AI viết prompt lỗi: ${err.message}`);
     throw err;
@@ -168,10 +172,12 @@ export async function writePrompt(input: WritePromptInput, deps: GatewayDeps = {
   }
   return {
     ...out,
-    ...(route ? { route } : {}),
+    ...(built.route ? { route: built.route } : {}),
     ...(guard ? { guard } : {}),
     provider: res.provider,
+    ...(res.model ? { model: res.model } : {}),
     ms: res.ms,
-    ...(skill ? { skill: { id: skill.id, slug: skill.slug, name: skill.name } } : {}),
+    ...(res.breakdown ? { breakdown: res.breakdown } : {}),
+    ...(built.skill ? { skill: { id: built.skill.id, slug: built.skill.slug, name: built.skill.name } } : {}),
   };
 }

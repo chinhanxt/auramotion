@@ -63,7 +63,24 @@ const ROUTES: Record<string, Record<string, unknown>> = {
   "queues/[name]/[action]": await import("@/app/api/admin/queues/[name]/[action]/route"),
   "jobs/[id]": await import("@/app/api/admin/jobs/[id]/route"),
   settings: await import("@/app/api/admin/settings/route"),
+  ai: await import("@/app/api/admin/ai/route"),
+  "ai/roles": await import("@/app/api/admin/ai/roles/route"),
+  "ai/test": await import("@/app/api/admin/ai/test/route"),
+  "ai/agy/login": await import("@/app/api/admin/ai/agy/login/route"),
+  "ai/agy/login/finish": await import("@/app/api/admin/ai/agy/login/finish/route"),
+  "ai/agy/switch": await import("@/app/api/admin/ai/agy/switch/route"),
+  "ai/agy/accounts/[id]": await import("@/app/api/admin/ai/agy/accounts/[id]/route"),
+  "ai/agy/proxy": await import("@/app/api/admin/ai/agy/proxy/route"),
+  "ai/acp/restart": await import("@/app/api/admin/ai/acp/restart/route"),
+  "ai/codex/login": await import("@/app/api/admin/ai/codex/login/route"),
+  "ai/codex/login/[loginId]": await import("@/app/api/admin/ai/codex/login/[loginId]/route"),
+  "ai/codex/logout": await import("@/app/api/admin/ai/codex/logout/route"),
+  flow: await import("@/app/api/admin/flow/route"),
+  "flow/jobs": await import("@/app/api/admin/flow/jobs/route"),
+  "jobs/[id]/trace": await import("@/app/api/admin/jobs/[id]/trace/route"),
 };
+const jobTraceRoute = await import("@/app/api/jobs/[id]/trace/route");
+const prewriteRoute = await import("@/app/api/ai/prewrite/route");
 const presetsRoute = await import("@/app/api/admin/presets/route");
 const exploreRoute = await import("@/app/api/explore/route");
 const themesRoute = await import("@/app/api/themes/route");
@@ -126,7 +143,7 @@ describe("admin v2 routes", () => {
 
   it("every new admin route: 401 anonymous, 403 normal user", async () => {
     let checked = 0;
-    const params = { id: "x", name: "story", action: "pause" };
+    const params = { id: "x", name: "story", action: "pause", loginId: "x" };
     for (const [who, status] of [
       [null, 401],
       [() => member, 403],
@@ -377,5 +394,57 @@ describe("admin v2 routes", () => {
     expect((await call("stories/[id]", "DELETE", undefined, { id: story.id })).status).toBe(200);
     expect((await db.story.findUniqueOrThrow({ where: { id: story.id } })).status).toBe("CANCELED");
     expect((await json(call("stories/[id]", "GET", undefined, { id: story.id }))).body.story.status).toBe("CANCELED");
+  });
+
+  it("flow graph from real config, flow jobs + trace routes (owner only)", async () => {
+    const { saveAiRoles, getAiRoles } = await import("@/server/ai/roles");
+    await saveAiRoles({ ...(await getAiRoles()), writer: { chain: [{ provider: "agy", model: "gemini-3.8-flash-low" }, { provider: "codex", model: "gpt-6-luna", effort: "low" }], strategy: "race", timeoutSec: 30 } });
+    const flow = await json(call("flow", "GET"));
+    expect(flow.status).toBe(200);
+    const nodes = flow.body.nodes as { id: string; kind: string; ai?: { provider: string; model?: string } }[];
+    expect(nodes.find((n) => n.id === "writer:0")?.ai).toEqual({ provider: "agy", model: "gemini-3.8-flash-low" });
+    expect(nodes.find((n) => n.id === "writer:1")?.ai).toMatchObject({ provider: "codex", model: "gpt-6-luna" });
+    const models = await db.aiModel.findMany({ where: { enabled: true } });
+    for (const m of models) expect(nodes.some((n) => n.id === `exec:${m.id}` && n.kind === "executor")).toBe(true);
+    const edges = flow.body.edges as { from: string; to: string; label?: string }[];
+    expect(edges).toContainEqual({ from: "skill", to: "writer:1", label: "race" });
+    expect(flow.body.live).toMatchObject({ queues: expect.any(Object), slots: { limits: expect.any(Object), used: expect.any(Object) }, activeJobs: [] });
+
+    const image = models.find((m) => m.kind === "IMAGE")!;
+    const job = await db.job.create({
+      data: { userId: member.id, modelId: image.id, kind: "IMAGE", prompt: "p", cost: 1, status: "SUCCEEDED", params: { trace: { createdAt: 1, doneAt: 2 } } },
+    });
+    const list = await json(call("flow/jobs", "GET"));
+    expect(list.body.items.map((j: { id: string }) => j.id)).toContain(job.id);
+    const tr = await json(call("jobs/[id]/trace", "GET", undefined, { id: job.id }));
+    expect(tr.body).toMatchObject({ id: job.id, trace: { createdAt: 1, doneAt: 2 } });
+
+    const own = (id: string) => (jobTraceRoute.GET as unknown as Handler)(new Request("http://localhost/api/jobs/x/trace"), { params: Promise.resolve({ id }) });
+    current.user = member;
+    expect((await json(own(job.id))).body).toMatchObject({ trace: { doneAt: 2 } });
+    current.user = admin;
+    expect((await own(job.id)).status).toBe(404);
+    current.user = null;
+    expect((await own(job.id)).status).toBe(401);
+    const pw = (prewriteRoute.POST as unknown as (r: Request) => Promise<Response>)(
+      new Request("http://localhost/api/ai/prewrite", { method: "POST", body: JSON.stringify({ idea: "x", kind: "image", aspect: "1:1" }) }),
+    );
+    expect((await pw).status).toBe(401);
+  });
+
+  it("ai roles PUT validates; ai test runs one provider with timing", async () => {
+    expect((await call("ai/roles", "PUT", { writer: { chain: [] } })).status).toBe(400);
+    const { getAiRoles } = await import("@/server/ai/roles");
+    const ok = await json(call("ai/roles", "PUT", { ...(await getAiRoles()), cacheHours: 12 }));
+    expect(ok.body.roles.cacheHours).toBe(12);
+    expect((await call("ai/test", "POST", { provider: "gpt", idea: "x" })).status).toBe(400);
+    const { testAi } = await import("@/server/services/ai-admin");
+    const res = await testAi(
+      { provider: "codex", model: "gpt-6-luna", effort: "low", idea: "mèo" },
+      { runners: { codex: async ({ step }) => ({ text: `{"prompt":"${step.model}/${step.effort}"}`, model: step.model, breakdown: { modelMs: 3 } }) } },
+    );
+    expect(res).toMatchObject({ provider: "codex", model: "gpt-6-luna", breakdown: { modelMs: 3 }, text: '{"prompt":"gpt-6-luna/low"}' });
+    expect(res.prompt).toContain("mèo");
+    expect(res.ms).toBeGreaterThanOrEqual(0);
   });
 });

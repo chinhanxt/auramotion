@@ -111,7 +111,9 @@ describe("guardPrompt (kiểm prompt trước khi gửi engine)", () => {
 
 describe("quotaCooldownSec (gateway bỏ qua provider hết quota)", () => {
   it("đọc thời gian reset", () => {
-    expect(quotaCooldownSec("error: Individual quota reached. Resets in 2h34m33s.")).toBe(2 * 3600 + 34 * 60 + 33);
+    // Tối đa 30 phút: quota agy tính theo model / tài khoản, thường dùng lại được sớm hơn giờ reset.
+    expect(quotaCooldownSec("error: Individual quota reached. Resets in 2h34m33s.")).toBe(1800);
+    expect(quotaCooldownSec("rate limit, resets in 5m")).toBe(300);
     expect(quotaCooldownSec("You have exhausted your capacity on this model.")).toBe(900);
     expect(quotaCooldownSec("agy thoát mã 1: timeout")).toBeNull();
   });
