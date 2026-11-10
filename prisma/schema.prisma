@@ -211,6 +211,19 @@ model AiModel {
   options     Json          @default("{}")
   enabled     Boolean       @default(true)
   sort        Int           @default(0)
+  // Hãng hiển thị cho người dùng: muse | google | anthropic | openai | local.
+  vendor      String        @default("")
+  // Tên đẹp, vd "Gemini 3.8 Flash"; `name` vẫn là khóa nội bộ duy nhất.
+  displayName String        @default("")
+  // Nhãn ngắn: "Nhanh", "Đẹp", "Mới", "Pro"…
+  badge       String        @default("")
+  description String        @default("")
+  // Thời gian ước tính (giây) hiển thị cho người dùng.
+  etaSec      Int?
+  // Kết quả test vẽ thật: { ok, testedAt, ms, error?, sampleUrl? }.
+  verified    Json?
+  // manual | synced (tạo bởi Đồng bộ model).
+  source      String        @default("manual")
 
   jobs Job[]
 

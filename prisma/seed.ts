@@ -24,7 +24,7 @@ const PLANS: {
   { code: "ultra", name: "Ultra", priceMonth: 499000, priceYear: 4790000, monthlyCredits: 2000, maxConcurrent: 6, maxDurationSec: 10, rank: 2 },
 ];
 
-const MODELS: {
+type SeedModel = {
   name: string;
   provider: ModelProvider;
   engineModel: string;
@@ -33,18 +33,91 @@ const MODELS: {
   baseCost: number;
   options: Prisma.InputJsonObject;
   sort: number;
-}[] = [
-  { name: "MUSE Ảnh", provider: "MUSE", engineModel: "muse-image", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1 }, sort: 1 },
+  vendor: string;
+  displayName: string;
+  badge?: string;
+  etaSec?: number;
+  verified?: Prisma.InputJsonObject;
+};
+
+const IMAGE_OPTIONS = { aspectRatios: IMAGE_RATIOS, counts: [1], maxRefs: 1 };
+
+const MODELS: SeedModel[] = [
+  { name: "MUSE Ảnh", provider: "MUSE", engineModel: "muse-image", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1 }, sort: 1, vendor: "muse", displayName: "Muse Image" },
   // Ghim tài khoản Muse riêng cho ảnh (SEED_MUSE_IMAGE_ACCOUNT = id trong muse2api). Bỏ trống thì không tạo.
   ...(process.env.SEED_MUSE_IMAGE_ACCOUNT
-    ? [{ name: "MUSE Ảnh 2", provider: "MUSE" as const, engineModel: "muse-image", kind: "IMAGE" as const, minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1, museAccount: process.env.SEED_MUSE_IMAGE_ACCOUNT }, sort: 2 }]
+    ? [{ name: "MUSE Ảnh 2", provider: "MUSE" as const, engineModel: "muse-image", kind: "IMAGE" as const, minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1, museAccount: process.env.SEED_MUSE_IMAGE_ACCOUNT }, sort: 2, vendor: "muse", displayName: "Muse Image · TK2" }]
     : []),
-  { name: "Gemini Ảnh", provider: "AGY", engineModel: "gemini-3.8-flash-medium", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1], maxRefs: 1 }, sort: 2 },
-  // engineModel rỗng: codex dùng model mặc định.
-  { name: "Codex Ảnh", provider: "CODEX", engineModel: "", kind: "IMAGE", minPlanRank: 1, baseCost: 2, options: { aspectRatios: IMAGE_RATIOS, counts: [1], maxRefs: 1 }, sort: 3 },
-  { name: "MUSE Video", provider: "MUSE", engineModel: "muse-video", kind: "VIDEO", minPlanRank: 0, baseCost: 3, options: { aspectRatios: VIDEO_RATIOS, durations: [5, 10], maxRefs: 1 }, sort: 4 },
-  { name: "Ghép video", provider: "LOCAL", engineModel: "assemble", kind: "ASSEMBLE", minPlanRank: 0, baseCost: 2, options: { aspectRatios: VIDEO_RATIOS }, sort: 5 },
+  { name: "Gemini Ảnh", provider: "AGY", engineModel: "gemini-3.8-flash-medium", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: IMAGE_OPTIONS, sort: 2, vendor: "google", displayName: "Gemini 3.8 Flash · Medium" },
+  { name: "Codex Ảnh", provider: "CODEX", engineModel: "gpt-6.1-sol", kind: "IMAGE", minPlanRank: 1, baseCost: 2, options: IMAGE_OPTIONS, sort: 3, vendor: "openai", displayName: "GPT-6.1 Sol" },
+  { name: "MUSE Video", provider: "MUSE", engineModel: "muse-video", kind: "VIDEO", minPlanRank: 0, baseCost: 3, options: { aspectRatios: VIDEO_RATIOS, durations: [5, 10], maxRefs: 1 }, sort: 4, vendor: "muse", displayName: "Muse Video" },
+  { name: "Ghép video", provider: "LOCAL", engineModel: "assemble", kind: "ASSEMBLE", minPlanRank: 0, baseCost: 2, options: { aspectRatios: VIDEO_RATIOS }, sort: 5, vendor: "local", displayName: "Ghép video" },
 ];
+
+// Model ảnh đã test vẽ thật 10/11/2026 (ảnh 1:1, cùng prompt, codex: profile default). Cùng provider + engineModel + kind đã có dòng
+// (vd "Codex Ảnh" = gpt-6.1-sol) thì dùng lại dòng đó, chỉ điền trường hiển thị còn trống.
+const TESTED_AT = "2026-11-10T16:00:00+07:00";
+const tested = (
+  provider: ModelProvider,
+  engineModel: string,
+  vendor: string,
+  displayName: string,
+  badge: string,
+  sec: number,
+  sort: number,
+): SeedModel => ({
+  name: `${provider.toLowerCase()}:${engineModel}:IMAGE`,
+  provider,
+  engineModel,
+  kind: "IMAGE",
+  minPlanRank: provider === "CODEX" ? 1 : 0,
+  baseCost: provider === "CODEX" ? 2 : 1,
+  options: IMAGE_OPTIONS,
+  sort,
+  vendor,
+  displayName,
+  badge,
+  etaSec: sec,
+  verified: { ok: true, testedAt: TESTED_AT, ms: sec * 1000 },
+});
+
+export const TESTED_MODELS: SeedModel[] = [
+  tested("AGY", "gemini-3.8-flash-low", "google", "Gemini 3.8 Flash", "Nhanh", 24, 1),
+  tested("AGY", "gemini-4-argon-low", "google", "Gemini 4 Argon", "Mới", 33, 3),
+  tested("AGY", "claude-sonnet-5-5-low", "anthropic", "Claude Sonnet 5.5", "", 21, 1),
+  tested("AGY", "claude-opus-5-5-low", "anthropic", "Claude Opus 5.5", "Đẹp", 20, 2),
+  tested("CODEX", "gpt-6-luna", "openai", "GPT-6 Luna", "", 42, 1),
+  tested("CODEX", "gpt-6.1-sol", "openai", "GPT-6.1 Sol", "Pro", 44, 3),
+  tested("CODEX", "gpt-6-astra", "openai", "GPT-6 Astra", "", 30, 2),
+  tested("CODEX", "gpt-6-sol", "openai", "GPT-6 Sol", "", 29, 4),
+  tested("CODEX", "gpt-6.1-terra", "openai", "GPT-6.1 Terra", "", 32, 5),
+  tested("CODEX", "gpt-5.6-sol", "openai", "GPT-5.6 Sol", "", 37, 6),
+  tested("CODEX", "gpt-5.6-terra", "openai", "GPT-5.6 Terra", "", 33, 7),
+  tested("CODEX", "gpt-5.6-luna", "openai", "GPT-5.6 Luna", "", 29, 8),
+];
+
+async function seedTestedModels(): Promise<void> {
+  for (const m of TESTED_MODELS) {
+    const cur = await db.aiModel.findFirst({
+      where: { provider: m.provider, engineModel: m.engineModel, kind: m.kind },
+      orderBy: [{ sort: "asc" }, { name: "asc" }],
+    });
+    if (!cur) {
+      await db.aiModel.upsert({ where: { name: m.name }, create: m, update: {} });
+      continue;
+    }
+    await db.aiModel.update({
+      where: { id: cur.id },
+      data: {
+        ...(cur.vendor ? {} : { vendor: m.vendor }),
+        ...(cur.displayName ? {} : { displayName: m.displayName }),
+        ...(cur.badge || !m.badge ? {} : { badge: m.badge }),
+        ...(cur.etaSec !== null ? {} : { etaSec: m.etaSec }),
+        ...(cur.verified !== null || !m.verified ? {} : { verified: m.verified }),
+      },
+    });
+  }
+}
 
 const PRESETS: Prisma.PresetCreateInput[] = [
   { kind: "STYLE", name: "Studio", promptSuffix: "clean studio product shot, seamless backdrop, soft box lighting, sharp focus" },
@@ -90,6 +163,7 @@ export async function seed(): Promise<void> {
   for (const m of MODELS) {
     await db.aiModel.upsert({ where: { name: m.name }, create: m, update: {} });
   }
+  await seedTestedModels();
   for (const p of PRESETS) {
     await db.preset.upsert({ where: { kind_name: { kind: p.kind, name: p.name } }, create: p, update: {} });
   }

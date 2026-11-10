@@ -20,7 +20,8 @@
 - `verified Json?` — `{ ok: boolean, testedAt, ms, error?, sampleUrl? }` (test vẽ ảnh/video thật)
 - `source String @default("manual")` — `manual | synced`
 - Giữ `name` duy nhất (khóa nội bộ, vd `agy:gemini-3.8-flash-low:IMAGE`), `provider`, `engineModel`, `kind`, `minPlanRank`, `baseCost`, `options.museAccount`, `enabled`, `sort`.
-- Dòng cũ: điền `vendor/displayName` (MUSE Ảnh → muse "Muse Image", MUSE Ảnh 2 → muse "Muse Image · TK2", Gemini Ảnh → google "Gemini 3.8 Flash", Codex Ảnh → openai "GPT-6.1 Sol" + engineModel `gpt-6.1-sol`, MUSE Video → muse "Muse Video").
+- Dòng cũ: điền `vendor/displayName` (MUSE Ảnh → muse "Muse Image", MUSE Ảnh 2 → muse "Muse Image · TK2", Gemini Ảnh (gemini-3.8-flash-medium) → google "Gemini 3.8 Flash · Medium" (bật, chưa verified), Codex Ảnh → openai "GPT-6.1 Sol" + engineModel `gpt-6.1-sol`, MUSE Video → muse "Muse Video", Ghép video → local).
+- Model ảnh đã test vẽ thật 10/11 (migration `20261110180000_model_catalog` + `…181000_model_catalog_codex` cho DB đang chạy, `prisma/seed.ts` cho DB mới; bật, `verified={ok:true, testedAt:"2026-11-10T16:00:00+07:00", ms}`, `etaSec` ≈ số đo; cùng provider+engineModel+kind đã có dòng thì dùng lại dòng đó, chỉ điền trường còn trống): agy (giá 1, gói 0) Gemini 3.8 Flash `gemini-3.8-flash-low` "Nhanh" 24 s, Gemini 4 Argon `gemini-4-argon-low` "Mới" 33 s, Claude Sonnet 5.5 `claude-sonnet-5-5-low` 21 s, Claude Opus 5.5 `claude-opus-5-5-low` "Đẹp" 20 s; codex (giá 2, gói ≥ 1, profile default) GPT-6 Luna 42 s, GPT-6.1 Sol "Pro" 44 s (= dòng Codex Ảnh), GPT-6 Astra 30 s, GPT-6 Sol 29 s, GPT-6.1 Terra 32 s, GPT-5.6 Sol 37 s, GPT-5.6 Terra 33 s, GPT-5.6 Luna 29 s. Model chỉ có ở 1 profile codex (acc5 gpt-5.5, gpt-daybreak-*; acc2/vanan gpt-6-chat-thinking) chỉ là dòng `synced` tắt (cần bật profile đó).
 
 ## API
 | Method | Path | |
