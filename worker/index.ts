@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { QUEUE_NAMES, queues, storyQueue, type QueueJobData, type QueueName, type StoryJobData } from "@/lib/queue";
 import { redis } from "@/lib/redis";
 import { stopAcp } from "@/server/ai/acp/runtime";
+import { stopCodexAppServers } from "@/server/ai/codex/appserver";
 import { QUEUE_TIMEOUT_MS } from "@/server/services/job";
 import { startCron } from "./cron";
 import { processGenerate } from "./processors/generate";
@@ -66,6 +67,8 @@ async function main(): Promise<void> {
       await Promise.all(workers.map((w) => w.close(true).catch(() => undefined)));
       // Tắt các tiến trình agy acp của worker (xóa dữ liệu phiên).
       await stopAcp();
+      // Tắt tiến trình codex app-server thường trực.
+      await stopCodexAppServers();
       await Promise.all([...Object.values(queues), storyQueue].map((q) => q.close()));
       await redis.quit();
       await db.$disconnect();
