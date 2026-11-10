@@ -683,7 +683,14 @@ export async function processJob(jobId: string, deps: ProcessDeps = {}): Promise
   return runFileEngine(ready, deps);
 }
 
-export type WrittenInfo = { provider: string; skillSlug: string; skillName: string; ms: number };
+export type WrittenInfo = {
+  provider: string;
+  skillSlug: string;
+  skillName: string;
+  ms: number;
+  router?: { method: string; candidates: string[]; chosen: string; ms: number; reason?: string };
+  guard?: { fixes: string[] };
+};
 
 // params.autoWrite: `prompt` đang là ý tưởng gốc → AI Gateway (agy → codex → muse) áp skill viết prompt cho engine.
 // Đã viết (params.written) thì bỏ qua — an toàn khi BullMQ chạy lại. Lỗi viết: FAILED + hoàn Credit.
@@ -722,6 +729,8 @@ async function ensureWritten<J extends Job>(job: J, deps: ProcessDeps): Promise<
     skillSlug: res.skill?.slug ?? "",
     skillName: res.skill?.name ?? "",
     ms: res.ms ?? 0,
+    ...(res.route ? { router: res.route } : {}),
+    ...(res.guard ? { guard: res.guard } : {}),
   };
   const updated = await db.job.updateMany({
     where: { id: job.id, status: { in: ["PENDING", "RUNNING"] } },

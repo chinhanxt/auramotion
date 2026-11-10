@@ -3,6 +3,7 @@ import type { JobKind, ModelProvider, PlanCode, Prisma } from "@prisma/client";
 import { db } from "../src/lib/db";
 import { startFree } from "../src/server/services/plan";
 import { CAMERAS, LEGACY_PRESET_META, SKILLS, THEMES } from "./seed-data";
+import { SKILL_LIBRARY, SKILL_META } from "./skill-library";
 
 const IMAGE_RATIOS = ["1:1", "9:16", "16:9", "4:5"];
 const VIDEO_RATIOS = ["9:16", "16:9", "1:1"];
@@ -103,7 +104,11 @@ export async function seed(): Promise<void> {
     const [kind, name] = key.split(":") as ["STYLE" | "CAMERA", string];
     await db.preset.updateMany({ where: { kind, name, slug: null }, data: meta });
   }
-  for (const s of SKILLS) {
+  const allSkills = [
+    ...SKILLS.map((s) => ({ ...s, category: SKILL_META[s.slug]?.category ?? "", tags: SKILL_META[s.slug]?.tags ?? [] })),
+    ...SKILL_LIBRARY,
+  ];
+  for (const s of allSkills) {
     const cur = await db.promptSkill.findUnique({ where: { slug: s.slug } });
     if (!cur) {
       await db.promptSkill.create({ data: s });
@@ -111,9 +116,11 @@ export async function seed(): Promise<void> {
       // Admin chưa sửa skill này: cập nhật nội dung theo bản seed mới (giữ bật/tắt + thứ tự).
       await db.promptSkill.update({
         where: { id: cur.id },
-        data: { name: s.name, description: s.description, instructions: s.instructions, template: s.template },
+        data: { name: s.name, description: s.description, instructions: s.instructions, template: s.template, category: s.category, tags: s.tags },
       });
       await db.$executeRaw`UPDATE prompt_skills SET "updatedAt" = "createdAt" WHERE id = ${cur.id}`;
+    } else if (!cur.category && cur.tags.length === 0) {
+      await db.$executeRaw`UPDATE prompt_skills SET category = ${s.category}, tags = ${s.tags} WHERE id = ${cur.id}`;
     }
   }
   for (const [key, value] of Object.entries(SETTINGS)) {

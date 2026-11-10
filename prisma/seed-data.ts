@@ -26,7 +26,7 @@ export type SeedTheme = {
 };
 
 // Cách hiểu yêu cầu người dùng: áp cho mọi skill ảnh / video.
-const INPUT_RULES = `How to read the request:
+export const INPUT_RULES = `How to read the request:
 - The user's idea is usually Vietnamese (sometimes slang or a few words). Understand the intent fully, then write the prompt in natural English.
 - Keep every concrete detail the user gives (subject, colour, place, time of day, mood, product name). Never contradict the idea and never add a second main subject.
 - Vietnamese culture must be accurate and specific: name the real thing in English (ao dai, conical non la hat, pho noodle soup, banh mi, Hoi An lanterns, Saigon scooters, karst islands of Ha Long Bay) instead of generic "Asian" wording.
@@ -34,14 +34,14 @@ const INPUT_RULES = `How to read the request:
 - If something is unspecified, choose what makes the most beautiful, believable result.`;
 
 // Luật chung cho prompt ảnh Muse.
-const IMAGE_RULES = `Muse image rules:
+export const IMAGE_RULES = `Muse image rules:
 - ONE English prompt of 40 to 70 words, one paragraph, no lists, no quotation marks.
 - Order: main subject (exact material, colour, shape) → action or pose → setting and background → light (source, direction, colour) → camera (angle, lens, depth of field) → mood and style.
 - No text, letters, captions, logos or watermarks in the image unless the idea explicitly asks for them.
 - Never mention aspect ratio, resolution or image size.`;
 
 // Luật chung cho prompt video Muse (bài học AffKit / EM BÔNG).
-const VIDEO_RULES = `Muse video rules (never break them):
+export const VIDEO_RULES = `Muse video rules (never break them):
 - Write the prompt in English, 1 to 3 short sentences, present tense, concrete and visual.
 - Exactly ONE camera move per shot, slow and smooth (for example "slow dolly in" or "gentle orbit to the left"). Never combine moves, never "zoom in and out", never pulsing, shaking or repeated zooms, no whip pans, no fast cuts inside a shot.
 - Describe continuous motion of the subject (hair in the wind, steam rising, fabric moving) so the clip never looks frozen.
@@ -49,7 +49,7 @@ const VIDEO_RULES = `Muse video rules (never break them):
 - No on-screen text, captions, logos, watermarks or UI in the picture.
 - Characters: lock them in Muse vocabulary = species or archetype + 3 to 5 colour cues (for example "a small orange tabby cat with a white chest, a teal knitted scarf and amber eyes"). Reuse that exact phrase, word for word, every time the character appears.`;
 
-const STORY_RULES = `${INPUT_RULES}
+export const STORY_RULES = `${INPUT_RULES}
 ${VIDEO_RULES}
 - Shots must flow into each other: end each shot on a pose, object, colour or movement that the next shot begins with (match-cut, shape match, colour match, continuous action across the cut).
 - Keep one location family, one light direction and one colour palette across all shots unless the idea demands a change; change it with a motivated transition (door opens, camera passes through an object, light flares).
@@ -57,16 +57,16 @@ ${VIDEO_RULES}
 {"title": "short Vietnamese title", "shots": [{"title": "short Vietnamese shot title", "prompt": "English Muse video prompt", "camera": "the single camera move in 2-5 English words", "durationSec": number}]}
 - Return exactly the requested number of shots, each with durationSec equal to the requested duration.`;
 
-const STORY_TEMPLATE = `Idea: {{idea}}
+export const STORY_TEMPLATE = `Idea: {{idea}}
 Visual style: {{style}}
 Preferred camera language: {{camera}}
 Number of shots: {{shots}}
 Duration of each shot: {{duration}} seconds
 Final format (do not mention it in prompts): {{aspect}}`;
 
-const IMAGE_JSON = 'Return strict JSON only, no markdown: {"prompt": "..."}';
-const VIDEO_JSON = 'Return strict JSON only, no markdown: {"prompt": "..."}';
-const SCRIPT_JSON = 'Return strict JSON only, no markdown: {"lines": ["câu 1", "câu 2"]}';
+export const IMAGE_JSON = 'Return strict JSON only, no markdown: {"prompt": "..."}';
+export const VIDEO_JSON = 'Return strict JSON only, no markdown: {"prompt": "..."}';
+export const SCRIPT_JSON = 'Return strict JSON only, no markdown: {"lines": ["câu 1", "câu 2"]}';
 
 export const SKILLS: SeedSkill[] = [
   {

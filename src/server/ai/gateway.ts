@@ -162,7 +162,7 @@ export async function getGatewayHealth(): Promise<Record<AiProvider, ProviderHea
 
 // Provider báo hết quota: tạm bỏ qua tới lúc reset (đọc "Resets in 2h34m33s", không có thì 15 phút).
 const QUOTA_RE = /quota|exhausted your capacity|resource[_ ]exhausted|rate limit|usage limit|\b429\b/i;
-const cooldownKey = (p: AiProvider) => `am:gw:cooldown:${p}`;
+const cooldownKey = (p: AiProvider) => `${process.env.NODE_ENV === "test" ? "am:test:" : "am:"}gw:cooldown:${p}`;
 
 export function quotaCooldownSec(message: string): number | null {
   if (!QUOTA_RE.test(message)) return null;

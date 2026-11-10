@@ -280,6 +280,9 @@ model PromptSkill {
   name         String
   kind         SkillKind
   description  String    @default("")
+  // Lĩnh vực (Review sản phẩm, Bán hàng, Thời trang, Gia dụng, Làm phim, Vlog…) + từ khóa không dấu cho bộ chọn skill.
+  category     String    @default("")
+  tags         String[]  @default([])
   instructions String    @db.Text
   // Biến: {{idea}} {{style}} {{camera}} {{aspect}} {{duration}} {{shots}}
   template     String    @db.Text

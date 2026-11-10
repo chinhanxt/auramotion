@@ -1,0 +1,2 @@
+ALTER TABLE "prompt_skills" ADD COLUMN "category" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "tags" TEXT[] DEFAULT ARRAY[]::TEXT[];

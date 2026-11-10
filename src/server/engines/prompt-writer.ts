@@ -2,6 +2,8 @@ import type { PromptSkill } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { aiText, getGatewaySetting, type AiProvider, type GatewayDeps } from "@/server/ai/gateway";
+import { guardPrompt } from "@/server/ai/guard";
+import { chooseSkillByRules, routeSkill, type RouteInfo } from "@/server/ai/router";
 import { presetText, renderTemplate } from "@/server/ai/template";
 import { EngineError } from "@/server/engines/types";
 import { getSetting } from "@/server/services/settings";
@@ -23,6 +25,9 @@ export type WritePromptInput = {
 };
 
 export type WritePromptResult = {
+  // Bộ chọn skill 2 tầng + kiểm prompt (khi tự chọn skill / ảnh-video).
+  route?: RouteInfo;
+  guard?: { fixes: string[] };
   prompt?: string;
   lines?: string[];
   provider: AiProvider;
@@ -83,62 +88,13 @@ export async function loadSkill(skillId: string, kind: PromptSkill["kind"], plan
   return skill;
 }
 
-// Từ khóa (không dấu) gợi ý skill hợp với ý tưởng; skill mới không có ở đây thì dùng tên + mô tả của skill.
-const SKILL_HINTS: Record<string, string[]> = {
-  "image-product-hero": ["san pham", "chai", "hop qua", "my pham", "nuoc hoa", "dong ho", "doi giay", "giay the thao", "giay dep", "tui xach", "quang cao", "product", "packshot", "ban hang", "shop", "kem duong", "son moi", "serum", "tai nghe", "dien thoai"],
-  "image-character-lock": ["nhan vat", "mascot", "linh vat", "character", "con meo", "con cho", "chu meo", "chu cho", "be gai", "be trai", "nhat quan"],
-  "image-cinematic-frame": ["dien anh", "canh phim", "cinematic", "khung hinh", "phim", "bau khong khi", "toi", "mua dem"],
-  "image-food-drink": ["mon an", "do an", "do uong", "pho", "bun", "banh", "banh mi", "banh xeo", "bun cha", "com tam", "xoi", "che", "lau", "nuong", "thit", "gion", "hai san", "ca phe", "cafe", "tra sua", "tra", "nuoc ep", "sinh to", "cocktail", "food", "an uong", "nha hang", "quan an", "com", "boc khoi", "ngon"],
-  "image-portrait-fashion": ["chan dung", "nguoi mau", "thoi trang", "ao dai", "outfit", "trang phuc", "portrait", "fashion", "co gai", "chang trai", "lookbook"],
-  "image-vietnam-landscape": ["phong canh", "du lich", "ha long", "hoi an", "sapa", "da lat", "ruong bac thang", "bien", "nui", "pho co", "landscape", "travel", "hue", "mien tay"],
-  "video-one-move": ["canh", "khung canh", "scene"],
-  "video-product-reveal": ["san pham", "chai", "hop qua", "my pham", "nuoc hoa", "doi giay", "giay the thao", "tui xach", "quang cao", "product", "ban hang", "shop", "unbox", "serum", "dong ho"],
-  "video-character-motion": ["nhan vat", "mascot", "con meo", "con cho", "chu meo", "chu cho", "be gai", "be trai", "di bo", "chay", "nhay mua", "character"],
-  "video-food-motion": ["mon an", "do an", "do uong", "pho", "bun", "banh", "banh mi", "banh xeo", "bun cha", "com tam", "lau", "nuong", "thit", "gion", "ca phe", "cafe", "tra sua", "nuoc ep", "sinh to", "boc khoi", "rot", "food", "nau an", "ngon"],
-  "video-travel-scenic": ["phong canh", "du lich", "ha long", "hoi an", "sapa", "da lat", "ruong bac thang", "bien", "nui", "flycam", "drone", "travel", "hoang hon", "binh minh"],
-  "video-fashion-showcase": ["thoi trang", "outfit", "trang phuc", "ao dai", "vay", "nguoi mau", "catwalk", "fashion", "lookbook", "mac do"],
-  "video-animate-still": [],
-};
-
-function fold(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-// Chọn skill hợp nhất cho ý tưởng (nhanh, không gọi AI): đếm từ khóa khớp; hòa thì theo thứ tự `sort`.
-// Có ảnh khung đầu cho video thì ưu tiên skill "animate" nếu có.
-export function chooseSkill<T extends Pick<PromptSkill, "slug" | "name" | "description" | "sort">>(
+// Chọn skill bằng luật (tầng 1 của bộ chọn) — giữ để tương thích; luồng chính dùng routeSkill (2 tầng).
+export function chooseSkill<T extends Pick<PromptSkill, "slug" | "name" | "description" | "sort"> & Partial<Pick<PromptSkill, "category" | "tags">>>(
   skills: T[],
   idea: string,
   opts: { hasRef?: boolean; kind?: "image" | "video" | "script" } = {},
 ): T | undefined {
-  if (skills.length === 0) return undefined;
-  const text = ` ${fold(idea)} `;
-  if (opts.hasRef && opts.kind === "video") {
-    const animate = skills.find((s) => s.slug === "video-animate-still");
-    if (animate) return animate;
-  }
-  let best: T | undefined;
-  let bestScore = 0;
-  for (const s of [...skills].sort((a, b) => a.sort - b.sort)) {
-    const hints = SKILL_HINTS[s.slug] ?? fold(`${s.name} ${s.description}`).split(" ").filter((w) => w.length > 3);
-    let score = 0;
-    for (const h of hints) {
-      if (!h) continue;
-      const hits = text.split(` ${h} `).length - 1;
-      score += hits * (h.includes(" ") ? 2 : 1);
-    }
-    if (score > bestScore) {
-      best = s;
-      bestScore = score;
-    }
-  }
-  return best ?? [...skills].sort((a, b) => a.sort - b.sort)[0];
+  return chooseSkillByRules(skills, idea, opts);
 }
 
 const REF_NOTE: Record<"image" | "video", string> = {
@@ -166,13 +122,16 @@ export async function writePrompt(input: WritePromptInput, deps: GatewayDeps = {
   let prompt: string;
   let system: string | undefined;
   let skill: PromptSkill | undefined;
+  let route: RouteInfo | undefined;
   if (input.skillId) {
     skill = await loadSkill(input.skillId, SKILL_KIND[input.kind], input.planRank);
   } else if (input.autoSkill) {
-    const list = await db.promptSkill.findMany({
-      where: { kind: SKILL_KIND[input.kind], enabled: true, ...(input.planRank !== undefined ? { minPlanRank: { lte: input.planRank } } : {}) },
-    });
-    skill = chooseSkill(list, input.idea, { hasRef: input.hasRef, kind: input.kind });
+    const routed = await routeSkill(
+      { kind: input.kind, idea: input.idea, hasRef: input.hasRef, planRank: input.planRank, style: style?.name },
+      deps,
+    );
+    skill = routed.skill;
+    route = routed.route;
   }
   if (skill) {
     system = skill.instructions;
@@ -200,8 +159,17 @@ export async function writePrompt(input: WritePromptInput, deps: GatewayDeps = {
     if (err instanceof EngineError && err.code === "AI_GATEWAY") throw new EngineError("PROMPT_WRITER", `AI viết prompt lỗi: ${err.message}`);
     throw err;
   }
+  const out = parseOutput(res.data, res.text, input.kind);
+  let guard: { fixes: string[] } | undefined;
+  if (out.prompt && input.kind !== "script") {
+    const g = guardPrompt(input.kind, out.prompt, { allowText: /\b(chữ|text|logo|tiêu đề|slogan)\b/i.test(input.idea) });
+    out.prompt = g.prompt;
+    guard = { fixes: g.fixes };
+  }
   return {
-    ...parseOutput(res.data, res.text, input.kind),
+    ...out,
+    ...(route ? { route } : {}),
+    ...(guard ? { guard } : {}),
     provider: res.provider,
     ms: res.ms,
     ...(skill ? { skill: { id: skill.id, slug: skill.slug, name: skill.name } } : {}),
