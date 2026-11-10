@@ -108,9 +108,12 @@ function TopBar({ user }: { user: ShellUser }) {
         scrolled ? "glass shadow-[0_1px_0_var(--color-line)]" : "bg-transparent",
       )}
     >
-      <div className="flex h-14 items-center gap-3 px-3 sm:px-5 lg:px-6">
-        <Logo href="/explore" compact />
-        <nav aria-label="Chính" className="mx-auto hidden items-center gap-0.5 md:flex">
+      {/* 3 cột: menu giữa luôn đứng yên khi pill Credit đổi độ rộng */}
+      <div className="flex h-14 items-center gap-3 px-3 sm:px-5 md:grid md:grid-cols-[1fr_auto_1fr] lg:px-6">
+        <div className="flex min-w-0 items-center">
+          <Logo href="/explore" compact />
+        </div>
+        <nav aria-label="Chính" className="hidden items-center gap-0.5 md:flex">
           {NAV.map((n) => {
             const active = isActive(pathname, n.href);
             return (
@@ -129,7 +132,7 @@ function TopBar({ user }: { user: ShellUser }) {
             );
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-2 md:ml-0">
+        <div className="ml-auto flex items-center justify-end gap-2 md:ml-0">
           <CreditPill />
           <UserMenu user={user} />
         </div>

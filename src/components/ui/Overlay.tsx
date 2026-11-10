@@ -216,11 +216,42 @@ export function Popover({
   const setOpen = useCallback((v: boolean) => (onOpenChange ? onOpenChange(v) : setInner(v)), [onOpenChange]);
   const wrap = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const { mounted, closing } = usePresence(open, 140);
+  const [pos, setPos] = useState<React.CSSProperties | null>(null);
+
+  // Panel nằm trong portal, định vị fixed theo nút: không bị container overflow (thanh công cụ cuộn ngang, dock) cắt mất.
+  useEffect(() => {
+    if (!mounted) return;
+    const place = () => {
+      const r = (wrap.current?.firstElementChild as HTMLElement | null)?.getBoundingClientRect() ?? wrap.current?.getBoundingClientRect();
+      if (!r) return;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const style: React.CSSProperties = {};
+      if (side === "top") style.bottom = vh - r.top + 8;
+      else style.top = r.bottom + 8;
+      if (align === "end") style.right = Math.max(8, vw - r.right);
+      else if (align === "center") style.left = r.left + r.width / 2;
+      else style.left = Math.max(8, Math.min(r.left, vw - 200));
+      style.maxHeight = (side === "top" ? r.top : vh - r.bottom) - 16;
+      setPos(style);
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [mounted, side, align]);
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: PointerEvent) => !wrap.current?.contains(e.target as Node) && setOpen(false);
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!wrap.current?.contains(t) && !panel.current?.contains(t)) setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
@@ -239,19 +270,24 @@ export function Popover({
   return (
     <div ref={wrap} className="relative inline-flex">
       {trigger({ open, toggle: () => setOpen(!open), ref: btn, "aria-expanded": open, "aria-haspopup": "menu" })}
-      {mounted && (
-        <div
-          data-closing={closing || undefined}
-          className={cx(
-            "popover-panel absolute z-[70] min-w-48 rounded-m2 bg-s2 p-1.5 shadow-[0_0_0_1px_var(--color-line2),0_24px_60px_-12px_rgba(0,0,0,.85)]",
-            side === "top" ? "bottom-[calc(100%+8px)] origin-bottom" : "top-[calc(100%+8px)] origin-top",
-            align === "end" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0",
-            className,
-          )}
-        >
-          {typeof children === "function" ? children(close) : children}
-        </div>
-      )}
+      {mounted &&
+        pos &&
+        createPortal(
+          <div
+            ref={panel}
+            data-closing={closing || undefined}
+            style={pos}
+            className={cx(
+              "am-layer popover-panel fixed z-[90] min-w-48 overflow-y-auto overscroll-contain rounded-m2 bg-s2 p-1.5 shadow-[0_0_0_1px_var(--color-line2),0_24px_60px_-12px_rgba(0,0,0,.85)]",
+              side === "top" ? "origin-bottom" : "origin-top",
+              align === "center" && "-translate-x-1/2",
+              className,
+            )}
+          >
+            {typeof children === "function" ? children(close) : children}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
