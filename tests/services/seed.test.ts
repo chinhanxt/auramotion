@@ -12,6 +12,7 @@ async function counts() {
     plans: await db.plan.count(),
     models: await db.aiModel.count(),
     presets: await db.preset.count(),
+    skills: await db.promptSkill.count(),
     settings: await db.setting.count(),
     subscriptions: await db.subscription.count(),
     transactions: await db.creditTransaction.count(),
@@ -42,8 +43,27 @@ describe("seed", () => {
   });
 
   it("creates style and camera presets", async () => {
-    expect(await db.preset.count({ where: { kind: "STYLE" } })).toBe(4);
-    expect(await db.preset.count({ where: { kind: "CAMERA" } })).toBe(6);
+    expect(await db.preset.count({ where: { kind: "STYLE" } })).toBeGreaterThanOrEqual(4 + 18);
+    expect(await db.preset.count({ where: { kind: "CAMERA" } })).toBeGreaterThanOrEqual(6 + 8);
+    const presets = await db.preset.findMany();
+    expect(presets.every((p) => p.slug && p.cover && p.palette.length >= 3 && p.palette.length <= 5)).toBe(true);
+    expect(new Set(presets.map((p) => p.slug)).size).toBe(presets.length);
+    for (const p of presets) {
+      expect(p.cover).toMatch(/gradient\(/);
+      for (const hex of p.palette) expect(hex).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+    expect(await db.preset.findFirst({ where: { slug: "son-mai" } })).not.toBeNull();
+  });
+
+  it("creates prompt skills of every kind", async () => {
+    const skills = await db.promptSkill.findMany();
+    expect(skills.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(skills.map((s) => s.kind))).toEqual(new Set(["IMAGE", "VIDEO", "STORY", "SCRIPT"]));
+    for (const s of skills.filter((k) => k.kind === "STORY")) {
+      expect(s.instructions).toContain('"shots"');
+      expect(s.template).toContain("{{shots}}");
+    }
+    expect(await getSetting("muse_slots")).toEqual({ image: 2, video: 2, chat: 1, gapSec: 20, sendVideoAspect: false });
   });
 
   it("gives admin the free plan", async () => {
