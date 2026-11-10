@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { ALL_QUEUE_NAMES, anyQueue, type AnyQueueName } from "@/lib/queue";
 import { aiText, extractJson, getCooldowns, getGatewayHealth, getGatewaySetting, type GatewayDeps } from "@/server/ai/gateway";
+import { getAiRoles, saveAiRoles, type ChainStep } from "@/server/ai/roles";
 import { renderTemplate } from "@/server/ai/template";
 import { getMuse } from "@/server/engines";
 import { clearVideoBlocked, getVideoBlocked } from "@/server/engines/muse-block";
@@ -136,9 +137,17 @@ export async function getGatewayAdmin() {
   return { setting, health, cooldowns };
 }
 
+// API cũ (order + model theo provider): đổi sang chuỗi writer của ai_roles, giữ model / effort đã có của từng provider.
 export async function putGatewayAdmin(input: unknown) {
   const setting = gatewaySettingSchema.parse(input);
   await setSetting("ai_gateway", setting);
+  const roles = await getAiRoles();
+  const model = { agy: setting.agyModel, codex: setting.codexModel, muse: setting.museModel };
+  const chain = setting.order.map((provider): ChainStep => {
+    const own = roles.writer.chain.find((s) => s.provider === provider) ?? { provider };
+    return { ...own, ...(model[provider] ? { model: model[provider] } : {}) };
+  });
+  await saveAiRoles({ ...roles, writer: { ...roles.writer, chain, timeoutSec: setting.timeoutSec } });
   return getGatewayAdmin();
 }
 
