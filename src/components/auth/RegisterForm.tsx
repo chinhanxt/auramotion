@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { Spinner } from "@/components/ui/Button";
 import { buttonClass, Field, Message, readError } from "./AuthShell";
 
 export function RegisterForm() {
@@ -42,7 +43,8 @@ export function RegisterForm() {
         <Field label="Mật khẩu (tối thiểu 8 ký tự)" name="password" type="password" minLength={8} autoComplete="new-password" required />
         <Field label="Nhập lại mật khẩu" name="confirm" type="password" minLength={8} autoComplete="new-password" required />
         <button type="submit" className={buttonClass} disabled={pending}>
-          {pending ? "Đang tạo tài khoản..." : "Đăng ký"}
+          {pending && <Spinner />}
+          {pending ? "Đang tạo tài khoản" : "Tạo tài khoản"}
         </button>
       </form>
     </div>

@@ -8,8 +8,8 @@ export default async function ProfilePage() {
   const user = await requireUser().catch(() => null);
   if (!user) redirect("/login");
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-xl font-semibold">Hồ sơ</h1>
+    <div className="mx-auto max-w-[1200px] px-3 pt-3 pb-16 sm:px-5 lg:px-6">
+      <h1 className="t-h2 mb-5">Hồ sơ</h1>
       <ProfileForm
         user={{
           name: user.name,

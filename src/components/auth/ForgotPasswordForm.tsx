@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Spinner } from "@/components/ui/Button";
 import { buttonClass, Field, Message, readError } from "./AuthShell";
 
 export function ForgotPasswordForm() {
@@ -36,7 +37,8 @@ export function ForgotPasswordForm() {
       <form onSubmit={onSubmit} className="space-y-4">
         <Field label="Email" name="email" type="email" autoComplete="email" required />
         <button type="submit" className={buttonClass} disabled={pending}>
-          {pending ? "Đang gửi..." : "Gửi liên kết đặt lại"}
+          {pending && <Spinner />}
+          {pending ? "Đang gửi" : "Gửi liên kết"}
         </button>
       </form>
     </div>
