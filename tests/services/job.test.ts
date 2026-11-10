@@ -322,7 +322,7 @@ describe("job", () => {
     const museJob = await createJob(userId, imageParams());
     await db.job.update({
       where: { id: museJob.id },
-      data: { status: "RUNNING", museTaskId: "task_1", startedAt: new Date(now.getTime() - 16 * MINUTE) },
+      data: { status: "RUNNING", museTaskId: "task_1", startedAt: new Date(now.getTime() - 21 * MINUTE) },
     });
     const cliJob = await createJob(otherId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1 }));
     await db.job.update({

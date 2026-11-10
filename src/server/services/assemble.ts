@@ -8,7 +8,6 @@ import { AppError } from "@/lib/errors";
 import { storagePath } from "@/lib/storage";
 import { buildAssembleSpec, runAssemble, type ClipFile } from "@/server/engines/assemble";
 import { EngineError } from "@/server/engines/types";
-import { failJob, finishJob } from "@/server/services/job";
 import { generationParamsSchema } from "@/server/services/pricing";
 import { getSetting } from "@/server/services/settings";
 
@@ -18,7 +17,7 @@ const MUSIC_DIR = path.resolve("public/music");
 type MusicTrack = { id: string; name: string; file: string };
 
 // Lỗi dữ liệu đầu vào: chạy lại cũng không được, đánh FAILED với mã này.
-class InputError extends Error {
+export class InputError extends Error {
   constructor(readonly code: string) {
     super(code);
   }
@@ -70,9 +69,9 @@ async function musicFile(musicId: string | undefined): Promise<string | null> {
   return file;
 }
 
-// Job đã được processJob chuyển sang RUNNING. Mọi lỗi đều đánh FAILED và hoàn Credit (ghép lại từ đầu
-// tốn tới 20 phút, không để BullMQ tự chạy lại).
-export async function processAssemble(job: Job, signal?: AbortSignal): Promise<void> {
+// Chạy ghép cho job ASSEMBLE (đã RUNNING), trả đường dẫn file mp4 trong os.tmpdir() (aura-out-*).
+// Không gọi finishJob / failJob: job.ts lo phần đó (tránh import vòng job.ts ↔ assemble).
+export async function runAssembleJob(job: Job, signal?: AbortSignal): Promise<string> {
   const out = path.join(os.tmpdir(), `aura-out-${randomUUID()}.mp4`);
   try {
     const parsed = generationParamsSchema.safeParse(job.params);
@@ -82,12 +81,14 @@ export async function processAssemble(job: Job, signal?: AbortSignal): Promise<v
     const music = await musicFile(p.musicId);
     const ref = p.voice?.refUrl ? await mediaFile(p.voice.refUrl, "BAD_INPUT", `uploads/${job.userId}/`) : null;
     const { output } = await runAssemble(buildAssembleSpec(p, files, music, ref, out), signal);
-    await finishJob(job.id, [{ path: output }]);
+    if (path.resolve(output) !== out) await fs.rm(out, { force: true });
+    return output;
   } catch (err) {
-    const code = err instanceof InputError || err instanceof EngineError || err instanceof AppError ? err.code : "INTERNAL";
-    if (code === "INTERNAL" || code === "ASSEMBLE_FAILED") console.error(`[assemble] job ${job.id} lỗi`, err);
-    await failJob(job.id, code);
-  } finally {
     await fs.rm(out, { force: true });
+    throw err;
   }
+}
+
+export function assembleErrorCode(err: unknown): string {
+  return err instanceof InputError || err instanceof EngineError || err instanceof AppError ? err.code : "INTERNAL";
 }
