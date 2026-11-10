@@ -635,8 +635,31 @@ export async function listAdminStories(input: z.input<typeof adminStoryQuery>) {
       include: { user: { select: { id: true, email: true } }, _count: { select: { jobs: true } } },
     }),
   ]);
+  // Số cảnh đã xong + tổng Credit các job của từng story (cho bảng admin).
+  const stats = rows.length
+    ? await db.job.groupBy({
+        by: ["storyId", "status"],
+        where: { storyId: { in: rows.map((r) => r.id) } },
+        _count: { _all: true },
+        _sum: { cost: true },
+      })
+    : [];
+  const statOf = (id: string) => {
+    const mine = stats.filter((x) => x.storyId === id);
+    return {
+      doneCount: mine.filter((x) => x.status === "SUCCEEDED").reduce((n, x) => n + x._count._all, 0),
+      cost: mine.reduce((sum, x) => sum + (x._sum.cost?.toNumber() ?? 0), 0),
+    };
+  };
   return {
-    items: rows.map(({ user: u, _count, ...s }) => ({ ...toStoryItem(s), user: u, jobCount: _count.jobs, deletedAt: s.deletedAt, planner: s.planner })),
+    items: rows.map(({ user: u, _count, ...s }) => ({
+      ...toStoryItem(s),
+      user: u,
+      jobCount: _count.jobs,
+      ...statOf(s.id),
+      deletedAt: s.deletedAt,
+      planner: s.planner,
+    })),
     total,
     page,
     pageSize: PAGE_SIZE,

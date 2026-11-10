@@ -141,6 +141,57 @@ export async function putGatewayAdmin(input: unknown) {
   return getGatewayAdmin();
 }
 
+export const gatewayTestSchema = z.object({
+  prompt: z.string().trim().min(1, { message: "Hãy nhập nội dung thử" }).max(4000),
+  provider: z.enum(["agy", "codex", "muse"]).optional(),
+});
+
+// Chạy thử 1 câu qua gateway (provider chọn trước, lỗi thì thử provider kế theo `order`).
+export async function testGateway(input: unknown, deps: GatewayDeps = {}) {
+  const { prompt, provider } = gatewayTestSchema.parse(input);
+  try {
+    const res = await aiText({ prompt, provider }, deps);
+    return { text: res.text, provider: res.provider, ms: res.ms };
+  } catch (err) {
+    if (err instanceof EngineError) throw new AppError("ENGINE", `AI chưa trả lời được: ${err.message.slice(0, 300)}`);
+    throw err;
+  }
+}
+
+// ---------- Tổng quan (dashboard) ----------
+
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Số liệu nhanh cho dashboard: tổng người dùng, job hôm nay (giờ VN) theo trạng thái, job lỗi gần nhất.
+export async function getOpsSnapshot(now: Date = new Date()) {
+  const local = now.getTime() + VN_OFFSET_MS;
+  const today = new Date(local - (local % DAY_MS) - VN_OFFSET_MS);
+  const [users, byStatus, recentFailed] = await Promise.all([
+    db.user.count(),
+    db.job.groupBy({ by: ["status"], where: { createdAt: { gte: today, lte: now } }, _count: { _all: true } }),
+    db.job.findMany({
+      where: { status: "FAILED" },
+      orderBy: [{ finishedAt: "desc" }, { createdAt: "desc" }],
+      take: 6,
+      select: { id: true, kind: true, prompt: true, error: true, createdAt: true, finishedAt: true, user: { select: { email: true } }, model: { select: { name: true } } },
+    }),
+  ]);
+  const count = (s: string) => byStatus.find((r) => r.status === s)?._count._all ?? 0;
+  const succeeded = count("SUCCEEDED");
+  const failed = count("FAILED");
+  const done = succeeded + failed;
+  return {
+    users,
+    jobsToday: byStatus.reduce((sum, r) => sum + r._count._all, 0),
+    succeededToday: succeeded,
+    failedToday: failed,
+    activeNow: count("PENDING") + count("RUNNING"),
+    successRate: done ? Math.round((succeeded / done) * 1000) / 10 : null,
+    recentFailed,
+  };
+}
+
 // ---------- Hàng đợi ----------
 
 const COUNT_TYPES = ["waiting", "active", "delayed", "failed", "completed", "prioritized"] as const;
@@ -207,9 +258,18 @@ const accountId = z.string().regex(/^[\w.-]{1,100}$/, { message: "Mã tài kho�
 const cookies = z.union([z.record(z.string(), z.string()), z.string().min(1).max(100_000), z.array(z.record(z.string(), z.unknown())).min(1).max(500)]);
 const accountCreate = z.object({ label: z.string().trim().max(100).default(""), cookies, enabled: z.boolean().optional() });
 export const museImportSchema = z.union([z.object({ accounts: z.array(accountCreate).min(1).max(50) }), accountCreate]);
+// kinds: loại việc tài khoản nhận ("image" | "video" | "chat"); [] = mọi loại.
 export const museAccountPatchSchema = z
-  .object({ enabled: z.boolean().optional(), label: z.string().trim().max(100).optional() })
-  .refine((v) => v.enabled !== undefined || v.label !== undefined, { message: "Không có gì để sửa" });
+  .object({
+    enabled: z.boolean().optional(),
+    label: z.string().trim().max(100).optional(),
+    kinds: z
+      .array(z.enum(["image", "video", "chat"], { message: "Loại việc chỉ gồm image, video, chat" }))
+      .max(3)
+      .transform((k) => [...new Set(k)])
+      .optional(),
+  })
+  .refine((v) => v.enabled !== undefined || v.label !== undefined || v.kinds !== undefined, { message: "Không có gì để sửa" });
 
 export function listMuseAccounts() {
   return muse<{ data: unknown[] }>("GET", "/admin/accounts");

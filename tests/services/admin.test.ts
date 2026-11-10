@@ -343,6 +343,12 @@ describe("admin", () => {
 
     const created = await createModel({ ...base, options: { aspectRatios: ["1:1"], counts: [1, 2], extra: true } });
     expect(created.options).toEqual({ aspectRatios: ["1:1"], counts: [1, 2] });
+    // options.museAccount (ghim tài khoản Muse) được giữ; rỗng thì bỏ.
+    const pinned = await updateModel({ id: created.id, options: { aspectRatios: ["1:1"], counts: [1], museAccount: "acc_775c5fad5a" } });
+    expect(pinned.options).toEqual({ aspectRatios: ["1:1"], counts: [1], museAccount: "acc_775c5fad5a" });
+    const any = await updateModel({ id: created.id, options: { aspectRatios: ["1:1"], counts: [1], museAccount: "" } });
+    expect(any.options).toEqual({ aspectRatios: ["1:1"], counts: [1] });
+    await expect(updateModel({ id: created.id, options: { aspectRatios: ["1:1"], counts: [1], museAccount: "../x" } })).rejects.toThrow();
     await updateModel({ id: imageId, options: { aspectRatios: ["1:1"], counts: [1] } });
     expect((await db.aiModel.findUniqueOrThrow({ where: { id: imageId } })).options).toEqual({ aspectRatios: ["1:1"], counts: [1] });
   });
