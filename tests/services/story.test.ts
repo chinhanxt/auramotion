@@ -18,6 +18,7 @@ import {
   parseStoryPlan,
   planStory,
   renderStory,
+  sweepStories,
   retryShot,
   PLAN_FOLLOW_UP,
 } from "@/server/services/story";
@@ -276,6 +277,14 @@ describe("story", () => {
     await planStory(story.id, { setting: gateway, runners: { muse: async () => GOOD } });
     expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
     expect((await db.story.findUniqueOrThrow({ where: { id: story.id } })).status).toBe("CANCELED");
+  });
+
+  it("sweepStories fails stuck planning with refund", async () => {
+    const story = await createStory(userId, { idea: "x", aspect: "9:16", shotCount: 3, shotDurationSec: 5 });
+    expect(await sweepStories(new Date())).toBe(0);
+    expect(await sweepStories(new Date(Date.now() + 16 * 60_000))).toBe(1);
+    expect((await getStory(userId, story.id)).story).toMatchObject({ status: "FAILED", error: "TIMEOUT" });
+    expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
   });
 
   it("autoRun renders right after planning", async () => {

@@ -300,6 +300,16 @@ describe("admin v2 routes", () => {
     expect(status.body.videoBlocked).toBeNull();
   });
 
+  it("music used by a pending assemble job cannot be deleted", async () => {
+    const { deleteMusicTrack } = await import("@/server/services/admin");
+    const model = await db.aiModel.findFirstOrThrow({ where: { kind: "ASSEMBLE" } });
+    await db.job.create({
+      data: { userId: member.id, modelId: model.id, kind: "ASSEMBLE", prompt: "", cost: 0, params: { kind: "assemble", musicId: "lofi-chill" } },
+    });
+    await expect(deleteMusicTrack("lofi-chill")).rejects.toMatchObject({ code: "CONFLICT" });
+    await deleteMusicTrack("happy-clap");
+  });
+
   it("admin stories list / detail / cancel", async () => {
     const { createStory } = await import("@/server/services/story");
     const story = await createStory(member.id, { idea: "x", aspect: "9:16", shotCount: 2, shotDurationSec: 5 });

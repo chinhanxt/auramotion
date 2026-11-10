@@ -566,6 +566,11 @@ export async function updateMusicTrack(input: unknown): Promise<MusicTrack> {
 export async function deleteMusicTrack(id: string): Promise<void> {
   const tracks = await getTracks();
   if (!tracks.some((t) => t.id === id)) throw new AppError("NOT_FOUND", "Không tìm thấy bài nhạc");
+  // Job ghép đang chờ / chạy dùng bài này sẽ lỗi nếu xóa: chặn lại.
+  const inUse = await db.job.count({
+    where: { kind: "ASSEMBLE", status: { in: ["PENDING", "RUNNING"] }, params: { path: ["musicId"], equals: id } },
+  });
+  if (inUse > 0) throw new AppError("CONFLICT", "Bài nhạc đang được dùng cho tác vụ ghép chưa xong");
   await setSetting(
     "music_tracks",
     tracks.filter((t) => t.id !== id),

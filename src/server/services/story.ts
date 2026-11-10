@@ -635,3 +635,19 @@ export async function listAdminStories(input: z.input<typeof adminStoryQuery>) {
     pageSize: PAGE_SIZE,
   };
 }
+
+// Cron 5 phút: story kẹt PLANNING (worker chết giữa lúc lập kịch bản) → FAILED + hoàn phí;
+// story RENDERING / ASSEMBLING lỡ sự kiện advance → chạy lại advance.
+export async function sweepStories(now: Date = new Date()): Promise<number> {
+  const stuck = await db.story.findMany({
+    where: { status: "PLANNING", deletedAt: null, updatedAt: { lt: new Date(now.getTime() - 15 * 60_000) } },
+    select: { id: true },
+  });
+  for (const { id } of stuck) await failPlanning(id, "TIMEOUT");
+  const active = await db.story.findMany({
+    where: { status: { in: ["RENDERING", "ASSEMBLING"] }, deletedAt: null, updatedAt: { lt: new Date(now.getTime() - 5 * 60_000) } },
+    select: { id: true },
+  });
+  for (const { id } of active) await advanceStory(id);
+  return stuck.length;
+}
