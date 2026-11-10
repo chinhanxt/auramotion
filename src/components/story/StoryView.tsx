@@ -318,13 +318,22 @@ export function StoryView({ id }: { id: string }) {
               {count} cảnh · {story.shotDurationSec}s · {story.aspect} · {story.mode === "CHAIN" ? "Nối cảnh" : "Song song"}
             </span>
           </div>
-          <input
+          {/* textarea 1 dòng logic để tên dài xuống dòng trên mobile; Enter = lưu */}
+          <textarea
             key={story.title}
             defaultValue={story.title}
             placeholder="Story chưa đặt tên"
-            onBlur={(e) => saveTitle(e.target.value.trim())}
+            rows={1}
+            maxLength={120}
+            onBlur={(e) => saveTitle(e.target.value.replace(/\s+/g, " ").trim())}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
             aria-label="Tên story"
-            className="t-h2 -mx-1 mt-1 w-full rounded-m1 bg-transparent px-1 outline-none placeholder:text-dim hover:bg-white/[.03] focus:bg-white/[.05]"
+            className="t-h2 -mx-1 mt-1 block w-full resize-none rounded-m1 bg-transparent px-1 outline-none [field-sizing:content] placeholder:text-dim hover:bg-white/[.03] focus:bg-white/[.05]"
           />
           <p className="mt-1 line-clamp-2 max-w-3xl text-sm text-muted">{story.idea}</p>
         </div>
