@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { JobTile, type TileAction } from "@/components/library/JobTile";
 import { useInfiniteSentinel } from "@/components/library/useJobFeed";
 import type { LightboxEntry } from "@/components/library/Lightbox";
@@ -72,13 +72,13 @@ export function GenerationFeed({
   const [deleting, setDeleting] = useState(false);
   const sentinel = useInfiniteSentinel(feed.loadMore, Boolean(feed.nextCursor) && !feed.loadingMore, feed.items.length);
 
-  const onOpen = useCallback(
-    (job: JobItem, index: number, el: HTMLElement) => {
-      const start = viewable.findIndex((e) => e.job.id === job.id && e.index === index);
-      if (start >= 0) setOpen({ start, origin: el.getBoundingClientRect() });
-    },
-    [viewable],
-  );
+  // Giữ danh sách trong ref để hàm mở ổn định: cập nhật một ô không làm render lại cả lưới.
+  const listRef = useRef(viewable);
+  listRef.current = viewable;
+  const onOpen = useCallback((job: JobItem, index: number, el: HTMLElement) => {
+    const start = listRef.current.findIndex((e) => e.job.id === job.id && e.index === index);
+    if (start >= 0) setOpen({ start, origin: el.getBoundingClientRect() });
+  }, []);
 
   const onDelete = useCallback((job: JobItem) => setConfirm(job), []);
   const { remove } = feed;

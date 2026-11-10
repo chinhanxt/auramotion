@@ -62,7 +62,7 @@ export function HeroComposer({ loggedIn }: { loggedIn: boolean }) {
 
   function go() {
     const prompt = (value.trim() || shown.trim() || EXAMPLES[0]).slice(0, 2000);
-    const dest = target === "story" ? "/studio/story" : `/studio/${target}?prompt=${encodeURIComponent(prompt)}`;
+    const dest = target === "story" ? `/studio/story?idea=${encodeURIComponent(prompt)}` : `/studio/${target}?prompt=${encodeURIComponent(prompt)}`;
     router.push(loggedIn ? dest : `/login?callbackUrl=${encodeURIComponent(dest)}`);
   }
 

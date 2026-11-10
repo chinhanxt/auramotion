@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { TileAction } from "@/components/library/JobTile";
 import { useJobFeed } from "@/components/library/useJobFeed";
 import { useCreditBalance } from "@/components/realtime/Events";
 import { Empty, Notice } from "@/components/ui/Bits";
@@ -35,6 +36,7 @@ type SavedParams = {
 };
 
 const QUOTE_DEBOUNCE_MS = 300;
+const EDIT_ACTIONS: TileAction[] = ["download", "remake", "delete"];
 const DEFAULT_IMAGE_SEC = 3;
 
 let clipSeq = 0;
@@ -352,7 +354,7 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
         </div>
 
         <h2 className="t-label mt-10 mb-3">Video đã ghép</h2>
-        <GenerationFeed feed={feed} actions={["download", "remake", "delete"]} skeletonRatio="9:16" empty={<Empty icon="cut" title="Chưa có video ghép" className="py-10" />} />
+        <GenerationFeed feed={feed} actions={EDIT_ACTIONS} skeletonRatio="9:16" empty={<Empty icon="cut" title="Chưa có video ghép" className="py-10" />} />
       </div>
 
       {/* Thanh xuất */}

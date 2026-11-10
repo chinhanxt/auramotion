@@ -165,6 +165,7 @@ export function StoryView({ id }: { id: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const storyRef = useRef(story);
   storyRef.current = story;
+  const lastLoad = useRef(0);
 
   const load = useCallback(
     () =>
@@ -198,7 +199,11 @@ export function StoryView({ id }: { id: string }) {
     if (e.storyId && e.storyId !== id) return;
     const known = storyRef.current?.jobs.some((j) => j.id === e.id);
     if (!known) {
-      if (e.storyId === id) load();
+      // Job mới của story (vừa bấm quay / quay lại): nạp lại, tối đa 1 lần / 1.5 s.
+      if (e.storyId === id && Date.now() - lastLoad.current > 1500) {
+        lastLoad.current = Date.now();
+        load();
+      }
       return;
     }
     setStory((s) => s && { ...s, jobs: s.jobs.map((j) => (j.id === e.id ? applyEvent(j, e) : j)) });

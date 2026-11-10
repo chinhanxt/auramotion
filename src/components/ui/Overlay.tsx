@@ -98,7 +98,7 @@ export function Modal({
   const { mounted, closing } = usePresence(open);
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  useFocusTrap(panel, open);
+  useFocusTrap(panel, open && mounted);
 
   useEffect(() => {
     if (!open) return;

@@ -18,12 +18,12 @@ import { useShotQuote, useStoryCatalog } from "./useStoryCatalog";
 
 const IDEAS = ["Một ngày của chú mèo cam ở phố cổ Hội An", "Ra mắt chai nước hoa hổ phách, cảm giác buổi tối", "Hành trình ly cà phê từ hạt đến tay người uống"];
 
-export function StoryComposer() {
+export function StoryComposer({ initialIdea = "" }: { initialIdea?: string }) {
   const router = useRouter();
   const toast = useToast();
   const showError = useErrorToast();
   const cat = useStoryCatalog();
-  const [idea, setIdea] = useState("");
+  const [idea, setIdea] = useState(initialIdea);
   const [skillId, setSkillId] = useState("");
   const [styleId, setStyleId] = useState("");
   const [cameraId, setCameraId] = useState("");

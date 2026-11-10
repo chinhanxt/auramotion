@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { StoryGrid } from "@/components/story/StoryGrid";
 import { Empty, Notice } from "@/components/ui/Bits";
 import { LinkButton, Spinner } from "@/components/ui/Button";
@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/ui/Overlay";
 import { Segmented } from "@/components/ui/Segmented";
 import { useToast } from "@/components/ui/Toast";
 import { STATUS_LABEL, api, type GenKind, type JobItem, type JobStatus } from "@/lib/api-client";
-import { JobTile } from "./JobTile";
+import { JobTile, type TileAction } from "./JobTile";
 import type { LightboxEntry } from "./Lightbox";
 import { useInfiniteSentinel, useJobFeed } from "./useJobFeed";
 
@@ -24,6 +24,7 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "assemble", label: "Ghép" },
   { value: "story", label: "Story" },
 ];
+const LIB_ACTIONS: TileAction[] = ["download", "remake", "details", "delete"];
 const STATUSES: JobStatus[] = ["RUNNING", "PENDING", "SUCCEEDED", "FAILED", "CANCELED"];
 
 export function MasonrySkeleton({ count = 12 }: { count?: number }) {
@@ -49,13 +50,13 @@ function JobMasonry({ kind, status }: { kind?: GenKind; status: JobStatus | "" }
     () => feed.items.filter((j) => j.status === "SUCCEEDED").flatMap((job) => job.resultUrls.map((_, index) => ({ job, index }))),
     [feed.items],
   );
-  const onOpen = useCallback(
-    (job: JobItem, index: number, el: HTMLElement) => {
-      const start = entries.findIndex((e) => e.job.id === job.id && e.index === index);
-      if (start >= 0) setOpen({ start, origin: el.getBoundingClientRect() });
-    },
-    [entries],
-  );
+  // Giữ danh sách trong ref để hàm mở ổn định: cập nhật một ô không làm render lại cả lưới.
+  const listRef = useRef(entries);
+  listRef.current = entries;
+  const onOpen = useCallback((job: JobItem, index: number, el: HTMLElement) => {
+    const start = listRef.current.findIndex((e) => e.job.id === job.id && e.index === index);
+    if (start >= 0) setOpen({ start, origin: el.getBoundingClientRect() });
+  }, []);
   const onDelete = useCallback((job: JobItem) => setConfirm(job), []);
 
   async function doDelete() {
@@ -93,7 +94,7 @@ function JobMasonry({ kind, status }: { kind?: GenKind; status: JobStatus | "" }
     <>
       <div className="masonry">
         {feed.items.map((job, i) => (
-          <JobTile key={job.id} job={job} order={i % 24} showCount actions={["download", "remake", "details", "delete"]} onOpen={onOpen} onDelete={onDelete} />
+          <JobTile key={job.id} job={job} order={i % 24} showCount actions={LIB_ACTIONS} onOpen={onOpen} onDelete={onDelete} />
         ))}
       </div>
       <div ref={sentinel} className="flex h-20 items-center justify-center text-muted">

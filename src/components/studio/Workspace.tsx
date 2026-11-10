@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { TileAction } from "@/components/library/JobTile";
 import { useJobFeed } from "@/components/library/useJobFeed";
 import { useCreditBalance } from "@/components/realtime/Events";
 import { Empty, Notice } from "@/components/ui/Bits";
@@ -33,6 +34,8 @@ type SavedParams = {
 };
 
 const QUOTE_DEBOUNCE_MS = 300;
+const IMAGE_ACTIONS: TileAction[] = ["download", "ref", "frame", "remake", "delete"];
+const VIDEO_ACTIONS: TileAction[] = ["download", "remake", "delete"];
 
 const TEXT = {
   image: {
@@ -205,6 +208,14 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
     }
   }
 
+  const onUseRef = useCallback(
+    (url: string) => {
+      setInputUrl(url);
+      toast.info("Đã đặt làm ảnh tham chiếu");
+    },
+    [toast],
+  );
+
   const counts = model?.options.counts ?? [1];
   const durations = model?.options.durations ?? [5];
   const ratios = model?.options.aspectRatios ?? [];
@@ -261,8 +272,8 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
           <GenerationFeed
             feed={feed}
             skeletonRatio={kind === "image" ? "1:1" : "9:16"}
-            actions={kind === "image" ? ["download", "ref", "frame", "remake", "delete"] : ["download", "remake", "delete"]}
-            onUseRef={kind === "image" ? (url) => (setInputUrl(url), toast.info("Đã đặt làm ảnh tham chiếu")) : undefined}
+            actions={kind === "image" ? IMAGE_ACTIONS : VIDEO_ACTIONS}
+            onUseRef={kind === "image" ? onUseRef : undefined}
             empty={
               <Empty
                 icon={kind === "image" ? "image" : "video"}

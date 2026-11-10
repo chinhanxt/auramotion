@@ -3,7 +3,8 @@ import { StoryGrid } from "@/components/story/StoryGrid";
 
 export const metadata = { title: "Story · AuraMotion" };
 
-export default function StoryPage() {
+export default async function StoryPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const { idea } = await searchParams;
   return (
     <div className="px-3 pt-3 pb-16 sm:px-5 lg:px-6">
       <section className="relative mx-auto max-w-[1040px] pt-6 pb-10 sm:pt-12">
@@ -11,7 +12,7 @@ export default function StoryPage() {
         <h1 className="t-h1 relative mb-6 text-center">
           Một ý tưởng. <span className="aura-text">Nhiều cảnh.</span>
         </h1>
-        <StoryComposer />
+        <StoryComposer initialIdea={typeof idea === "string" ? idea : ""} />
       </section>
       <h2 className="t-label mb-3">Story của bạn</h2>
       <StoryGrid />
