@@ -8,7 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { FadeImage, SmartVideo } from "@/components/ui/Media";
 import { api, isVideoUrl, type ExploreItem, type ThemeItem } from "@/lib/api-client";
 
-// Chủ đề mặc định khi /api/themes chưa có (khớp preset seed).
+// Chủ đề dự phòng khi không gọi được /api/themes (khớp preset seed).
 const FALLBACK_THEMES: ThemeItem[] = [
   { id: "f-studio", kind: "STYLE", name: "Studio", promptSuffix: "", thumbnailUrl: null, category: "Sản phẩm", palette: ["#7c5cff", "#2dd4bf"] },
   { id: "f-out", kind: "STYLE", name: "Ngoài trời", promptSuffix: "", thumbnailUrl: null, category: "Đời sống", palette: ["#ffb36b", "#ff4fd8"] },
@@ -23,11 +23,9 @@ const FALLBACK_THEMES: ThemeItem[] = [
 // Một lần tải cho cả trang (ExploreGrid + ThemeStrip dùng chung).
 let themesPromise: Promise<ThemeItem[]> | null = null;
 function loadThemes(): Promise<ThemeItem[]> {
-  themesPromise ??= api<ThemeItem[] | { items?: ThemeItem[]; presets?: ThemeItem[] }>("/api/themes")
-    .then((r) => {
-      const list = Array.isArray(r) ? r : (r.items ?? r.presets ?? []);
-      return list.length ? list : FALLBACK_THEMES;
-    })
+  // /api/themes trả { styles, cameras }: phong cách trước, camera sau.
+  themesPromise ??= api<{ styles?: ThemeItem[]; cameras?: ThemeItem[] }>("/api/themes")
+    .then((r) => [...(r.styles ?? []), ...(r.cameras ?? [])])
     .catch(() => FALLBACK_THEMES);
   return themesPromise;
 }
@@ -105,6 +103,7 @@ export function ThemeStrip() {
   const themes = useThemes();
   const list = themes ?? FALLBACK_THEMES;
   const loop = [...list, ...list];
+  if (themes && themes.length === 0) return null;
   return (
     <div className="marquee group relative overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_6%,#000_94%,transparent)]">
       <div className={cx("marquee-track flex w-max gap-3 py-1", !themes && "opacity-0")}>
