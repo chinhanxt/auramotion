@@ -17,7 +17,7 @@ import { demoAi, demoTest } from "./demo";
 import { Monogram } from "./Monogram";
 import { RolesPanel, type ModelLists } from "./Roles";
 import { TestBench, makeTestFn } from "./TestBench";
-import { normalizeRoles, toTime, type AiData, type AiModel, type AiProvider, type AiRoles } from "./types";
+import { codexModels, normalizeRoles, toTime, type AiData, type AiProvider, type AiRoles } from "./types";
 
 // Gọi giả cho ?demo=1: trả kết quả hợp lý cho từng endpoint, không chạm backend.
 function demoCall(): Call {
@@ -37,23 +37,6 @@ function demoCall(): Call {
     if (url.includes("/codex/login/")) return v({ status: ++polls > 3 ? "done" : "waiting" });
     return v({ ok: true });
   };
-}
-
-// Catalog Codex: `codex.models[].profiles`; backend cũ chỉ có `profiles[].models` → gộp lại.
-function codexModels(data?: AiData): AiModel[] {
-  const c = data?.providers?.codex;
-  const base = c?.models ?? [];
-  const byId = new Map<string, AiModel>(base.map((m) => [m.id, { ...m }]));
-  for (const p of c?.profiles ?? []) {
-    for (const m of p.models ?? []) {
-      const known = byId.get(m.id);
-      if (known?.profiles && base.some((b) => b.id === m.id && b.profiles)) continue; // backend đã ghi sẵn
-      const cur = known ?? { ...m };
-      cur.profiles = [...new Set([...(cur.profiles ?? []), p.name])];
-      byId.set(m.id, cur);
-    }
-  }
-  return [...byId.values()];
 }
 
 function ProviderCard({

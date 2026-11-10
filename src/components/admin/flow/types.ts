@@ -33,9 +33,11 @@ export type FlowNode = {
   // Story: số thứ tự cảnh; writer của Story: vai "lập kịch bản".
   index?: number;
   role?: "planner";
+  // Thẻ engine gộp theo provider (chế độ trực tiếp): các model đang bật bên trong.
+  members?: { id: string; title: string }[];
 };
 export type FlowEdge = { from: string; to: string; label?: string };
-export type ActiveJob = { id: string; kind?: string; stage?: string; node?: string };
+export type ActiveJob = { id: string; kind?: string; stage?: string; node?: string; modelId?: string | null };
 export type FlowLive = { queues?: Record<string, unknown>; slots?: Record<string, unknown>; activeJobs?: ActiveJob[] };
 export type FlowGraph = { nodes: FlowNode[]; edges: FlowEdge[] };
 export type FlowData = FlowGraph & { live?: FlowLive; story?: FlowGraph };

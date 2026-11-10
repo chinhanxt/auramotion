@@ -64,6 +64,8 @@ export const STAT_LABEL: Record<string, string> = {
   cache: "cache",
   fixed: "sửa",
   limit: "slot",
+  models: "model đang bật",
+  activeJobs: "chạy",
 };
 
 // Số liệu node có thể là số, chữ, true/false hoặc object nhỏ: luôn đổi thành chữ ngắn.

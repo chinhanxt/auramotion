@@ -13,8 +13,9 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Overlay";
 import { useToast } from "@/components/ui/Toast";
-import { ApiError, api, formatCredit, planLabel, postJson, type Catalog, type CatalogModel, type JobItem } from "@/lib/api-client";
-import { AiWriteControl, AspectMenu, AutoTextarea, EngineMenu, GenerateButton, RATIO_LABEL, RatioShape, ToolButton } from "./Composer";
+import { ApiError, api, planLabel, postJson, type Catalog, type CatalogModel, type JobItem } from "@/lib/api-client";
+import { AiWriteControl, AspectMenu, AutoTextarea, GenerateButton, RATIO_LABEL, RatioShape, ToolButton } from "./Composer";
+import { ModelList, ModelPicker } from "./ModelPicker";
 import { describeError, toApiError, useErrorToast } from "./errors";
 import { GenerationFeed, JustifiedSkeleton } from "./GenerationFeed";
 import { PresetCover, PresetGallery } from "./PresetGallery";
@@ -51,6 +52,23 @@ function readPref(kind: Kind): WritePref {
 function writePref(kind: Kind, pref: WritePref) {
   try {
     localStorage.setItem(prefKey(kind), JSON.stringify(pref));
+  } catch {
+    // trình duyệt chặn storage
+  }
+}
+
+// Model đã chọn, nhớ theo từng loại.
+const modelKey = (kind: Kind) => `am:model:${kind}`;
+function readModel(kind: Kind): string {
+  try {
+    return localStorage.getItem(modelKey(kind)) ?? "";
+  } catch {
+    return "";
+  }
+}
+function saveModel(kind: Kind, id: string) {
+  try {
+    localStorage.setItem(modelKey(kind), id);
   } catch {
     // trình duyệt chặn storage
   }
@@ -161,7 +179,8 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
         setSkillId(validSkill(pref.current.skillId));
         const usable = cat.models.filter((m) => !m.locked);
         const fromSaved = saved?.kind === kind ? usable.find((m) => m.id === saved.modelId) : undefined;
-        const first = fromSaved ?? usable[0];
+        const remembered = usable.find((m) => m.id === readModel(kind));
+        const first = fromSaved ?? remembered ?? usable[0];
         if (first) applyModel(first, cat.plan.maxDurationSec, saved?.kind === kind ? saved : {});
         if (saved?.kind === kind) {
           // Job do AI viết → nạp lại ý tưởng gốc + bật AI viết; job thủ công → nạp prompt, gửi nguyên văn (không ghi đè lựa chọn đã nhớ).
@@ -171,7 +190,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
           if (savedAuto && saved.skillId !== undefined) setSkillId(validSkill(saved.skillId));
           setPresetId(cat.presets.some((p) => p.id === saved.presetId) ? (saved.presetId ?? "") : "");
           setInputUrl(saved.inputUrl ?? null);
-          if (!fromSaved && saved.modelId) toast.info("Engine cũ không còn dùng được, đã chọn engine khác");
+          if (!fromSaved && saved.modelId) toast.info("Model cũ không còn dùng được, đã chọn model khác");
         } else if (fromJobId && saved === null) {
           toast.error("Không tải được thiết lập cũ");
         }
@@ -215,6 +234,11 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
   useEffect(() => {
     if (prompt.trim() === "" && pref.current.on) setAutoWrite(true);
   }, [prompt]);
+
+  function onPickModel(m: CatalogModel) {
+    applyModel(m, maxDuration);
+    saveModel(kind, m.id);
+  }
 
   function onToggleWrite(on: boolean) {
     setAutoWrite(on);
@@ -386,7 +410,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
             e.preventDefault();
             submit();
           }}
-          className="composer pointer-events-auto relative mx-auto max-w-[1040px] rounded-m4 glass-strong p-2.5 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-20px_rgba(0,0,0,.9)] sm:p-3"
+          className="composer pointer-events-auto relative mx-auto max-w-[1040px] rounded-m4 glass-strong px-3 pt-3 pb-2.5 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-20px_rgba(0,0,0,.9)] transition-shadow duration-200 focus-within:shadow-[0_0_0_1px_rgba(212,255,58,.32),0_30px_80px_-20px_rgba(0,0,0,.9)] sm:px-4 sm:pt-3 sm:pb-3"
         >
           {videoBlocked && (
             <Notice tone="warn" className="mb-2.5">
@@ -402,21 +426,21 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
               </div>
             </div>
           ) : catalog && catalog.models.length === 0 ? (
-            <Notice tone="warn">Hiện chưa có engine nào hoạt động.</Notice>
+            <Notice tone="warn">Hiện chưa có model nào hoạt động.</Notice>
           ) : (
             <>
-              <div className="flex items-start gap-2.5">
+              <div className="flex items-start gap-3">
                 <RefSlot value={inputUrl} onChange={setInputUrl} onBusyChange={setUploading} label={text.ref} />
                 <AutoTextarea
                   value={prompt}
                   onChange={setPrompt}
                   placeholder={autoWrite ? text.autoPlaceholder : text.placeholder}
                   onSubmit={submit}
-                  className="min-h-14 py-1.5 pr-1"
+                  className="min-h-14 pt-1 pb-1 pr-0.5 sm:pt-1.5"
                   ariaLabel="Prompt"
                 />
               </div>
-              <div className="mt-2 flex items-center gap-1.5">
+              <div className="mt-2.5 flex items-center gap-1.5">
                 <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
                   <AiWriteControl
                     skills={skills}
@@ -432,11 +456,11 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
                       setAutoWrite(false);
                     }}
                   />
-                  {/* Luồng: AI viết prompt → engine người dùng chọn tạo kết quả */}
+                  {/* Luồng: AI viết prompt → model người dùng chọn tạo kết quả */}
                   {catalog && (
-                    <div className="hidden items-center gap-1 md:flex">
-                      <Icon name="arrowRight" size={14} className={cx("shrink-0", autoWrite ? "text-[#c9bdff]" : "text-dim")} />
-                      <EngineMenu models={catalog.models} value={modelId} onChange={(m) => applyModel(m, maxDuration)} unit={text.unit} />
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Icon name="arrowRight" size={14} className={cx("shrink-0 max-md:hidden", autoWrite ? "text-[#c9bdff]" : "text-dim")} />
+                      <ModelPicker models={catalog.models} value={modelId} onChange={onPickModel} unit={text.unit} />
                     </div>
                   )}
                   {presetButton}
@@ -508,26 +532,10 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
               {countControl}
             </div>
           )}
-          {catalog && (
+          {catalog && catalog.models.length > 1 && (
             <div className="space-y-2">
-              <p className="t-label">Engine</p>
-              <div className="space-y-1.5">
-                {catalog.models.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    disabled={m.locked}
-                    onClick={() => applyModel(m, maxDuration)}
-                    className={cx(
-                      "press flex w-full items-center justify-between rounded-m1 px-3.5 py-3 text-left text-sm disabled:opacity-50",
-                      m.id === modelId ? "bg-white/[.1] ring-1 ring-accent" : "bg-white/[.04]",
-                    )}
-                  >
-                    <span className="font-medium">{m.name}</span>
-                    <span className="text-xs text-muted">{m.locked ? planLabel(m.minPlanRank) : `${formatCredit(m.baseCost)} / ${text.unit}`}</span>
-                  </button>
-                ))}
-              </div>
+              <p className="t-label">Model</p>
+              <ModelList models={catalog.models} value={modelId} onPick={onPickModel} unit={text.unit} autoFocus={false} className="-mx-2.5 max-h-[44dvh]" />
             </div>
           )}
           {quoteMsg && <Notice tone="warn">{quoteMsg.title}</Notice>}

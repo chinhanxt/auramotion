@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
-import { Icon } from "@/components/ui/Icon";
+import { CoinMark } from "@/components/ui/Icon";
 import { formatCredit } from "@/lib/api-client";
 import { formatVnd, type CreditPack } from "./labels";
 import { useBuy } from "./useBuy";
@@ -20,8 +20,8 @@ export function CreditPacks({ packs, returnTo }: { packs: CreditPack[]; returnTo
         return (
           <div key={p.credits} className={cx("reveal relative flex flex-col gap-4 overflow-hidden rounded-m3 bg-s1 p-5 hairline", isBest && "aura-ring")} style={{ "--i": i } as React.CSSProperties}>
             {isBest && <span className="absolute top-4 right-4 rounded-full bg-white/[.08] px-2 py-0.5 text-[11px] font-semibold text-fg/80">Lời nhất</span>}
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-ink">
-              <Icon name="bolt" size={17} strokeWidth={2} />
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f5c84b]/[.12] shadow-[inset_0_0_0_1px_rgba(245,200,75,.28)]">
+              <CoinMark size={22} />
             </span>
             <div>
               <p className="text-2xl font-bold tracking-tight tabular-nums">{formatCredit(p.credits)}</p>

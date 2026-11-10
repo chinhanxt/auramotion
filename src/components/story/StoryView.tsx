@@ -341,7 +341,7 @@ export function StoryView({ id }: { id: string }) {
         <div className="order-last flex w-full flex-wrap items-center gap-2 sm:order-none sm:w-auto">
           {ready && (
             <Button variant="primary" size="lg" icon="video" loading={busy === "render"} disabled={blocked} onClick={() => action("render")}>
-              Quay tất cả{total !== null && <span className="inline-flex items-center gap-0.5 rounded-[8px] bg-black/10 px-1.5 py-0.5 text-[13px]"><Icon name="bolt" size={13} />{formatCredit(total)}</span>}
+              Quay tất cả{total !== null && <span className="inline-flex items-center gap-0.5 rounded-[8px] bg-black/10 px-1.5 py-0.5 text-[13px]"><Icon name="coin" size={14} />{formatCredit(total)}</span>}
             </Button>
           )}
           {canAssemble && (

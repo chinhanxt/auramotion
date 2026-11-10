@@ -32,7 +32,7 @@ import { formatMs, timeAgo } from "../format";
 import { usePoll } from "../hooks";
 import { KV, PageHeader } from "../kit";
 import { demoFlow, demoJobs } from "./demo";
-import { buildLayout, buildReplay, realAt, segAt, storyGraph, visualAt, withUi, type PipeNodeData, type Replay } from "./graph";
+import { buildLayout, buildReplay, normalizeGraph, realAt, segAt, storyGraph, visualAt, withUi, type PipeNodeData, type Replay } from "./graph";
 import { FlowCtx, LaneNode, PipeEdge, PipeNode, STAT_LABEL, roleOf, type FlowVisual, type NodeLive, fmtStat } from "./parts";
 import type { ActiveJob, EdgeVisual, FlowData, FlowGraph, FlowJob, FlowNode, Tab } from "./types";
 
@@ -80,6 +80,8 @@ function liveCounts(nodes: FlowNode[], jobs: ActiveJob[] = []): Record<string, n
   const ids = new Set(nodes.map((n) => n.id));
   for (const j of jobs) {
     let id = j.node && ids.has(j.node) ? j.node : j.stage && ids.has(j.stage) ? j.stage : undefined;
+    // Job đang ở engine: tìm thẻ engine gộp chứa model của job.
+    if (!id && j.modelId && STAGE_KIND[(j.stage ?? "").toLowerCase()] === "executor") id = nodes.find((n) => n.members?.some((m) => m.id === `exec:${j.modelId}`))?.id;
     if (!id && j.stage) id = nodes.find((n) => n.kind === STAGE_KIND[j.stage!.toLowerCase()])?.id;
     if (id) out[id] = (out[id] ?? 0) + 1;
   }
@@ -399,8 +401,8 @@ export function FlowView({ demo = false }: { demo?: boolean }) {
   }, [tab, demo, planners.length]);
 
   const graph: FlowGraph | null = useMemo(() => {
-    if (tab === "story") return withUi(storyGraph(data, planners.map((p) => ({ provider: p.provider, model: p.model ?? (p.provider === "muse" ? "muse-chat" : null) }))));
-    return data?.nodes?.length ? withUi({ nodes: data.nodes, edges: data.edges ?? [] }) : null;
+    if (tab === "story") return withUi(normalizeGraph(storyGraph(data, planners.map((p) => ({ provider: p.provider, model: p.model ?? (p.provider === "muse" ? "muse-chat" : null) }))), "story"));
+    return data?.nodes?.length ? withUi(normalizeGraph({ nodes: data.nodes, edges: data.edges ?? [] }, "media")) : null;
   }, [tab, data, planners]);
 
   // ── Phát lại ──
@@ -655,6 +657,19 @@ export function FlowView({ demo = false }: { demo?: boolean }) {
                     ...(openAi.account ? ([["Tài khoản", openAi.account]] as [React.ReactNode, React.ReactNode][]) : []),
                   ]}
                 />
+              </div>
+            )}
+            {open.members && open.members.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="t-label">Model đang bật · {open.members.length}</h3>
+                <ul className="flex flex-wrap gap-1.5">
+                  {open.members.map((m) => (
+                    <li key={m.id} className="rounded-full bg-white/[.06] px-2.5 py-1 text-[12px] text-fg/85">
+                      {m.title}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted">Người dùng chọn model ở Studio; phát lại 1 job để xem model thật.</p>
               </div>
             )}
             {open.stats && Object.keys(open.stats).length > 0 && (

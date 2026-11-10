@@ -14,7 +14,90 @@ export type CatalogModel = {
   baseCost: string;
   options: ModelOptions;
   locked: boolean;
+  // Model catalog v2 (docs/v2-model-catalog.md) — backend cũ có thể chưa trả.
+  vendor?: ModelVendor | string;
+  displayName?: string;
+  badge?: string;
+  description?: string;
+  etaSec?: number | null;
+  verified?: { ok: boolean } | null;
 };
+
+// ───────── Model catalog v2: hãng, tên hiển thị, kết quả test ─────────
+
+export type ModelVendor = "muse" | "google" | "anthropic" | "openai" | "local";
+export const VENDOR_ORDER: string[] = ["muse", "google", "anthropic", "openai", "local"];
+export const VENDOR_LABEL: Record<string, string> = { muse: "Muse", google: "Google", anthropic: "Anthropic", openai: "OpenAI", local: "Máy chủ" };
+export const MODEL_BADGES = ["Nhanh", "Đẹp", "Mới", "Pro"] as const;
+
+// `{ ok, testedAt, ms, error?, sampleUrl? }` — test vẽ thật bằng đúng model.
+export type ModelVerified = { ok: boolean; testedAt?: string | number | null; ms?: number | null; error?: string | null; sampleUrl?: string | null };
+export type ModelCatalogFields = {
+  vendor?: string;
+  displayName?: string;
+  badge?: string;
+  description?: string;
+  etaSec?: number | null;
+  verified?: ModelVerified | null;
+  source?: "manual" | "synced" | string;
+};
+export type ModelSyncResult = { created: number; existing: number };
+export type ModelVerifyResult = ModelVerified & { model?: unknown };
+
+type VendorSource = { vendor?: string | null; provider?: string | null; engineModel?: string | null; name?: string | null };
+
+// Hãng của model: `vendor` từ backend; chưa có thì suy từ provider + engineModel + tên.
+export function vendorOf(m: VendorSource): string {
+  const v = (m.vendor ?? "").trim().toLowerCase();
+  if (v) return v;
+  const p = (m.provider ?? "").toUpperCase();
+  const hay = `${m.engineModel ?? ""} ${m.name ?? ""}`.toLowerCase();
+  if (p === "MUSE" || /muse/.test(hay)) return "muse";
+  if (p === "LOCAL") return "local";
+  if (/claude|anthropic|opus|sonnet|haiku/.test(hay)) return "anthropic";
+  if (/gpt|openai|codex|dall-e/.test(hay) || p === "CODEX") return "openai";
+  if (/gemini|imagen|veo|google/.test(hay) || p === "AGY") return "google";
+  return "other";
+}
+
+export function modelLabel(m: { displayName?: string | null; name: string }): string {
+  return m.displayName?.trim() || m.name;
+}
+
+// Thời gian ước tính: `etaSec`; chưa có thì agy/codex (CLI vẽ ảnh) ~1–4 phút.
+export function etaLabel(m: { etaSec?: number | null; provider?: string }): string | null {
+  const s = m.etaSec;
+  if (typeof s === "number" && s > 0) return s < 90 ? `~${Math.round(s)} s` : `~${Math.round(s / 60)} phút`;
+  if (m.provider === "AGY" || m.provider === "CODEX") return "1–4 phút";
+  return null;
+}
+
+// Gom theo hãng (Muse, Google, Anthropic, OpenAI, rồi hãng khác), giữ thứ tự gốc trong nhóm.
+export function groupByVendor<T extends VendorSource>(list: T[]): [string, T[]][] {
+  const g = new Map<string, T[]>();
+  for (const m of list) {
+    const v = vendorOf(m);
+    g.set(v, [...(g.get(v) ?? []), m]);
+  }
+  const rank = (v: string) => (VENDOR_ORDER.includes(v) ? VENDOR_ORDER.indexOf(v) : VENDOR_ORDER.length);
+  return [...g.entries()].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
+}
+
+// ───────── Quota agy / codex (`/api/admin/ai`) ─────────
+
+// Cửa sổ quota codex (primary = 5 giờ, secondary = tuần).
+export type QuotaWindow = { usedPercent?: number | null; windowMinutes?: number | null; resetsAt?: string | number | null };
+export type CodexQuota = { primary?: QuotaWindow | null; secondary?: QuotaWindow | null; source?: "app-server" | "session-log" | string; checkedAt?: string | number | null };
+// agy: % còn lại theo nhóm model (Gemini | Claude), mỗi nhóm 5 giờ + tuần.
+export type QuotaRemain = { pct?: number | null; remainingPercent?: number | null; usedPercent?: number | null; resetAt?: string | number | null; resetsAt?: string | number | null };
+export type AgyQuotaGroup = {
+  fiveHour?: number | QuotaRemain | null;
+  weekly?: number | QuotaRemain | null;
+  resetAt?: string | number | null;
+  fiveHourResetAt?: string | number | null;
+  weeklyResetAt?: string | number | null;
+};
+export type AgyQuotaGroups = { gemini?: AgyQuotaGroup | null; claude?: AgyQuotaGroup | null };
 
 // Trường mới của v2 (slug, category, description, cover, palette) có thể chưa có khi backend cũ.
 export type CatalogPreset = {

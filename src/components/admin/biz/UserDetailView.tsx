@@ -93,7 +93,7 @@ export function UserDetailView({ data, self }: { data: Data; self: boolean }) {
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat i={0} label="Khả dụng" icon="bolt" tone="accent" value={formatCredit(balance.available)} />
+        <Stat i={0} label="Khả dụng" icon="coin" tone="accent" value={formatCredit(balance.available)} />
         <Stat i={1} label="Credit gói" icon="tag" value={formatCredit(balance.plan)} />
         <Stat i={2} label="Credit mua" icon="coin" value={formatCredit(balance.purchased)} />
         <Stat i={3} label="Đang giữ" icon="clock" value={formatCredit(balance.held)} />

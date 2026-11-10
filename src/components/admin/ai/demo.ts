@@ -34,6 +34,10 @@ export function demoAi(now = Date.now()): AiData {
               { group: "Gemini Pro", pct: 38, resetAt: now + 4.1 * H },
               { group: "Claude", pct: 12, resetAt: now + 0.6 * H },
             ],
+            groups: {
+              gemini: { fiveHour: { pct: 72, resetAt: now + 2.4 * H }, weekly: { pct: 58, resetAt: now + 3.2 * 24 * H } },
+              claude: { fiveHour: { pct: 12, resetAt: now + 0.6 * H }, weekly: { pct: 41, resetAt: now + 3.2 * 24 * H } },
+            },
           },
           {
             id: "a2",
@@ -44,6 +48,10 @@ export function demoAi(now = Date.now()): AiData {
               { group: "Gemini Pro", pct: 91, resetAt: now + 5 * H },
               { group: "Claude", pct: 64, resetAt: now + 3 * H },
             ],
+            groups: {
+              gemini: { fiveHour: { pct: 100, resetAt: null }, weekly: { pct: 88, resetAt: now + 5.5 * 24 * H } },
+              claude: { fiveHour: { pct: 64, resetAt: now + 3 * H }, weekly: { pct: 79, resetAt: now + 5.5 * 24 * H } },
+            },
           },
         ],
         models: [
@@ -64,9 +72,9 @@ export function demoAi(now = Date.now()): AiData {
         installed: true,
         version: "0.98.0",
         profiles: [
-          { name: "default", loggedIn: true, method: "ChatGPT", active: true },
-          { name: "acc2", loggedIn: true, method: "ChatGPT", active: false },
-          { name: "acc 3", loggedIn: true, method: "API key", active: false },
+          { name: "default", loggedIn: true, method: "ChatGPT", active: true, quota: { primary: { usedPercent: 34, windowMinutes: 300, resetsAt: Math.round((now + 2.1 * H) / 1000) }, secondary: { usedPercent: 61, windowMinutes: 10080, resetsAt: Math.round((now + 70 * H) / 1000) }, source: "app-server", checkedAt: now - 1 * 60_000 } },
+          { name: "acc2", loggedIn: true, method: "ChatGPT", active: false, quota: { primary: { usedPercent: 88, windowMinutes: 300, resetsAt: Math.round((now + 0.7 * H) / 1000) }, secondary: { usedPercent: 93, windowMinutes: 10080, resetsAt: Math.round((now + 30 * H) / 1000) }, source: "app-server", checkedAt: now - 4 * 60_000 } },
+          { name: "acc 3", loggedIn: true, method: "API key", active: false, quota: { primary: { usedPercent: 5, windowMinutes: 300, resetsAt: Math.round((now + 4.6 * H) / 1000) }, secondary: { usedPercent: 22, windowMinutes: 10080, resetsAt: Math.round((now + 120 * H) / 1000) }, source: "session-log", checkedAt: now - 38 * 60_000 } },
           { name: "acc 4", loggedIn: false, method: null, active: false },
           { name: "acc 5", loggedIn: true, method: "ChatGPT", active: false },
           { name: "acc 6", loggedIn: true, method: "ChatGPT", active: false },

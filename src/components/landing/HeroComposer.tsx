@@ -72,10 +72,10 @@ export function HeroComposer({ loggedIn }: { loggedIn: boolean }) {
         e.preventDefault();
         go();
       }}
-      className="hero-composer mx-auto w-full max-w-[760px] rounded-m4 glass-strong p-2 shadow-[0_0_0_1px_var(--color-line2),0_40px_120px_-30px_rgba(124,92,255,.55)]"
+      className="hero-composer mx-auto w-full max-w-[760px] rounded-m4 glass-strong p-2.5 shadow-[0_0_0_1px_var(--color-line2),0_40px_120px_-30px_rgba(124,92,255,.55)]"
     >
       <div className="flex items-center gap-2">
-        <span className="ml-2 hidden h-10 w-10 shrink-0 items-center justify-center rounded-m1 bg-white/[.05] text-accent sm:flex">
+        <span className="ml-1.5 hidden h-10 w-10 shrink-0 items-center justify-center rounded-m1 bg-white/[.05] text-accent sm:flex">
           <Icon name="sparkle" size={20} />
         </span>
         <input
@@ -85,7 +85,7 @@ export function HeroComposer({ loggedIn }: { loggedIn: boolean }) {
           onBlur={() => setFocused(false)}
           placeholder={focused ? "Mô tả điều bạn muốn tạo…" : shown}
           aria-label="Mô tả điều bạn muốn tạo"
-          className="h-14 min-w-0 flex-1 bg-transparent px-3 text-[16px] text-fg outline-none placeholder:text-fg/45 sm:text-[17px]"
+          className="h-14 min-w-0 flex-1 bg-transparent px-2 text-[16px] text-fg !outline-none sm:px-3 placeholder:text-fg/45 sm:text-[17px]"
         />
         <button
           type="submit"
@@ -96,7 +96,7 @@ export function HeroComposer({ loggedIn }: { loggedIn: boolean }) {
           <Icon name="arrowRight" size={18} strokeWidth={2} />
         </button>
       </div>
-      <div className="flex items-center justify-between gap-2 px-2 pt-1.5 pb-1">
+      <div className="flex items-center justify-between gap-2 px-1.5 pt-1.5 pb-0.5">
         <Segmented
           size="sm"
           ariaLabel="Loại"

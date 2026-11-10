@@ -115,7 +115,7 @@ export function normalizeGraph(g: FlowGraph, tab: Tab): FlowGraph {
 
   const routers = nodes.filter((n) => n.id.startsWith("router:")).sort((a, b) => a.id.localeCompare(b.id));
   if (routers.length) {
-    const label = (n: FlowNode) => [n.ai?.provider, n.ai?.model].filter(Boolean).join(" · ") || n.title;
+    const label = (n: FlowNode) => n.ai?.provider || n.title;
     const merged: FlowNode = {
       id: "router",
       kind: "router",
@@ -126,6 +126,30 @@ export function normalizeGraph(g: FlowGraph, tab: Tab): FlowGraph {
     };
     routers.forEach((r) => remap.set(r.id, merged.id));
     nodes = [...nodes.filter((n) => !n.id.startsWith("router:")), merged];
+  }
+
+  // Engine: gộp mọi model đang bật theo provider → 1 thẻ "AI thực thi · model người dùng chọn".
+  if (tab === "media") {
+    const execs = nodes.filter((n) => n.kind === "executor" && !n.id.startsWith(EXEC_PREFIX));
+    const byProvider = new Map<string, FlowNode[]>();
+    for (const n of execs) {
+      const p = (n.ai?.provider ?? "engine").toLowerCase();
+      byProvider.set(p, [...(byProvider.get(p) ?? []), n]);
+    }
+    const merged: FlowNode[] = [...byProvider.entries()].map(([p, list]) => {
+      const active = list.reduce((a, n) => a + (Number(n.stats?.active ?? n.stats?.activeJobs ?? 0) || 0), 0);
+      list.forEach((n) => remap.set(n.id, `${EXEC_PREFIX}${p}`));
+      return {
+        id: `${EXEC_PREFIX}${p}`,
+        kind: "executor",
+        title: PROVIDER_TITLE[p] ?? p,
+        subtitle: p === "local" ? "ghép video · ffmpeg" : "model người dùng chọn",
+        ai: { provider: p },
+        stats: { models: list.length, active },
+        members: list.map((n) => ({ id: n.id, title: n.title })),
+      };
+    });
+    if (execs.length) nodes = [...nodes.filter((n) => !execs.includes(n)), ...merged];
   }
 
   const ids = new Set(nodes.map((n) => n.id));
@@ -179,11 +203,35 @@ export function normalizeGraph(g: FlowGraph, tab: Tab): FlowGraph {
     seen.add(k);
     return true;
   });
-  return { nodes, edges };
+  return { nodes: liveCards(nodes, tab), edges };
 }
 
+const EXEC_PREFIX = "exec@";
+const PROVIDER_TITLE: Record<string, string> = { muse: "Muse", agy: "agy", codex: "Codex", local: "Máy chủ" };
+
+// Chế độ trực tiếp không gán sẵn model lên thẻ: AI viết / chọn skill chỉ ghi hãng + vai trò;
+// model thật chỉ hiện khi phát lại 1 job (FlowView ghi đè `ai` của nút trên đường đi).
+function liveCards(nodes: FlowNode[], tab: Tab): FlowNode[] {
+  let w = 0;
+  return nodes.map((n) => {
+    if (n.kind === "writer") {
+      const i = n.role === "planner" ? -1 : w++;
+      const p = n.ai?.provider;
+      return {
+        ...n,
+        ...(p ? { ai: { provider: p } } : {}),
+        ...(tab === "media" && i >= 0 && p ? { title: PROVIDER_TITLE[p] ?? p, subtitle: i === 0 ? "theo chuỗi AI viết" : `dự phòng ${i}` } : {}),
+      };
+    }
+    if (n.kind === "router") return { ...n, ...(n.ai?.provider ? { ai: { provider: n.ai.provider } } : {}) };
+    if (n.kind === "shot" && n.ai) return { ...n, ai: { provider: n.ai.provider, ...(n.ai.account ? { account: n.ai.account } : {}) } };
+    return n;
+  });
+}
+
+// `g` đã qua normalizeGraph (FlowView chuẩn hóa 1 lần cho cả sơ đồ lẫn phát lại).
 export function buildLayout(g0: FlowGraph, tab: Tab): { nodes: Node[]; edges: Edge[] } {
-  const g = withUi(normalizeGraph(g0, tab));
+  const g = withUi(g0);
   const { place, lanes, fallbackRow } = LAYOUT[tab];
   const maxCol = Math.max(...Object.values(place).map(([, c]) => c));
   // Gom nút theo ô (hàng, cột); loại lạ xếp sau cùng của hàng cuối.
