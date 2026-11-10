@@ -6,7 +6,7 @@ import { useCreditBalance } from "@/components/realtime/Events";
 import { Badge, Empty, Notice } from "@/components/ui/Bits";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
-import { Icon } from "@/components/ui/Icon";
+import { CoinMark } from "@/components/ui/Icon";
 import { Segmented } from "@/components/ui/Segmented";
 import { api, formatCredit } from "@/lib/api-client";
 import { CreditPacks } from "./CreditPacks";
@@ -117,8 +117,8 @@ export function CreditsView({ packs }: { packs: CreditPack[] }) {
           <div className="pointer-events-none absolute -top-24 -right-16 h-72 w-72 rounded-full opacity-35 blur-3xl" style={{ background: "var(--aura)" }} />
           <p className="t-label relative">Khả dụng</p>
           <p className="relative mt-2 flex items-center gap-3 text-[clamp(2.75rem,2rem+3vw,4.5rem)] leading-none font-extrabold tracking-[-0.05em] tabular-nums">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-ink">
-              <Icon name="bolt" size={22} strokeWidth={2} />
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f5c84b]/[.12] shadow-[inset_0_0_0_1px_rgba(245,200,75,.28)]">
+              <CoinMark size={28} />
             </span>
             {formatCredit(available)}
           </p>

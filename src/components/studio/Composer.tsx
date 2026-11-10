@@ -367,7 +367,7 @@ export function GenerateButton({
     >
       {pending ? "Đang gửi" : label}
       <span className="inline-flex h-7 min-w-11 items-center justify-center gap-1 rounded-[10px] bg-black/10 px-2 text-[13px] font-semibold tabular-nums group-disabled:bg-white/[.06]">
-        <Icon name="bolt" size={13} strokeWidth={2} />
+        <Icon name="coin" size={14} strokeWidth={1.8} />
         {quoting && cost === null ? "…" : cost === null ? "—" : formatCredit(cost)}
       </span>
     </button>

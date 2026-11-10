@@ -62,7 +62,7 @@ export function DashboardView({ range, stats, ops, slots }: { range: StatsRange;
           hint={`${ops.failedToday} lỗi hôm nay`}
         />
         <Stat i={3} icon="card" label="Doanh thu" value={formatVnd(stats.revenue)} hint={RANGE_OPTS.find((r) => r.value === range)?.label} href="/admin/payments" />
-        <Stat i={4} icon="bolt" label="Credit đã tiêu" value={formatCredit(stats.creditsSpent)} hint={`${formatNumber(stats.images)} ảnh · ${formatNumber(stats.videos)} video`} />
+        <Stat i={4} icon="coin" label="Credit đã tiêu" value={formatCredit(stats.creditsSpent)} hint={`${formatNumber(stats.images)} ảnh · ${formatNumber(stats.videos)} video`} />
       </div>
 
       <div>

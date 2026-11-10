@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EventsProvider, useCreditBalance } from "@/components/realtime/Events";
 import { Avatar } from "@/components/ui/Bits";
 import { cx } from "@/components/ui/cx";
-import { Icon, type IconName } from "@/components/ui/Icon";
+import { CoinMark, Icon, type IconName } from "@/components/ui/Icon";
+import { formatCredit } from "@/lib/api-client";
 import { MenuItem, Popover } from "@/components/ui/Overlay";
 import { ToastProvider } from "@/components/ui/Toast";
 import { Logo } from "./Logo";
@@ -27,18 +28,44 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+// Số dư chạy nhẹ tới giá trị mới (~0.5 s) khi đổi; lần đầu hiện ngay.
+function useTween(value: number | null, ms = 520): number | null {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    const a = from.current;
+    from.current = value;
+    if (value === null || a === null || a === value || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(value);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / ms);
+      const e = 1 - Math.pow(1 - k, 3);
+      setShown(k >= 1 ? value : a + (value - a) * e);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, ms]);
+  return shown;
+}
+
 function CreditPill() {
-  const { label, held } = useCreditBalance();
+  const { balance, label, held } = useCreditBalance();
+  const shown = useTween(balance);
   return (
     <Link
       href="/credits"
       aria-label={`Số dư ${label} Credit`}
-      className="press group flex h-9 items-center gap-2 rounded-full bg-white/[.05] pr-3.5 pl-1.5 text-[13px] font-semibold shadow-[inset_0_0_0_1px_var(--color-line)] hover:bg-white/[.09]"
+      className="press group flex h-10 items-center gap-2 rounded-full bg-white/[.05] pr-4 pl-1.5 shadow-[inset_0_0_0_1px_var(--color-line)] hover:bg-white/[.09]"
     >
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-ink">
-        <Icon name="bolt" size={13} strokeWidth={2} />
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f5c84b]/[.12] shadow-[inset_0_0_0_1px_rgba(245,200,75,.28)]">
+        <CoinMark size={18} />
       </span>
-      <span className="tabular-nums">{label}</span>
+      <span className="text-[15.5px] leading-none font-semibold tabular-nums">{shown === null ? label : formatCredit(Math.round(shown * 100) / 100)}</span>
       {held > 0 && <span className="hidden text-xs font-medium text-muted lg:inline">· giữ {held.toLocaleString("vi-VN")}</span>}
     </Link>
   );
