@@ -32,12 +32,33 @@ describe("seed", () => {
   it("creates plans, engines, settings and admin", async () => {
     expect(await db.plan.count()).toBe(3);
     expect((await db.plan.findUnique({ where: { code: "free" } }))!.maxDurationSec).toBe(5);
-    expect(
-      (await db.aiModel.findMany({ where: { enabled: true }, orderBy: { sort: "asc" } })).map(
-        (m) => `${m.provider}:${m.kind}`,
-      ),
-    ).toEqual(["MUSE:IMAGE", "AGY:IMAGE", "CODEX:IMAGE", "MUSE:VIDEO", "LOCAL:ASSEMBLE"]);
-    expect((await db.aiModel.findFirst({ where: { provider: "CODEX" } }))!.minPlanRank).toBe(1);
+    const enabled = await db.aiModel.findMany({ where: { enabled: true } });
+    expect(enabled.map((m) => `${m.provider}:${m.kind}:${m.engineModel}`).sort()).toEqual(
+      [
+        "MUSE:IMAGE:muse-image",
+        "AGY:IMAGE:gemini-3.8-flash-medium",
+        "CODEX:IMAGE:gpt-6.1-sol",
+        "MUSE:VIDEO:muse-video",
+        "LOCAL:ASSEMBLE:assemble",
+        "AGY:IMAGE:gemini-3.8-flash-low",
+        "AGY:IMAGE:gemini-4-argon-low",
+        "AGY:IMAGE:claude-sonnet-5-5-low",
+        "AGY:IMAGE:claude-opus-5-5-low",
+        "CODEX:IMAGE:gpt-6-luna",
+        "CODEX:IMAGE:gpt-6-astra",
+        "CODEX:IMAGE:gpt-6-sol",
+        "CODEX:IMAGE:gpt-6.1-terra",
+        "CODEX:IMAGE:gpt-5.6-sol",
+        "CODEX:IMAGE:gpt-5.6-terra",
+        "CODEX:IMAGE:gpt-5.6-luna",
+      ].sort(),
+    );
+    expect(enabled.every((m) => m.vendor && m.displayName)).toBe(true);
+    // "Codex Ảnh" = GPT-6.1 Sol: dùng lại dòng cũ, không tạo trùng; điền verified/badge.
+    const sol = await db.aiModel.findUniqueOrThrow({ where: { name: "Codex Ảnh" } });
+    expect(sol).toMatchObject({ displayName: "GPT-6.1 Sol", vendor: "openai", badge: "Pro", etaSec: 44, verified: { ok: true, ms: 44000 } });
+    expect((await db.aiModel.findUniqueOrThrow({ where: { name: "Gemini Ảnh" } })).displayName).toBe("Gemini 3.8 Flash · Medium");
+    expect((await db.aiModel.findMany({ where: { provider: "CODEX" } })).every((m) => m.minPlanRank === 1 && m.baseCost.toNumber() === 2)).toBe(true);
     expect(await getSetting("voice_line_cost")).toBe(1);
     expect(await db.user.count({ where: { role: "ADMIN" } })).toBe(1);
   });

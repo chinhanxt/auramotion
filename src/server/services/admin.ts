@@ -18,6 +18,7 @@ import { checkCli } from "@/server/engines/cli";
 import { expirePlanCredits, getBalance } from "@/server/services/credit";
 import { activatePlan, startFree } from "@/server/services/plan";
 import { quote, type GenerationParams } from "@/server/services/pricing";
+import { VENDORS, sortByVendor, vendorOf } from "@/server/services/model-naming";
 import { getSetting, setSetting } from "@/server/services/settings";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -307,6 +308,11 @@ const modelFields = {
   options: z.record(z.string(), z.unknown()),
   enabled: z.boolean(),
   sort: z.coerce.number().int(),
+  vendor: z.enum(["", ...VENDORS], { message: "Hãng chỉ gồm muse, google, anthropic, openai, local" }),
+  displayName: z.string().trim().max(100),
+  badge: z.string().trim().max(20),
+  description: z.string().trim().max(500),
+  etaSec: z.coerce.number().int().min(0).max(3600).nullable(),
 };
 
 export const modelCreateSchema = z.object({
@@ -315,6 +321,11 @@ export const modelCreateSchema = z.object({
   minPlanRank: modelFields.minPlanRank.default(0),
   enabled: modelFields.enabled.default(true),
   sort: modelFields.sort.default(0),
+  vendor: modelFields.vendor.optional(),
+  displayName: modelFields.displayName.default(""),
+  badge: modelFields.badge.default(""),
+  description: modelFields.description.default(""),
+  etaSec: modelFields.etaSec.default(null),
 });
 export const modelUpdateSchema = z.object({ id: z.string().min(1), ...modelFields }).partial().required({ id: true });
 
@@ -336,14 +347,18 @@ async function mapDbErrors<T>(fn: () => Promise<T>, what: string): Promise<T> {
   }
 }
 
-export function listModels() {
-  return db.aiModel.findMany({ orderBy: [{ sort: "asc" }, { name: "asc" }] });
+// Nhóm theo hãng rồi sort (giống catalog người dùng).
+export async function listModels() {
+  return sortByVendor(await db.aiModel.findMany({ orderBy: [{ sort: "asc" }, { name: "asc" }] }));
 }
 
 export async function createModel(input: unknown) {
-  const data = modelCreateSchema.parse(input);
+  const { vendor, ...data } = modelCreateSchema.parse(input);
   const options = parseModelOptions(data.kind, data.options);
-  return mapDbErrors(() => db.aiModel.create({ data: { ...data, options } }), "Engine");
+  return mapDbErrors(
+    () => db.aiModel.create({ data: { ...data, vendor: vendor || vendorOf(data.provider, data.engineModel), options } }),
+    "Engine",
+  );
 }
 
 export async function updateModel(input: unknown) {

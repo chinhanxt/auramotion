@@ -72,6 +72,12 @@ describe("agy switcher bridge + codex profiles", () => {
       ["c@test.local", false, "ERROR"],
     ]);
     expect(accounts[0].quota).toContainEqual({ group: "gemini_5h", pct: 80, resetAt: "2026-11-10T20:00:00Z" });
+    // 2 cột Gemini | Claude: % còn lại 5 giờ + tuần, lúc reset.
+    expect(accounts[0].groups).toEqual({
+      gemini: { fiveHour: 80, weekly: 90, fiveHourResetAt: "2026-11-10T20:00:00Z", weeklyResetAt: null },
+      claude: { fiveHour: 50, weekly: 60, fiveHourResetAt: null, weeklyResetAt: null },
+    });
+    expect(accounts[2].groups.gemini).toEqual({ fiveHour: null, weekly: null, fiveHourResetAt: null, weeklyResetAt: null });
     const raw = JSON.stringify(accounts);
     expect(raw).not.toMatch(/SECRET|refreshToken|1\/\/|ya29/);
     expect(accounts[2].error).toContain("***");

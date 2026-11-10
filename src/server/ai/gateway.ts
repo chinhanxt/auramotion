@@ -1,6 +1,7 @@
 import { redis } from "@/lib/redis";
 import { AcpUnavailable, acpText } from "@/server/ai/acp/runtime";
-import { codexProfileHome } from "@/server/ai/codex-profiles";
+import { CodexAppServerUnavailable, codexAppText } from "@/server/ai/codex/appserver";
+import { activeCodexHome } from "@/server/ai/codex-profiles";
 import {
   AI_PROVIDERS,
   DEFAULT_AGY_MODEL,
@@ -116,6 +117,11 @@ export function agyTransport(roles: AiRoles): "acp" | "cli" {
   return env === "acp" || env === "cli" ? env : roles.agy.transport;
 }
 
+// `CODEX_TRANSPORT=exec` ép `codex exec` mỗi lần 1 tiến trình (test); mặc định app-server thường trực.
+export function codexTransport(): "app-server" | "exec" {
+  return process.env.CODEX_TRANSPORT === "exec" ? "exec" : "app-server";
+}
+
 function joinText(prompt: string, system?: string): string {
   return system ? `${system}\n\n${prompt}` : prompt;
 }
@@ -148,16 +154,24 @@ function defaultRunners(deps: GatewayDeps): Record<AiProvider, ProviderRun> {
         throw err;
       }
     },
-    codex: async ({ prompt, system, signal, step, roles }) => {
-      const started = Date.now();
+    codex: async ({ prompt, system, signal, step, roles, timeoutMs }) => {
       // Mắt xích ghi profile riêng thì dùng profile đó, không thì profile đang bật.
       const profile = step.profile || roles.codex.profile;
-      const text = await codexText(joinText(prompt, system), step.effort || "low", {
-        model: step.model || undefined,
-        signal,
-        ...(profile !== "default" ? { home: codexProfileHome(profile) } : {}),
-      });
-      return { text, model: step.model, breakdown: { modelMs: Date.now() - started } };
+      const home = await activeCodexHome(profile);
+      const text = joinText(prompt, system);
+      const effort = step.effort || "low";
+      if (codexTransport() === "app-server") {
+        try {
+          const r = await codexAppText({ home, prompt: text, model: step.model || undefined, effort, timeoutMs, signal });
+          return { text: r.text, model: step.model || r.model || undefined, breakdown: r.breakdown };
+        } catch (err) {
+          if (!(err instanceof CodexAppServerUnavailable)) throw err;
+          console.warn(`[ai] codex app-server chưa sẵn sàng, dùng codex exec: ${err.message.slice(0, 200)}`);
+        }
+      }
+      const started = Date.now();
+      const out = await codexText(text, effort, { model: step.model || undefined, signal, home });
+      return { text: out, model: step.model, breakdown: { modelMs: Date.now() - started } };
     },
     muse: async ({ prompt, system, threadKey, signal, step, timeoutMs }) => {
       const scheduler = deps.scheduler ?? getScheduler();

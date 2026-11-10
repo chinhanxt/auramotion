@@ -5,8 +5,9 @@ import { ALL_QUEUE_NAMES, anyQueue } from "@/lib/queue";
 import { acpModels, acpStatus, getAcpPool } from "@/server/ai/acp/runtime";
 import { getAgyAccounts, type AgyAccount } from "@/server/ai/agy/accounts";
 import { getProxyStatus } from "@/server/ai/agy/proxy";
-import { listCodexProfiles, unionModels } from "@/server/ai/codex-profiles";
-import { agyTransport, aiText, getCooldowns, getGatewayHealth, type GatewayDeps } from "@/server/ai/gateway";
+import { getCodexQuota, type CodexQuota } from "@/server/ai/codex/quota";
+import { codexProfileHome, listCodexProfiles, unionModels, type CodexProfile } from "@/server/ai/codex-profiles";
+import { agyTransport, aiText, codexTransport, getCooldowns, getGatewayHealth, type GatewayDeps } from "@/server/ai/gateway";
 import { AI_PROVIDERS, CODEX_PROFILE_NAME_RE, getAiRoles, saveAiRoles, type AiRoles } from "@/server/ai/roles";
 import { getMuse } from "@/server/engines";
 import { checkCli } from "@/server/engines/cli";
@@ -55,6 +56,24 @@ async function museAccounts(): Promise<MuseAccountView[]> {
   });
 }
 
+// Quota 5 giờ + tuần của từng profile codex đã đăng nhập (profile đang bật qua app-server thường trực).
+async function withQuota(profiles: CodexProfile[], refresh?: boolean): Promise<(CodexProfile & { quota: CodexQuota | null })[]> {
+  const appServer = codexTransport() === "app-server";
+  const out: (CodexProfile & { quota: CodexQuota | null })[] = [];
+  // Tối đa 2 profile cùng lúc (mỗi profile khác bật 1 app-server tạm).
+  for (let i = 0; i < profiles.length; i += 2) {
+    out.push(
+      ...(await Promise.all(
+        profiles.slice(i, i + 2).map(async (p) => ({
+          ...p,
+          quota: p.loggedIn ? await getCodexQuota(codexProfileHome(p.name), { active: p.active, refresh, appServer }).catch(() => null) : null,
+        })),
+      )),
+    );
+  }
+  return out;
+}
+
 export async function getAiAdmin(opts: { refresh?: boolean } = {}) {
   const roles = await getAiRoles();
   const transport = agyTransport(roles);
@@ -68,7 +87,9 @@ export async function getAiAdmin(opts: { refresh?: boolean } = {}) {
       (err: Error) => ({ list: [] as AgyAccount[], error: err.message.slice(0, 300) }),
     ),
     getProxyStatus(),
-    listCodexProfiles({ refresh: opts.refresh }).catch(() => []),
+    listCodexProfiles({ refresh: opts.refresh })
+      .catch(() => [] as CodexProfile[])
+      .then((list) => withQuota(list, opts.refresh)),
     getMuse().health(),
     museAccounts().catch(() => null),
   ]);
@@ -185,6 +206,18 @@ export function jobStage(job: { status: string; queuedAt: Date | null; museTaskI
   return "slot";
 }
 
+const EXEC_TITLE: Record<string, string> = {
+  "MUSE:IMAGE": "Muse · Ảnh",
+  "MUSE:VIDEO": "Muse · Video",
+  "AGY:IMAGE": "agy · Ảnh",
+  "CODEX:IMAGE": "codex · Ảnh",
+  "LOCAL:ASSEMBLE": "Ghép video",
+};
+
+export function execNodeId(m: { provider: string; kind: string }): string {
+  return `exec:${m.provider.toLowerCase()}:${m.kind.toLowerCase()}`;
+}
+
 export async function getFlow() {
   const roles = await getAiRoles();
   const [models, skills, queueStats, slots, slotCounts, museHealth, museAccs, active] = await Promise.all([
@@ -211,6 +244,7 @@ export async function getFlow() {
     }),
   ]);
   const acp = acpStatus();
+  const modelById = new Map(models.map((m) => [m.id, m]));
   const nodes: FlowNode[] = [];
   const edges: FlowEdge[] = [];
   const queues = Object.fromEntries(queueStats);
@@ -244,7 +278,9 @@ export async function getFlow() {
   });
   edges.push({ from: "gateway", to: "skill" });
 
+  // Chế độ trực tiếp không gán model lên thẻ (model thật chỉ có trong trace khi phát lại 1 job): chỉ hãng + vai trò.
   const TITLE = { writer: "Viết prompt", story: "Kịch bản", router: "Chọn skill AI" } as const;
+  const CHAIN = { writer: "AI viết", story: "kịch bản", router: "chọn skill" } as const;
   const chainNodes = (prefix: "writer" | "story" | "router", role: AiRoles["writer"], from: string) => {
     role.chain.forEach((step, i) => {
       const id = `${prefix}:${i}`;
@@ -253,8 +289,9 @@ export async function getFlow() {
         id,
         kind: "writer",
         title: `${TITLE[prefix]} #${i + 1}`,
-        subtitle: [step.provider, step.model, step.effort].filter(Boolean).join(" · "),
-        ai: { provider: step.provider, ...(step.model ? { model: step.model } : {}), ...(profile ? { account: profile } : {}) },
+        subtitle: `${step.provider} · theo chuỗi ${CHAIN[prefix]}`,
+        ai: { provider: step.provider, ...(profile ? { account: profile } : {}) },
+        stats: { role: prefix, step: i + 1 },
       });
       const raced = role.strategy === "race" && i < 2;
       if (i === 0 || raced) edges.push({ from, to: id, label: raced ? "race" : `#${i + 1}` });
@@ -267,22 +304,30 @@ export async function getFlow() {
   // Bộ chọn skill 2 tầng: luật lọc 10 ứng viên, chưa rõ thì hỏi chuỗi `router`.
   chainNodes("router", roles.router, "skill");
 
+  // Engine: 1 thẻ / (provider × loại), đếm model đang bật theo hãng; người dùng chọn model nào thì chạy model đó.
+  const groups = new Map<string, { provider: string; kind: string; models: typeof models }>();
   for (const m of models) {
-    const account = museAccountOf(m.options);
-    const id = `exec:${m.id}`;
+    const id = execNodeId(m);
+    const g = groups.get(id) ?? { provider: m.provider, kind: m.kind, models: [] };
+    g.models.push(m);
+    groups.set(id, g);
+  }
+  for (const [id, grp] of groups) {
+    const provider = grp.provider.toLowerCase();
+    const vendors: Record<string, number> = {};
+    for (const m of grp.models) vendors[m.vendor || "?"] = (vendors[m.vendor || "?"] ?? 0) + 1;
+    const ids = new Set(grp.models.map((m) => m.id));
     nodes.push({
       id,
       kind: "executor",
-      title: m.name,
-      subtitle: `${m.provider} · ${m.kind}`,
-      ai: { provider: m.provider.toLowerCase(), model: m.engineModel, ...(account ? { account } : {}) },
-      stats: { activeJobs: active.filter((j) => j.modelId === m.id).length },
+      title: EXEC_TITLE[`${grp.provider}:${grp.kind}`] ?? `${provider} · ${grp.kind.toLowerCase()}`,
+      subtitle: grp.provider === "LOCAL" ? `${grp.models.length} model đang bật` : `${provider} · model người dùng chọn · ${grp.models.length} model đang bật`,
+      ai: { provider },
+      stats: { models: grp.models.length, vendors, activeJobs: active.filter((j) => ids.has(j.modelId)).length },
     });
-    const queue = m.provider === "MUSE" ? "muse" : m.provider === "LOCAL" ? "post" : "cli";
+    const queue = grp.provider === "MUSE" ? "muse" : grp.provider === "LOCAL" ? "post" : "cli";
     edges.push({ from: "worker", to: id, label: queue });
-    if (m.provider === "MUSE") {
-      edges.push({ from: id, to: account ? `muse-tab:${account}` : "muse2api", label: account ? "ghim tài khoản" : m.kind.toLowerCase() });
-    }
+    if (grp.provider === "MUSE") edges.push({ from: id, to: "muse2api", label: grp.kind.toLowerCase() });
     edges.push({ from: id, to: "validate" });
   }
 
@@ -326,7 +371,11 @@ export async function getFlow() {
     live: {
       queues,
       slots: { limits: slots, used: slotCounts },
-      activeJobs: active.map((j) => ({ id: j.id, kind: j.kind, stage: jobStage(j), modelId: j.modelId })),
+      activeJobs: active.map((j) => {
+        const stage = jobStage(j);
+        const m = modelById.get(j.modelId);
+        return { id: j.id, kind: j.kind, stage, modelId: j.modelId, ...(m && (stage === "slot" || stage === "rendering") ? { node: execNodeId(m) } : {}) };
+      }),
     },
   };
 }
