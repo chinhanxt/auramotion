@@ -85,7 +85,7 @@ async function loginStatus(home: string): Promise<LoginStatus> {
   const out = await new Promise<string>((resolve) => {
     let text = "";
     const proc = spawn(codexBin(), ["login", "status"], {
-      env: { PATH: process.env.PATH ?? "", HOME: os.homedir(), CODEX_HOME: home },
+      env: { PATH: process.env.PATH ?? "", HOME: os.homedir(), CODEX_HOME: home } as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
       cwd: os.tmpdir(),
     });
