@@ -60,8 +60,7 @@ export function usePresence(open: boolean, ms = 200) {
 }
 
 let lockCount = 0;
-// Khóa cuộn body (đếm lồng nhau: modal mở trên drawer vẫn giữ khóa).
-export function lockScroll() {
+function lockScroll() {
   if (lockCount++ === 0) {
     const w = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";

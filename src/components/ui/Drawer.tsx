@@ -4,7 +4,16 @@ import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { IconButton } from "./Button";
 import { cx } from "./cx";
-import { lockScroll, useFocusTrap, usePresence } from "./Overlay";
+import { useFocusTrap, usePresence } from "./Overlay";
+
+// Khóa cuộn bằng <html> (Modal khóa <body>): mở ConfirmDialog trên drawer rồi đóng vẫn giữ khóa.
+let drawerLocks = 0;
+function lockRoot() {
+  if (drawerLocks++ === 0) document.documentElement.style.overflow = "hidden";
+  return () => {
+    if (--drawerLocks === 0) document.documentElement.style.overflow = "";
+  };
+}
 
 // Ngăn trượt từ cạnh màn hình: trình sửa chi tiết (phải) hoặc menu điều hướng mobile (trái).
 export function Drawer({
@@ -35,7 +44,7 @@ export function Drawer({
 
   useEffect(() => {
     if (!open) return;
-    const unlock = lockScroll();
+    const unlock = lockRoot();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => {
