@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
+import { Switch } from "@/components/ui/Controls";
 import { MenuItem, Popover } from "@/components/ui/Overlay";
 import { formatCredit, planLabel, type CatalogModel, type CatalogSkill } from "@/lib/api-client";
 
@@ -166,67 +167,80 @@ export function EngineMenu({ models, value, onChange, unit }: { models: CatalogM
   );
 }
 
-// Nút "AI viết" + chọn skill (nếu catalog có).
-export function AiWriteButton({
+// Một nút skill duy nhất của composer: bật/tắt "AI viết" (Tạo → AI Gateway viết prompt từ ý tưởng rồi gửi engine),
+// chọn skill (Tự chọn = gateway tự chọn), và "Viết vào ô để sửa" cho ai muốn xem prompt trước.
+export function AiWriteControl({
   skills,
   skillId,
   onSkill,
+  on,
+  onToggle,
   onWrite,
   pending,
-  compact,
+  writer = "agy",
 }: {
   skills: CatalogSkill[];
   skillId: string;
   onSkill: (id: string) => void;
+  on: boolean;
+  onToggle: (v: boolean) => void;
   onWrite: () => void;
   pending: boolean;
-  compact?: boolean;
+  writer?: string;
 }) {
   const skill = skills.find((s) => s.id === skillId);
   return (
-    <div className="inline-flex shrink-0 items-center rounded-[11px] bg-white/[.04]">
-      <button
-        type="button"
-        onClick={onWrite}
-        disabled={pending}
-        data-tip="AI viết lại prompt từ ý tưởng"
-        className="press inline-flex h-9 items-center gap-1.5 rounded-[11px] px-2.5 text-[13px] font-medium text-fg/85 hover:bg-white/[.08] hover:text-fg disabled:opacity-60"
-      >
-        <span className={cx("flex", pending && "animate-spin [animation-duration:2.2s]")}>
-          <Icon name="sparkle" size={16} className="text-accent" />
-        </span>
-        <span className={cx(compact && "max-sm:hidden")}>{pending ? "AI đang viết" : "AI viết"}</span>
-      </button>
-      {skills.length > 0 && (
-        <Popover
-          side="top"
-          className="w-72"
-          trigger={({ toggle, ref, ...aria }) => (
-            <button
-              ref={ref}
-              type="button"
-              onClick={toggle}
-              {...aria}
-              aria-label="Chọn skill"
-              className="press -ml-1 inline-flex h-9 max-w-36 items-center gap-1 rounded-[11px] pr-2 pl-1.5 text-[12px] text-muted hover:bg-white/[.08] hover:text-fg"
-            >
-              {skill && <span className="truncate rounded-full bg-aura1/20 px-2 py-0.5 text-[11px] font-semibold text-[#c9bdff]">{skill.name}</span>}
-              <Icon name="chevronDown" size={14} />
-            </button>
+    <Popover
+      side="top"
+      className="w-80"
+      trigger={({ toggle, ref, ...aria }) => (
+        <button
+          ref={ref}
+          type="button"
+          onClick={toggle}
+          {...aria}
+          aria-label="AI viết prompt"
+          data-tip={on ? "Tạo: AI viết prompt rồi gửi engine" : "Tạo: gửi nguyên văn"}
+          className={cx(
+            "press inline-flex h-9 max-w-60 shrink-0 items-center gap-1.5 rounded-[11px] px-2.5 text-[13px] font-medium whitespace-nowrap",
+            on ? "bg-aura1/15 text-fg shadow-[inset_0_0_0_1px_rgba(124,92,255,.35)] hover:bg-aura1/25" : "bg-white/[.04] text-muted hover:bg-white/[.08] hover:text-fg",
           )}
         >
-          {(close) => (
+          <span className={cx("flex shrink-0", pending && "animate-spin [animation-duration:2.2s]")}>
+            <Icon name="sparkle" size={16} className={on || pending ? "text-accent" : undefined} />
+          </span>
+          {pending ? (
+            <span>AI đang viết</span>
+          ) : on ? (
             <>
-              <p className="px-2.5 pt-1.5 pb-1 t-label">Skill viết prompt</p>
-              <MenuItem active={!skillId} onClick={() => (onSkill(""), close())} icon={<Icon name="sparkle" size={16} />}>
-                Mặc định
+              <span className="max-sm:hidden">{writer} viết</span>
+              <span className="text-muted max-sm:hidden">·</span>
+              <span className="min-w-0 truncate text-[#c9bdff]">{skill?.name ?? "Tự chọn"}</span>
+            </>
+          ) : (
+            <span>Gửi nguyên văn</span>
+          )}
+          <Icon name="chevronDown" size={14} className="shrink-0 text-muted" />
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
+          <div className="px-1.5 pt-1 pb-1">
+            <Switch checked={on} onChange={onToggle} label="AI viết prompt" hint={on ? `Tạo: ${writer} viết rồi gửi engine` : "Tạo: gửi nguyên văn"} icon="sparkle" />
+          </div>
+          {skills.length > 0 && (
+            <>
+              <p className="px-2.5 pt-1.5 pb-1 t-label">Skill</p>
+              <MenuItem active={!skillId} onClick={() => (onSkill(""), close())} icon={<Icon name={!skillId ? "check" : "sparkle"} size={16} />} hint="AI chọn">
+                Tự chọn
               </MenuItem>
               {skills.map((s) => (
                 <MenuItem
                   key={s.id}
                   active={s.id === skillId}
                   disabled={s.locked}
-                  icon={<Icon name={s.locked ? "lock" : "wand"} size={16} />}
+                  icon={<Icon name={s.locked ? "lock" : s.id === skillId ? "check" : "wand"} size={16} />}
                   hint={s.locked ? "Pro" : undefined}
                   onClick={() => (onSkill(s.id), close())}
                 >
@@ -236,9 +250,13 @@ export function AiWriteButton({
               ))}
             </>
           )}
-        </Popover>
+          <div className="mx-2 my-1 h-px bg-line" />
+          <MenuItem icon={<Icon name="edit" size={16} />} disabled={pending} onClick={() => (close(), onWrite())}>
+            Viết vào ô để sửa
+          </MenuItem>
+        </>
       )}
-    </div>
+    </Popover>
   );
 }
 
