@@ -57,12 +57,12 @@ export function MediaViewer({ job }: { job: ViewerJob }) {
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      <div className="relative flex min-h-[40vh] flex-1 items-center justify-center overflow-hidden rounded-m4 bg-[#050506] p-2 hairline sm:p-4 lg:min-h-[calc(100dvh-140px)]">
+      <div className="relative flex h-[62vh] items-center justify-center overflow-hidden rounded-m4 bg-[#050506] p-2 hairline sm:p-4 lg:h-[calc(100dvh-240px)] lg:min-h-[420px]">
         {url ? (
           video ? (
-            <video key={url} src={url} controls playsInline loop className="blur-in max-h-[78dvh] max-w-full rounded-m2 bg-black" />
+            <video key={url} src={url} controls playsInline loop className="blur-in max-h-full max-w-full rounded-m2 bg-black" />
           ) : (
-            <img key={url} src={url} alt={job.prompt} className="blur-in max-h-[78dvh] max-w-full rounded-m2 object-contain" />
+            <img key={url} src={url} alt={job.prompt} className="blur-in max-h-full max-w-full rounded-m2 object-contain" />
           )
         ) : active ? (
           <div className="skel skel-aura w-full max-w-md rounded-m3" style={{ aspectRatio: ratioCss(job.aspect) }}>

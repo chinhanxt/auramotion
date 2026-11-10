@@ -7,7 +7,7 @@ export default function ExplorePage() {
   return (
     <div className="pb-16">
       <section className="px-3 pt-3 sm:px-5 lg:px-6">
-        <FeatureTiles />
+        <FeatureTiles compact />
       </section>
       <section className="pt-12">
         <div className="px-3 sm:px-5 lg:px-6">

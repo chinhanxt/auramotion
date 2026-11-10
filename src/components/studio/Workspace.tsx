@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useJobFeed } from "@/components/library/useJobFeed";
 import { useCreditBalance } from "@/components/realtime/Events";
 import { Empty, Notice } from "@/components/ui/Bits";
+import { Dock } from "@/components/ui/Dock";
 import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
 import { cx } from "@/components/ui/cx";
@@ -288,7 +289,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
       </div>
 
       {/* Composer nổi */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[var(--tabbar-h)] z-40 px-2 pb-2 sm:px-4 sm:pb-4">
+      <Dock>
         <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-bg via-bg/80 to-transparent" aria-hidden="true" />
         <form
           onSubmit={(e) => {
@@ -355,7 +356,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
             </>
           )}
         </form>
-      </div>
+      </Dock>
 
       {catalog && (
         <PresetGallery

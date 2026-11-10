@@ -20,15 +20,26 @@ const FALLBACK_THEMES: ThemeItem[] = [
   { id: "f-static", kind: "CAMERA", name: "Tĩnh", promptSuffix: "", thumbnailUrl: null, category: "Camera", palette: ["#2dd4bf", "#60a5fa"] },
 ];
 
+// Một lần tải cho cả trang (ExploreGrid + ThemeStrip dùng chung).
+let themesPromise: Promise<ThemeItem[]> | null = null;
+function loadThemes(): Promise<ThemeItem[]> {
+  themesPromise ??= api<ThemeItem[] | { items?: ThemeItem[]; presets?: ThemeItem[] }>("/api/themes")
+    .then((r) => {
+      const list = Array.isArray(r) ? r : (r.items ?? r.presets ?? []);
+      return list.length ? list : FALLBACK_THEMES;
+    })
+    .catch(() => FALLBACK_THEMES);
+  return themesPromise;
+}
+
 function useThemes() {
   const [themes, setThemes] = useState<ThemeItem[] | null>(null);
   useEffect(() => {
-    api<ThemeItem[] | { items?: ThemeItem[]; presets?: ThemeItem[] }>("/api/themes")
-      .then((r) => {
-        const list = Array.isArray(r) ? r : (r.items ?? r.presets ?? []);
-        setThemes(list.length ? list : FALLBACK_THEMES);
-      })
-      .catch(() => setThemes(FALLBACK_THEMES));
+    let alive = true;
+    loadThemes().then((t) => alive && setThemes(t));
+    return () => {
+      alive = false;
+    };
   }, []);
   return themes;
 }
@@ -68,12 +79,12 @@ export function ExploreGrid({ limit = 24 }: { limit?: number }) {
     );
   }
   if (items.length === 0) {
-    const list = [...(themes ?? FALLBACK_THEMES), ...(themes ?? FALLBACK_THEMES)].slice(0, 12);
+    const list = (themes ?? FALLBACK_THEMES).slice(0, 8);
     return (
       <div className="masonry">
         {list.map((t, i) => (
           <PresetCover key={`${t.id}-${i}`} preset={t} className="reveal rounded-m2 hairline" >
-            <span className="block" style={{ aspectRatio: ["4 / 5", "1 / 1", "9 / 16", "3 / 4"][i % 4] }} />
+            <span className="block" style={{ aspectRatio: ["4 / 5", "1 / 1", "3 / 4", "1 / 1"][i % 4] }} />
             <span className="absolute bottom-3 left-3 text-sm font-semibold text-white/90">{t.name}</span>
           </PresetCover>
         ))}

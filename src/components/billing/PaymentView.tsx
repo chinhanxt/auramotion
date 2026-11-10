@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCreditBalance } from "@/components/realtime/Events";
 import { Badge } from "@/components/ui/Bits";
 import { LinkButton } from "@/components/ui/Button";
@@ -47,6 +47,25 @@ function Row({ label, value, display, copy, strong }: { label: string; value: st
       </span>
     </div>
   );
+}
+
+function QrImage({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  const ref = useRef<HTMLImageElement>(null);
+  // Ảnh lỗi trước khi hydrate thì onError không chạy: kiểm lại sau khi gắn.
+  useEffect(() => {
+    const img = ref.current;
+    if (img?.complete && img.naturalWidth === 0) setFailed(true);
+  }, []);
+  if (failed) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-sm text-neutral-500">
+        <Icon name="qr" size={36} />
+        Không tải được mã QR. Chuyển khoản theo thông tin bên cạnh.
+      </div>
+    );
+  }
+  return <img ref={ref} src={src} alt="Mã QR chuyển khoản" onError={() => setFailed(true)} className="blur-in h-full w-full object-contain" />;
 }
 
 export function PaymentView({ initial, bank }: { initial: PaymentDetail; bank: BankInfo }) {
@@ -103,7 +122,7 @@ export function PaymentView({ initial, bank }: { initial: PaymentDetail; bank: B
       <div className="relative overflow-hidden rounded-m4 bg-s1 p-5 hairline sm:p-7">
         <div className="pointer-events-none absolute inset-x-0 -top-32 mx-auto h-64 w-64 rounded-full opacity-30 blur-3xl" style={{ background: "var(--aura)" }} />
         <div className="relative mx-auto aspect-square w-full max-w-[340px] rounded-m3 bg-white p-4 shadow-[0_30px_80px_-20px_rgba(0,0,0,.8)]">
-          <img src={payment.qrUrl} alt="Mã QR chuyển khoản" className="h-full w-full object-contain" />
+          <QrImage src={payment.qrUrl} />
         </div>
         <p className="relative mt-5 flex items-center justify-center gap-2 text-sm text-muted">
           <Icon name="qr" size={16} /> Mở app ngân hàng và quét mã

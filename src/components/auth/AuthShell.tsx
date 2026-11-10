@@ -16,10 +16,10 @@ export function AuthShell({ title, children, footer, subtitle }: { title: string
         <div className="relative flex h-full min-h-dvh flex-col justify-between p-10 xl:p-14">
           <Logo />
           <div className="max-w-xl">
-            <p className="t-display text-[clamp(3rem,1rem+4.5vw,6rem)]">
-              Ý tưởng
+            <p className="t-display text-[clamp(2.6rem,0.8rem+3.6vw,5.2rem)]">
+              Ý tưởng thành
               <br />
-              thành <span className="aura-text">chuyển động.</span>
+              <span className="aura-text whitespace-nowrap">chuyển động.</span>
             </p>
           </div>
           <div className="flex gap-2">

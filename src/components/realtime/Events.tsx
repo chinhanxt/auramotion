@@ -30,6 +30,7 @@ function useBus(): Bus {
 
 const MAX_BACKOFF = 30_000;
 const PROBE_AGAIN_MS = 120_000;
+const SSE_MISSING_KEY = "am:sse-missing";
 
 export function EventsProvider({ children, initialBalance, initialHeld = 0 }: { children: React.ReactNode; initialBalance: number; initialHeld?: number }) {
   const toast = useToast();
@@ -133,14 +134,29 @@ export function EventsProvider({ children, initialBalance, initialHeld = 0 }: { 
           // Chưa từng mở: kiểm route có tồn tại không (404 → dùng poll, thử lại sau lâu).
           const res = await fetch("/api/events", { method: "GET", headers: { Accept: "text/event-stream" } }).catch(() => null);
           res?.body?.cancel().catch(() => {});
-          if (!res || res.status === 404 || res.status === 405 || res.status === 401) return schedule(PROBE_AGAIN_MS);
+          if (!res || res.status === 404 || res.status === 405 || res.status === 401) {
+            try {
+              sessionStorage.setItem(SSE_MISSING_KEY, String(Date.now()));
+            } catch {
+              // trình duyệt chặn storage
+            }
+            return schedule(PROBE_AGAIN_MS);
+          }
         }
         schedule(backoff);
         backoff = Math.min(MAX_BACKOFF, backoff * 2);
       };
     }
 
-    connect();
+    let missingAt = 0;
+    try {
+      missingAt = Number(sessionStorage.getItem(SSE_MISSING_KEY) ?? 0);
+    } catch {
+      // bỏ qua
+    }
+    const wait = missingAt ? PROBE_AGAIN_MS - (Date.now() - missingAt) : 0;
+    if (wait > 0) schedule(wait);
+    else connect();
     const onVisible = () => {
       if (document.visibilityState === "visible" && !es && timer) {
         clearTimeout(timer);

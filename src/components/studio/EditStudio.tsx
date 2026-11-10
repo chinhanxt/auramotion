@@ -5,6 +5,7 @@ import { useJobFeed } from "@/components/library/useJobFeed";
 import { useCreditBalance } from "@/components/realtime/Events";
 import { Empty, Notice } from "@/components/ui/Bits";
 import { Switch } from "@/components/ui/Controls";
+import { Dock } from "@/components/ui/Dock";
 import { cx } from "@/components/ui/cx";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Overlay";
@@ -292,8 +293,8 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
           </aside>
 
           {/* Xem trước */}
-          <section className="relative flex min-h-[300px] items-center justify-center overflow-hidden rounded-m3 bg-[#050506] p-4 hairline lg:min-h-[420px]">
-            <div className="relative max-h-[52dvh] overflow-hidden rounded-m2 bg-s2 shadow-2xl" style={{ aspectRatio: ratioCss(aspect), height: "min(52dvh, 560px)", maxWidth: "100%" }}>
+          <section className="relative flex items-center justify-center overflow-hidden rounded-m3 bg-[#050506] p-4 pt-14 hairline lg:min-h-[420px] lg:pt-4">
+            <div className="relative max-h-[52dvh] overflow-hidden rounded-m2 bg-s2 shadow-2xl" style={{ aspectRatio: ratioCss(aspect), height: "clamp(220px, 40dvh, 560px)", maxWidth: "100%" }}>
               {preview ? (
                 preview.kind === "image" ? (
                   <img key={preview.key} src={preview.url} alt="" className="blur-in h-full w-full object-cover" />
@@ -355,7 +356,7 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
       </div>
 
       {/* Thanh xuất */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[var(--tabbar-h)] z-40 px-2 pb-2 sm:px-4 sm:pb-4">
+      <Dock>
         <div className="pointer-events-auto mx-auto flex max-w-[1040px] items-center gap-3 rounded-m3 glass-strong p-2 pl-4 shadow-[0_0_0_1px_var(--color-line2),0_24px_60px_-20px_rgba(0,0,0,.9)]">
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">
@@ -374,7 +375,7 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
             disabled={model.locked || blocker !== "" || voiceBusy || aiBusy}
           />
         </div>
-      </div>
+      </Dock>
 
       <Modal open={bin} onClose={() => setBin(false)} title="Kho clip" size="lg">
         <ClipPicker

@@ -323,7 +323,8 @@ export function StoryView({ id }: { id: string }) {
           />
           <p className="mt-1 line-clamp-2 max-w-3xl text-sm text-muted">{story.idea}</p>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        {(ready || canAssemble) && (
+        <div className="order-last flex w-full flex-wrap items-center gap-2 sm:order-none sm:w-auto">
           {ready && (
             <Button variant="primary" size="lg" icon="video" loading={busy === "render"} disabled={blocked} onClick={() => action("render")}>
               Quay tất cả{total !== null && <span className="rounded-[8px] bg-black/10 px-1.5 py-0.5 text-[13px]">⚡ {formatCredit(total)}</span>}
@@ -334,8 +335,9 @@ export function StoryView({ id }: { id: string }) {
               Ghép lại
             </Button>
           )}
-          <IconButton icon="trash" label="Xóa story" variant="ghost" onClick={() => setConfirmDelete(true)} />
         </div>
+        )}
+        <IconButton icon="trash" label="Xóa story" variant="ghost" onClick={() => setConfirmDelete(true)} className="sm:order-last" />
       </div>
 
       {blocked && (ready || story.status === "RENDERING") && (

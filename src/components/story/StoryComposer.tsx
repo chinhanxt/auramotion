@@ -136,13 +136,13 @@ export function StoryComposer() {
         />
       </div>
 
-      <div className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-fg/80">Số cảnh</span>
+      <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3 px-1">
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+          <span className="text-sm whitespace-nowrap text-fg/80">Số cảnh</span>
           <Stepper value={shotCount} onChange={setShotCount} min={2} max={8} ariaLabel="Số cảnh" />
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-fg/80">Mỗi cảnh</span>
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+          <span className="text-sm whitespace-nowrap text-fg/80">Mỗi cảnh</span>
           <Segmented
             size="sm"
             ariaLabel="Thời lượng mỗi cảnh"
@@ -151,8 +151,8 @@ export function StoryComposer() {
             onChange={setShotDuration}
           />
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-fg/80">Cách quay</span>
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+          <span className="text-sm whitespace-nowrap text-fg/80">Cách quay</span>
           <Segmented
             size="sm"
             ariaLabel="Cách quay"
@@ -164,7 +164,7 @@ export function StoryComposer() {
             onChange={setMode}
           />
         </div>
-        <div className="flex flex-col">
+        <div className="w-full sm:w-52">
           <Switch checked={autoAssemble} onChange={setAutoAssemble} label="Tự ghép khi xong" />
         </div>
       </div>

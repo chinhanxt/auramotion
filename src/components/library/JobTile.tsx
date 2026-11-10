@@ -102,18 +102,18 @@ export const JobTile = memo(function JobTile({
             <FadeImage src={url} alt={job.prompt} className="absolute inset-0" imgClassName="transition-transform duration-[700ms] ease-[var(--ease-out)] group-hover/tile:scale-[1.025]" />
           )
         ) : active ? (
-          <div className="skel skel-aura absolute inset-0 flex flex-col justify-end p-3.5">
+          <div className="skel skel-aura @container absolute inset-0 flex flex-col justify-end p-2.5 sm:p-3.5">
             <div className="relative space-y-2.5">
-              <div className="flex items-center gap-2 text-[12px] font-medium text-fg/85">
+              <div className="flex items-center gap-2 text-[12px] font-medium whitespace-nowrap text-fg/85">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inset-0 rounded-full bg-accent opacity-60 blur-[3px]" />
                   <span className="relative h-2 w-2 rounded-full bg-accent" />
                 </span>
-                {STATUS_LABEL[job.status]}
-                {pct !== null && pct > 0 && <span className="ml-auto tabular-nums text-muted">{Math.round(pct)}%</span>}
+                <span className="truncate">{STATUS_LABEL[job.status]}</span>
+                {pct !== null && pct > 0 && <span className="ml-auto hidden tabular-nums text-muted @[150px]:inline">{Math.round(pct)}%</span>}
               </div>
               <AuraBar value={pct} />
-              <p className="line-clamp-2 text-[12px] leading-snug text-muted">{job.prompt}</p>
+              <p className="hidden text-[12px] leading-snug text-muted @[150px]:line-clamp-2">{job.prompt}</p>
             </div>
           </div>
         ) : (
