@@ -164,7 +164,7 @@ function str(v: unknown, max: number): string {
 
 // Đọc kịch bản AI trả: chấp nhận chữ có ```json, mảng shots trần, tên trường khác (description/text);
 // cắt bớt nếu thừa cảnh, lỗi nếu < 2 cảnh. Thời lượng mỗi cảnh luôn theo story.
-export function parseStoryPlan(raw: unknown, opts: { shotCount: number; durationSec: number }): { title: string; plan: StoryPlan } {
+export function parseStoryPlan(raw: unknown, opts: { shotCount: number; durationSec: number; strict?: boolean }): { title: string; plan: StoryPlan } {
   let data: unknown = raw;
   if (typeof raw === "string") {
     const direct = extractJson(raw) as { shots?: unknown } | undefined;
@@ -173,11 +173,16 @@ export function parseStoryPlan(raw: unknown, opts: { shotCount: number; duration
   const obj = (Array.isArray(data) ? { shots: data } : (data ?? {})) as { title?: unknown; shots?: unknown; scenes?: unknown };
   const list = Array.isArray(obj.shots) ? obj.shots : Array.isArray(obj.scenes) ? obj.scenes : [];
   const shots: StoryPlanShot[] = [];
+  const seen = new Set<string>();
   for (const item of list) {
     if (shots.length >= opts.shotCount) break;
     const s = (typeof item === "string" ? { prompt: item } : (item ?? {})) as Record<string, unknown>;
     const prompt = str(s.prompt ?? s.description ?? s.text, MAX_PROMPT - 200);
     if (!prompt) continue;
+    // AI (nhất là Muse sau khi sửa JSON) có lúc lặp lại nguyên một cảnh: bỏ cảnh trùng.
+    const key = prompt.toLowerCase().replace(/[^a-z0-9à-ỹ]+/g, " ").trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
     const camera = str(s.camera, 80);
     shots.push({
       index: shots.length,
@@ -187,7 +192,9 @@ export function parseStoryPlan(raw: unknown, opts: { shotCount: number; duration
       durationSec: opts.durationSec,
     });
   }
-  if (shots.length < 2) throw new EngineError("BAD_PLAN", `Kịch bản AI không đủ cảnh: ${JSON.stringify(raw).slice(0, 200)}`);
+  if (shots.length < Math.min(2, opts.shotCount) || (opts.strict !== false && shots.length < opts.shotCount)) {
+    throw new EngineError("BAD_PLAN", `Kịch bản AI có ${shots.length}/${opts.shotCount} cảnh khác nhau: ${JSON.stringify(raw).slice(0, 200)}`);
+  }
   return { title: str(obj.title, 120), plan: { shots } };
 }
 
@@ -310,7 +317,7 @@ export async function planStory(storyId: string, deps: GatewayDeps = {}): Promis
         prompt,
         system: skill?.instructions ?? FALLBACK_SYSTEM,
         validate: (text) => parseStoryPlan(text, opts),
-        followUp: PLAN_FOLLOW_UP,
+        followUp: `${PLAN_FOLLOW_UP} Exactly ${story.shotCount} distinct shots, no repeated shot.`,
         provider: story.planner as AiProvider,
         threadKey: story.threadKey,
       },

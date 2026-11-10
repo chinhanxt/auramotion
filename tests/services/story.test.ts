@@ -95,9 +95,9 @@ describe("story", () => {
 
     it("repairs truncated output and extracts objects as last resort", () => {
       const cut = MALFORMED.slice(0, MALFORMED.indexOf('{"title": "C"') + 40);
-      expect(parseStoryPlan(cut, { shotCount: 3, durationSec: 5 }).plan.shots.length).toBeGreaterThanOrEqual(2);
+      expect(parseStoryPlan(cut, { shotCount: 3, durationSec: 5, strict: false }).plan.shots.length).toBeGreaterThanOrEqual(2);
       const loose = 'Cảnh 1: {"title":"X","prompt":"p1"} rồi cảnh 2: {"title":"Y","prompt":"p2",} hết.';
-      expect(parseStoryPlan(loose, { shotCount: 3, durationSec: 5 }).plan.shots.map((s) => s.prompt)).toEqual(["p1", "p2"]);
+      expect(parseStoryPlan(loose, { shotCount: 3, durationSec: 5, strict: false }).plan.shots.map((s) => s.prompt)).toEqual(["p1", "p2"]);
     });
 
     it("clamps shot count, forces duration, rejects < 2 shots", () => {
@@ -106,6 +106,15 @@ describe("story", () => {
       expect(plan.shots.every((s) => s.durationSec === 5)).toBe(true);
       expect(() => parseStoryPlan('{"shots":[{"prompt":"one"}]}', { shotCount: 3, durationSec: 5 })).toThrow();
       expect(() => parseStoryPlan("xin lỗi", { shotCount: 3, durationSec: 5 })).toThrow();
+    });
+
+    it("bỏ cảnh trùng và đòi đủ số cảnh khác nhau", () => {
+      const dup = '{"shots":[{"prompt":"Boat drifts."},{"prompt":"Boat reaches river."},{"prompt":"boat drifts"}]}';
+      expect(() => parseStoryPlan(dup, { shotCount: 3, durationSec: 5 })).toThrow(/2\/3/);
+      expect(parseStoryPlan(dup, { shotCount: 3, durationSec: 5, strict: false }).plan.shots.map((s) => s.prompt)).toEqual([
+        "Boat drifts.",
+        "Boat reaches river.",
+      ]);
     });
   });
 
@@ -137,7 +146,7 @@ describe("story", () => {
     const calls: { prompt: string; threadKey?: string }[] = [];
     const muse: ProviderRun = async (a) => {
       calls.push(a);
-      return a.prompt === PLAN_FOLLOW_UP ? GOOD : "Tôi sẽ kể một câu chuyện...";
+      return a.prompt.startsWith(PLAN_FOLLOW_UP) ? GOOD : "Tôi sẽ kể một câu chuyện...";
     };
     const agy: ProviderRun = vi.fn(async () => GOOD);
     await planStory(story.id, { setting: gateway, runners: { muse, agy } });
