@@ -7,11 +7,23 @@ export type MuseTaskStatus = "queued" | "running" | "succeeded" | "failed" | "ca
 type MuseTask = {
   id?: string;
   status?: MuseTaskStatus;
+  progress?: number;
   result?: { data?: { url?: string }[]; url?: string } | null;
   error?: { message?: string; code?: string } | null;
 };
 
+export type MuseTaskView = { status: MuseTaskStatus; urls: string[]; progress: number; error?: string; errorCode?: string };
+
+export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+
 const REQUEST_TIMEOUT_MS = 30_000;
+
+// Muse từ chối video theo vùng / tài khoản: lỗi cố định, không thử lại.
+const REGION_BLOCK = /country or region|not available (for|in) (this account|your)/i;
+
+export function isRegionBlocked(message: string | undefined | null): boolean {
+  return Boolean(message && REGION_BLOCK.test(message));
+}
 
 const IMAGE_MIME: Record<string, string> = {
   ".png": "image/png",
@@ -47,14 +59,23 @@ export class HttpMuseClient {
     return { Authorization: `Bearer ${this.apiKey}` };
   }
 
-  private async request<T>(method: "GET" | "POST", urlPath: string, body?: unknown): Promise<T> {
+  private async request<T>(
+    method: "GET" | "POST" | "PATCH" | "DELETE",
+    urlPath: string,
+    body?: unknown,
+    opts: { timeoutMs?: number; signal?: AbortSignal; headers?: Record<string, string> } = {},
+  ): Promise<T> {
     let res: Response;
+    const timeout = AbortSignal.timeout(opts.timeoutMs ?? REQUEST_TIMEOUT_MS);
     try {
       res = await fetch(`${this.baseUrl}${urlPath}`, {
         method,
-        headers: { ...this.authHeaders, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+        headers: {
+          ...(opts.headers ?? this.authHeaders),
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        },
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: opts.signal ? AbortSignal.any([timeout, opts.signal]) : timeout,
       });
     } catch (err) {
       throw new EngineError("MUSE_UNREACHABLE", `Không kết nối được muse2api: ${(err as Error).message}`, true);
@@ -69,6 +90,7 @@ export class HttpMuseClient {
     if (!res.ok) {
       const detail = (json as { error?: { message?: string } } | null)?.error?.message ?? text.slice(0, 300);
       const message = `muse2api HTTP ${res.status}: ${detail}`;
+      if (isRegionBlocked(detail)) throw new EngineError("REGION_BLOCKED", message);
       if (res.status === 429) throw new EngineError("MUSE_BUSY", message, true);
       if (res.status >= 500) throw new EngineError("MUSE_ERROR", message, true);
       if (res.status === 401 || res.status === 403) throw new EngineError("MUSE_AUTH", message);
@@ -98,7 +120,8 @@ export class HttpMuseClient {
         : await this.request<MuseTask>("POST", "/v1/videos", {
             model: req.engineModel,
             prompt: req.prompt,
-            size: req.aspectRatio,
+            // omitSize: không gửi tỷ lệ cho Muse video (gợi ý khung đã nằm trong prompt).
+            ...(req.omitSize ? {} : { size: req.aspectRatio }),
             duration: req.durationSec ?? 5,
             image,
           });
@@ -106,10 +129,7 @@ export class HttpMuseClient {
     return { taskId: task.id };
   }
 
-  async getTask(
-    kind: "image" | "video",
-    taskId: string,
-  ): Promise<{ status: MuseTaskStatus; urls: string[]; error?: string }> {
+  async getTask(kind: "image" | "video", taskId: string): Promise<MuseTaskView> {
     const base = kind === "image" ? "/v1/images/generations" : "/v1/videos";
     const task = await this.request<MuseTask>("GET", `${base}/${encodeURIComponent(taskId)}`);
     const urls =
@@ -119,7 +139,39 @@ export class HttpMuseClient {
           ? [task.result.url]
           : [];
     const error = task.error ? task.error.message || task.error.code : undefined;
-    return { status: task.status ?? "queued", urls, ...(error ? { error } : {}) };
+    const errorCode = isRegionBlocked(task.error?.message) ? "REGION_BLOCKED" : task.error?.code;
+    const progress = Math.max(0, Math.min(100, Math.round(Number(task.progress ?? 0)) || 0));
+    return {
+      status: task.status ?? "queued",
+      urls,
+      progress,
+      ...(error ? { error } : {}),
+      ...(errorCode ? { errorCode } : {}),
+    };
+  }
+
+  // Chat Muse (không stream). `user` = khóa hội thoại: cùng khóa thì muse2api giữ 1 thread (chat chính).
+  async chat(
+    messages: ChatMessage[],
+    opts: { user?: string; model?: string; timeoutMs?: number; signal?: AbortSignal } = {},
+  ): Promise<string> {
+    const body = await this.request<{ choices?: { message?: { content?: unknown } }[] }>(
+      "POST",
+      "/v1/chat/completions",
+      { model: opts.model || "muse-chat", messages, stream: false, ...(opts.user ? { user: opts.user } : {}) },
+      { timeoutMs: opts.timeoutMs ?? 180_000, signal: opts.signal },
+    );
+    const content = body.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      throw new EngineError("MUSE_BAD_RESPONSE", "Muse chat không trả nội dung", true);
+    }
+    return content;
+  }
+
+  // Gọi /admin/* và /readyz của muse2api bằng admin key.
+  async admin<T>(method: "GET" | "POST" | "PATCH" | "DELETE", urlPath: string, body?: unknown): Promise<T> {
+    const key = process.env.MUSE2API_ADMIN_KEY || this.apiKey;
+    return this.request<T>(method, urlPath, body, { headers: { Authorization: `Bearer ${key}` } });
   }
 
   async health(): Promise<{ ok: boolean; accounts?: number; driver?: string }> {
