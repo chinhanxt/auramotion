@@ -33,7 +33,7 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       { href: "/admin/models", label: "Model", icon: "cpu", keywords: "engine" },
       { href: "/admin/muse", label: "Muse", icon: "bolt", keywords: "tài khoản cookie" },
-      { href: "/admin/ai", label: "AI & Model", icon: "sparkle", keywords: "agy codex gateway tài khoản model" },
+      { href: "/admin/ai", label: "AI & Model", icon: "sparkle", keywords: "google openai gemini claude gateway tài khoản model" },
       { href: "/admin/flow", label: "Luồng xử lý", icon: "route", keywords: "pipeline flow sơ đồ trace" },
       { href: "/admin/queues", label: "Hàng đợi", icon: "layers", keywords: "queue bullmq" },
       { href: "/admin/jobs", label: "Tác vụ", icon: "list", keywords: "job" },

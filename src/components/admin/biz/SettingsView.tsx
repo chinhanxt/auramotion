@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { jsonInit, useAction, useDraft } from "@/components/admin/hooks";
 import { FieldRow, NumberInput, PageHeader, Panel, SaveBar, TextInput } from "@/components/admin/kit";
-import { PROVIDER_LABEL, formatVnd } from "@/components/admin/format";
+import { formatVnd, providerLabel } from "@/components/admin/format";
 import { Notice } from "@/components/ui/Bits";
 import { IconButton } from "@/components/ui/Button";
 import { Stepper, Switch } from "@/components/ui/Controls";
@@ -58,11 +58,11 @@ function PromptWriter({ initial }: { initial: { provider: "agy" | "codex"; model
           value={draft.provider}
           onChange={(v) => set("provider", v)}
           options={[
-            { value: "agy" as const, label: "agy" },
-            { value: "codex" as const, label: "Codex" },
+            { value: "agy" as const, label: providerLabel("agy") },
+            { value: "codex" as const, label: providerLabel("codex") },
           ]}
         />
-        <FieldRow label="Model" hint={draft.provider === "agy" ? "Bắt buộc với agy" : "Trống = mặc định"}>
+        <FieldRow label="Model" hint={draft.provider === "agy" ? "Bắt buộc với Google" : "Trống = mặc định"}>
           <TextInput value={draft.model} placeholder="claude-sonnet-5-5-low" onChange={(e) => set("model", e.target.value)} />
         </FieldRow>
         <SaveBar dirty={dirty} busy={isBusy("pw")} onSave={save} onReset={reset} />
@@ -101,7 +101,7 @@ function StorySettings({ initial, tracks }: { initial: StoryS; tracks: { id: str
             ariaLabel="Planner"
             value={draft.planner}
             onChange={(v) => set("planner", v)}
-            options={(["muse", "agy", "codex"] as const).map((p) => ({ value: p, label: PROVIDER_LABEL[p] }))}
+            options={(["muse", "agy", "codex"] as const).map((p) => ({ value: p, label: providerLabel(p, { chat: true }) }))}
           />
         </div>
         <div className="space-y-1 rounded-m2 bg-white/[.02] p-3 hairline">
@@ -223,7 +223,7 @@ export function SettingsView({
               href="/admin/ai"
               icon="route"
               title="AI & Model"
-              lines={[gateway ? gateway.order.map((p) => PROVIDER_LABEL[p]).join(" → ") : "Mặc định", gateway ? `Timeout ${gateway.timeoutSec}s` : ""].filter(Boolean)}
+              lines={[gateway ? gateway.order.map((p) => providerLabel(p, { chat: true })).join(" → ") : "Mặc định", gateway ? `Timeout ${gateway.timeoutSec}s` : ""].filter(Boolean)}
             />
           </div>
         </div>

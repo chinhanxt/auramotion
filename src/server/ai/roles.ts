@@ -23,7 +23,7 @@ const optText = z
   .transform((v) => (v ? v : undefined));
 
 export const chainStepSchema = z.object({
-  provider: z.enum(AI_PROVIDERS, { message: "Provider chỉ gồm agy, codex, muse" }),
+  provider: z.enum(AI_PROVIDERS, { message: "Provider chỉ gồm Google, OpenAI, Muse" }),
   model: optText,
   effort: z
     .string()
@@ -35,7 +35,7 @@ export const chainStepSchema = z.object({
   profile: z
     .string()
     .trim()
-    .regex(CODEX_PROFILE_NAME_RE, { message: "Tên profile codex không hợp lệ" })
+    .regex(CODEX_PROFILE_NAME_RE, { message: "Tên profile OpenAI không hợp lệ" })
     .optional()
     .or(z.literal("").transform(() => undefined)),
 });
@@ -97,7 +97,7 @@ export const aiRolesSchema = z.object({
     .object({ transport: z.enum(["acp", "cli"]).default("acp"), proxy: z.boolean().default(false) })
     .default(DEFAULT_AI_ROLES.agy),
   codex: z
-    .object({ profile: z.string().trim().regex(CODEX_PROFILE_NAME_RE, { message: "Tên profile codex không hợp lệ" }).default("default") })
+    .object({ profile: z.string().trim().regex(CODEX_PROFILE_NAME_RE, { message: "Tên profile OpenAI không hợp lệ" }).default("default") })
     .default(DEFAULT_AI_ROLES.codex),
 });
 export type AiRoles = z.infer<typeof aiRolesSchema>;

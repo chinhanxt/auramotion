@@ -1,6 +1,7 @@
 // Dựng sơ đồ (vị trí đặt tay theo làn) + đường đi của 1 job để phát lại.
 import type { Edge, Node } from "@xyflow/react";
 import type { JobTrace } from "@/lib/api-client";
+import { providerLabel } from "@/lib/providers";
 import type { FlowAi, FlowData, FlowEdge, FlowGraph, FlowJob, FlowNode, Tab } from "./types";
 
 export const NODE_W = 216;
@@ -115,7 +116,7 @@ export function normalizeGraph(g: FlowGraph, tab: Tab): FlowGraph {
 
   const routers = nodes.filter((n) => n.id.startsWith("router:")).sort((a, b) => a.id.localeCompare(b.id));
   if (routers.length) {
-    const label = (n: FlowNode) => n.ai?.provider || n.title;
+    const label = (n: FlowNode) => (n.ai?.provider ? providerLabel(n.ai.provider) : n.title);
     const merged: FlowNode = {
       id: "router",
       kind: "router",
@@ -207,7 +208,7 @@ export function normalizeGraph(g: FlowGraph, tab: Tab): FlowGraph {
 }
 
 const EXEC_PREFIX = "exec@";
-const PROVIDER_TITLE: Record<string, string> = { muse: "Muse", agy: "agy", codex: "Codex", local: "Máy chủ" };
+const PROVIDER_TITLE: Record<string, string> = { muse: "Muse", agy: providerLabel("agy"), codex: providerLabel("codex"), local: "Máy chủ" };
 
 // Chế độ trực tiếp không gán sẵn model lên thẻ: AI viết / chọn skill chỉ ghi hãng + vai trò;
 // model thật chỉ hiện khi phát lại 1 job (FlowView ghi đè `ai` của nút trên đường đi).
@@ -329,7 +330,7 @@ export function storyGraph(data: FlowData | undefined, planners: FlowAi[], shots
       id: `s-plan-${i}`,
       kind: "writer",
       role: "planner" as const,
-      title: p.provider === "muse" ? "Muse chat chính" : p.provider === "agy" ? "agy" : "Codex",
+      title: p.provider === "muse" ? "Muse chat chính" : providerLabel(p.provider),
       subtitle: i === 0 ? (p.provider === "muse" ? "Giữ thread · lập kịch bản" : "Lập kịch bản") : `Dự phòng ${i}`,
       ai: p,
     })),

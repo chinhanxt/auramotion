@@ -29,7 +29,8 @@ export const STORY_TONE: Record<string, Tone> = {
   CANCELED: "neutral",
 };
 
-export const PROVIDER_LABEL: Record<string, string> = { agy: "agy", codex: "Codex", muse: "Muse chat" };
+// Nhãn provider AI: dùng `providerLabel()` (src/lib/providers.ts) — agy → Google, codex → OpenAI, muse → Muse.
+export { providerLabel } from "@/lib/providers";
 
 export function formatVnd(value: number): string {
   return `${value.toLocaleString("vi-VN")} ₫`;

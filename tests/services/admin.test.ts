@@ -188,10 +188,10 @@ describe("admin", () => {
       { code: "ultra", name: "Ultra", users: 0 },
     ]);
     const credits = Object.fromEntries(week.creditsByModel.map((m) => [m.name, m.credits]));
-    expect(credits).toEqual({ "MUSE Ảnh": 6, "MUSE Video": 6, "Ghép video": 5 });
+    expect(credits).toEqual({ "Muse Image": 6, "Muse Video": 6, "Ghép video": 5 });
     expect(week.creditsByModel[0].modelId).toBe(await modelId("MUSE Ảnh"));
     const seconds = Object.fromEntries(week.avgSecondsByModel.map((m) => [m.name, m.seconds]));
-    expect(seconds).toEqual({ "MUSE Ảnh": 40, "MUSE Video": 120, "Ghép video": 60 });
+    expect(seconds).toEqual({ "Muse Image": 40, "Muse Video": 120, "Ghép video": 60 });
 
     expect(week.daily).toHaveLength(7);
     expect(week.daily[6]).toEqual({ date: "2026-11-06", images: 1, videos: 0, assembles: 1, revenue: 199000 });

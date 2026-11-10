@@ -59,7 +59,7 @@ export async function ensureProxy(): Promise<number> {
   if (await portOpen(port)) return port;
   const { pidFile, logFile } = proxyFiles();
   const r = await runBridge<BridgeProxy>(["proxy-start", "--port", String(port), "--pid-file", pidFile, "--log-file", logFile], { timeoutMs: 30_000 });
-  if (!r.running) throw new EngineError("AGY_PROXY", `Proxy agy không mở cổng ${port}`);
+  if (!r.running) throw new EngineError("AGY_PROXY", `Proxy Google không mở cổng ${port}`);
   return port;
 }
 

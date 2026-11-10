@@ -3,8 +3,11 @@ import { notFound } from "next/navigation";
 import { MediaViewer } from "@/components/library/MediaViewer";
 import { Badge, Notice } from "@/components/ui/Bits";
 import { Icon } from "@/components/ui/Icon";
+import { VendorLogo } from "@/components/ui/VendorLogo";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { shortModelName } from "@/lib/model-names";
+import { vendorOf } from "@/server/services/model-naming";
 import { JobPrompt } from "@/components/library/JobPrompt";
 import { JobTraceCard } from "@/components/library/JobTraceCard";
 import { ACTIVE_STATUSES, STATUS_LABEL, STATUS_TONE, formatCredit, jobErrorText, type WriteParams } from "@/lib/api-client";
@@ -30,7 +33,7 @@ function formatDate(d: Date): string {
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   const { id } = await params;
-  const job = await db.job.findUnique({ where: { id }, include: { model: { select: { name: true } } } });
+  const job = await db.job.findUnique({ where: { id }, include: { model: { select: { name: true, displayName: true, badge: true, vendor: true, provider: true, engineModel: true } } } });
   if (!job || job.userId !== user.id || job.deletedAt) notFound();
 
   const p = job.params as Params;
@@ -38,7 +41,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const aspect = p.aspectRatio ?? p.aspect ?? (job.kind === "IMAGE" ? "1:1" : "9:16");
   const rows: [string, React.ReactNode][] = [
     ["Loại", KIND_LABEL[job.kind]],
-    ["Engine", job.model.name],
+    [
+      "Model",
+      <span key="m" className="inline-flex items-center gap-1.5">
+        <VendorLogo vendor={job.model.vendor || vendorOf(job.model.provider, job.model.engineModel)} size={16} />
+        {job.model.displayName || shortModelName(job.model.engineModel) || job.model.name}
+        {job.model.badge && <span className="text-muted">· {job.model.badge}</span>}
+      </span>,
+    ],
     ["Tỷ lệ khung", aspect],
   ];
   if (job.kind === "IMAGE") rows.push(["Số ảnh", p.imageCount ?? 1]);

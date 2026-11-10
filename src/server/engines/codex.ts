@@ -45,7 +45,7 @@ export async function codexText(
     signal: opts.signal,
     collect: (dir) =>
       readFile(path.join(dir, "last.txt"), "utf8").catch(() => {
-        throw new EngineError("CODEX_FAILED", "codex không trả câu trả lời");
+        throw new EngineError("CODEX_FAILED", "OpenAI không trả câu trả lời");
       }),
   });
   return result;
@@ -117,12 +117,12 @@ async function removeThread(home: string, threadId: string): Promise<void> {
 
 function classify(message: string): EngineError {
   const quote = message.trim().slice(-240);
-  const said = quote ? ` Codex trả: «${quote}»` : " Codex không trả lời gì.";
-  if (/rate.?limit|usage limit/i.test(message)) return new EngineError("QUOTA", "Tài khoản Codex hết lượt." + said, false);
+  const said = quote ? ` OpenAI trả: «${quote}»` : " OpenAI không trả lời gì.";
+  if (/rate.?limit|usage limit/i.test(message)) return new EngineError("QUOTA", "Tài khoản OpenAI hết lượt." + said, false);
   if (/not available|image generation/i.test(message)) {
-    return new EngineError("NO_IMAGE_TOOL", "Tài khoản Codex không có công cụ tạo ảnh." + said);
+    return new EngineError("NO_IMAGE_TOOL", "Tài khoản OpenAI không có công cụ tạo ảnh." + said);
   }
-  return new EngineError("NO_IMAGE", "Codex không tạo được ảnh." + said);
+  return new EngineError("NO_IMAGE", "OpenAI không tạo được ảnh." + said);
 }
 
 // Ảnh codex nằm ở CODEX_HOME/generated_images/<thread_id>/, không ở thư mục chạy (sandbox). Prompt qua stdin vì

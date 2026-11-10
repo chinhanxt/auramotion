@@ -80,9 +80,9 @@ export function parseAgyOutput(stdout: string): string {
   if (!data || (data.status === undefined && data.response === undefined)) {
     const raw = stdout.trim();
     if (raw) return raw;
-    throw new EngineError("AGY_FAILED", "agy không trả gì");
+    throw new EngineError("AGY_FAILED", "Google không trả gì");
   }
-  if (data.status !== "SUCCESS") throw new EngineError("AGY_FAILED", `agy lỗi: ${JSON.stringify(data).slice(0, 300)}`);
+  if (data.status !== "SUCCESS") throw new EngineError("AGY_FAILED", `Google lỗi: ${JSON.stringify(data).slice(0, 300)}`);
   return typeof data.response === "string" ? data.response : "";
 }
 
@@ -172,11 +172,11 @@ export const agyImage: FileEngine = {
           return out;
         }
         const answer = parseAgyOutput(stdout).trim().slice(0, 300);
-        const said = answer ? ` agy trả: «${answer}»` : " agy không trả lời gì.";
+        const said = answer ? ` Google trả: «${answer}»` : " Google không trả lời gì.";
         if (REFUSAL_TEXT.test(answer)) throw new EngineError("REFUSED", `Công cụ ảnh từ chối tạo ảnh này.${said}`);
         // Tài khoản agy hết lượt ảnh (429 / exhausted capacity): báo QUOTA ngay, không thử lại vô ích.
-        if (QUOTA_TEXT.test(answer)) throw new EngineError("QUOTA", `agy hết lượt tạo ảnh.${said}`);
-        throw new EngineError("NO_IMAGE", `agy chạy xong nhưng không có ảnh.${said}`, true);
+        if (QUOTA_TEXT.test(answer)) throw new EngineError("QUOTA", `Google hết lượt tạo ảnh.${said}`);
+        throw new EngineError("NO_IMAGE", `Google chạy xong nhưng không có ảnh.${said}`, true);
       },
     });
     return { files: [result] };

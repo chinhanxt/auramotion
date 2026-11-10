@@ -3,17 +3,23 @@
 import { useState } from "react";
 import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
-import { WRITER_LABEL, type WriteParams, type WrittenInfo } from "@/lib/api-client";
+import { ProviderLogo } from "@/components/ui/VendorLogo";
+import type { WriteParams, WrittenInfo } from "@/lib/api-client";
+import { providerLabel } from "@/lib/providers";
 
 type View = "idea" | "prompt";
 
-// "✦ Skill · agy" — ai đã viết prompt cho job.
+// "✦ Skill · Google · 3.3s" — ai đã viết prompt cho job.
 export function WrittenLine({ written, ms, className }: { written: WrittenInfo; ms?: boolean; className?: string }) {
   return (
     <span className={cx("inline-flex min-w-0 items-center gap-1 text-[11px] font-medium", className)}>
       <Icon name="sparkle" size={11} className="shrink-0 text-accent" />
       <span className="truncate">{written.skillName}</span>
-      <span className="shrink-0 opacity-60">· {WRITER_LABEL[written.provider] ?? written.provider}</span>
+      <span className="inline-flex shrink-0 items-center gap-1">
+        <span className="opacity-60">·</span>
+        <ProviderLogo provider={written.provider} model={written.model} size={11} plain />
+        <span className="opacity-60">{providerLabel(written.provider)}</span>
+      </span>
       {ms && written.ms > 0 && <span className="shrink-0 tabular-nums opacity-60">· {(written.ms / 1000).toFixed(1)}s</span>}
     </span>
   );

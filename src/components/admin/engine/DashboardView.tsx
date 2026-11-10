@@ -112,7 +112,7 @@ export function DashboardView({ range, stats, ops, slots }: { range: StatsRange;
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm">{j.prompt || KIND_LABEL[j.kind]}</span>
                     <span className="block truncate text-xs text-muted">
-                      {j.model.name} · {j.user.email}
+                      {j.model.displayName || j.model.name} · {j.user.email}
                     </span>
                   </span>
                   <span className="hidden shrink-0 text-right sm:block">

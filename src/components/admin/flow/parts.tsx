@@ -4,7 +4,9 @@ import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, type Edge
 import { createContext, memo, useContext } from "react";
 import { cx } from "@/components/ui/cx";
 import { Icon, type IconName } from "@/components/ui/Icon";
-import { Monogram } from "../ai/Monogram";
+import { ProviderLogo } from "@/components/ui/VendorLogo";
+import { shortModelLabel } from "@/lib/model-names";
+import { providerLabel } from "@/lib/providers";
 import type { LaneData, PipeEdgeData, PipeNodeData } from "./graph";
 import type { EdgeVisual, FlowAi, NodeVisual } from "./types";
 
@@ -66,6 +68,12 @@ export const STAT_LABEL: Record<string, string> = {
   limit: "slot",
   models: "model đang bật",
   activeJobs: "chạy",
+  agyTransport: "kênh Google",
+  agyProxy: "proxy Google",
+  acpProcesses: "tiến trình ACP",
+  acpSessions: "phiên ACP",
+  codexProfile: "profile OpenAI",
+  vendors: "hãng",
 };
 
 // Số liệu node có thể là số, chữ, true/false hoặc object nhỏ: luôn đổi thành chữ ngắn.
@@ -120,7 +128,7 @@ export const PipeNode = memo(function PipeNode({ id, data }: NodeProps<PipeNodeT
   const role = roleOf(data);
   const mono = ai?.provider && (data.kind === "writer" || data.kind === "executor" || data.kind === "shot" || data.kind === "router");
   const count = live?.count ?? 0;
-  const model = [ai?.provider && mono ? null : ai?.provider, ai?.model].filter(Boolean).join(" · ");
+  const model = [ai?.provider && mono ? null : providerLabel(ai?.provider), ai?.model ? shortModelLabel(ai.model) : null].filter(Boolean).join(" · ");
   return (
     <div className={cx("pn", `pn-${state}`, mono && "pn-ai")} data-kind={data.kind}>
       <Handle type="target" position={Position.Left} id="l" className="pn-h" />
@@ -128,7 +136,7 @@ export const PipeNode = memo(function PipeNode({ id, data }: NodeProps<PipeNodeT
       <span className="pn-glow" aria-hidden="true" />
       <div className="flex items-start gap-2.5">
         {mono ? (
-          <Monogram provider={ai!.provider} size={30} />
+          <ProviderLogo provider={ai!.provider} model={ai?.model} size={30} />
         ) : (
           <span className="pn-icon">
             <Icon name={KIND_ICON[data.kind] ?? "cpu"} size={16} />

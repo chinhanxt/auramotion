@@ -79,9 +79,9 @@ export class CodexAppServer {
       this.stderrTail = (this.stderrTail + d).slice(-4000);
     });
     const died = new Promise<never>((_, reject) => {
-      proc.on("error", (e) => reject(new EngineError("CODEX_APPSERVER", `Không chạy được codex app-server: ${e.message}`)));
+      proc.on("error", (e) => reject(new EngineError("CODEX_APPSERVER", `Không chạy được OpenAI app-server: ${e.message}`)));
       proc.on("exit", (code, sig) => {
-        const err = new EngineError("CODEX_APPSERVER", `codex app-server thoát (${code ?? sig})${this.stderr() ? `: ${this.stderr()}` : ""}`);
+        const err = new EngineError("CODEX_APPSERVER", `OpenAI app-server thoát (${code ?? sig})${this.stderr() ? `: ${this.stderr()}` : ""}`);
         this.onDeath(err);
         reject(err);
       });
@@ -102,7 +102,7 @@ export class CodexAppServer {
       this.up = true;
     } catch (err) {
       await this.stop();
-      throw err instanceof EngineError ? err : new EngineError("CODEX_APPSERVER", `codex app-server không khởi động được: ${(err as Error).message}`);
+      throw err instanceof EngineError ? err : new EngineError("CODEX_APPSERVER", `OpenAI app-server không khởi động được: ${(err as Error).message}`);
     }
   }
 
@@ -133,7 +133,7 @@ export class CodexAppServer {
     } else if (method === "turn/completed") {
       const turn = (p.turn ?? {}) as Turn;
       if (turn.status === "failed" || turn.status === "interrupted") {
-        c.reject(new EngineError("CODEX_FAILED", `codex: ${turn.error?.message || c.error || `lượt ${turn.status}`}`));
+        c.reject(new EngineError("CODEX_FAILED", `OpenAI: ${turn.error?.message || c.error || `lượt ${turn.status}`}`));
         return;
       }
       for (const it of turn.items ?? []) {
@@ -141,13 +141,13 @@ export class CodexAppServer {
       }
       const finals = c.finals.filter((f) => f.final && f.text.trim());
       const text = (finals.length ? finals : c.finals.filter((f) => f.text.trim())).map((f) => f.text).at(-1) ?? [...c.deltas.values()].join("");
-      if (!text.trim()) c.reject(new EngineError("CODEX_FAILED", `codex không trả câu trả lời${c.error ? `: ${c.error}` : ""}`));
+      if (!text.trim()) c.reject(new EngineError("CODEX_FAILED", `OpenAI không trả câu trả lời${c.error ? `: ${c.error}` : ""}`));
       else c.resolve(text);
     }
   }
 
   private request<T>(method: string, params: unknown, timeoutMs: number): Promise<T> {
-    if (!this.peer || !this.up) return Promise.reject(new EngineError("CODEX_APPSERVER", "codex app-server chưa chạy"));
+    if (!this.peer || !this.up) return Promise.reject(new EngineError("CODEX_APPSERVER", "OpenAI app-server chưa chạy"));
     return this.peer.request<T>(method, params, timeoutMs);
   }
 
@@ -170,7 +170,7 @@ export class CodexAppServer {
       throw toEngineError(err);
     });
     const threadId = started?.thread?.id;
-    if (!threadId) throw new EngineError("CODEX_FAILED", "codex app-server không trả thread");
+    if (!threadId) throw new EngineError("CODEX_FAILED", "OpenAI app-server không trả thread");
     const t1 = Date.now();
     let collector!: Collector;
     const done = new Promise<string>((resolve, reject) => {
@@ -184,7 +184,7 @@ export class CodexAppServer {
     };
     const timer = setTimeout(() => {
       interrupt();
-      collector.reject(new EngineError("TIMEOUT", `codex app-server quá ${Math.round(args.timeoutMs / 1000)} giây`));
+      collector.reject(new EngineError("TIMEOUT", `OpenAI app-server quá ${Math.round(args.timeoutMs / 1000)} giây`));
     }, args.timeoutMs);
     const onAbort = () => {
       interrupt();
@@ -229,7 +229,7 @@ export class CodexAppServer {
   async stop(): Promise<void> {
     const proc = this.proc;
     this.proc = null;
-    this.onDeath(new EngineError("CODEX_APPSERVER", "codex app-server đã tắt"));
+    this.onDeath(new EngineError("CODEX_APPSERVER", "OpenAI app-server đã tắt"));
     if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
     await new Promise<void>((resolve) => {
       const kill = (sig: NodeJS.Signals) => {
@@ -256,10 +256,10 @@ export class CodexAppServer {
 function toEngineError(err: unknown): Error {
   if (err instanceof EngineError) return err;
   if (err instanceof RpcError) {
-    if (err.code === -32010) return new EngineError("TIMEOUT", `codex app-server: ${err.message}`);
-    return new EngineError("CODEX_FAILED", `codex app-server: ${err.message}`);
+    if (err.code === -32010) return new EngineError("TIMEOUT", `OpenAI app-server: ${err.message}`);
+    return new EngineError("CODEX_FAILED", `OpenAI app-server: ${err.message}`);
   }
-  return new EngineError("CODEX_APPSERVER", `codex app-server: ${(err as Error).message ?? String(err)}`);
+  return new EngineError("CODEX_APPSERVER", `OpenAI app-server: ${(err as Error).message ?? String(err)}`);
 }
 
 // ---------- Bộ quản lý: 1 tiến trình thường trực / CODEX_HOME ----------
@@ -323,7 +323,7 @@ export async function getCodexAppServer(home: string): Promise<CodexAppServer> {
   if (!e) rt.entries.set(home, (e = { server: null, starting: null, downUntil: 0, lastError: null }));
   if (e.server?.alive) return e.server;
   if (e.starting) return e.starting;
-  if (Date.now() < e.downUntil) throw new CodexAppServerUnavailable(`codex app-server chưa khởi động được: ${e.lastError ?? ""}`);
+  if (Date.now() < e.downUntil) throw new CodexAppServerUnavailable(`OpenAI app-server chưa khởi động được: ${e.lastError ?? ""}`);
   const entry = e;
   if (entry.server) void entry.server.stop();
   entry.server = null;
@@ -340,7 +340,7 @@ export async function getCodexAppServer(home: string): Promise<CodexAppServer> {
     (err: unknown) => {
       entry.lastError = ((err as Error).message ?? String(err)).slice(0, 300);
       entry.downUntil = Date.now() + DOWN_MS;
-      throw new CodexAppServerUnavailable(`codex app-server không khởi động được: ${entry.lastError}`);
+      throw new CodexAppServerUnavailable(`OpenAI app-server không khởi động được: ${entry.lastError}`);
     },
   );
   entry.starting = starting;

@@ -6,7 +6,8 @@ import { cx } from "@/components/ui/cx";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { usePoll } from "../hooks";
 import { Dot, Meter, Panel } from "../kit";
-import { PROVIDER_LABEL, formatMs, timeAgo } from "../format";
+import { ProviderLogo } from "@/components/ui/VendorLogo";
+import { formatMs, providerLabel, timeAgo } from "../format";
 
 // ───────── Kiểu dữ liệu API ─────────
 
@@ -34,7 +35,7 @@ export type RunningJob = {
   progress: number;
   startedAt: string | null;
   museTaskId: string | null;
-  model: { name: string; provider: string };
+  model: { name: string; displayName?: string | null; provider: string };
   user: { email: string };
 };
 export type QueuesData = { queues: QueueInfo[]; running: RunningJob[]; museSlots: Record<SlotType, number> };
@@ -44,7 +45,7 @@ export type MuseSlots = { image: number; video: number; chat: number; gapSec: nu
 
 export const QUEUE_META: Record<QueueInfo["name"], { label: string; icon: IconName }> = {
   muse: { label: "Muse", icon: "bolt" },
-  cli: { label: "agy / Codex", icon: "cpu" },
+  cli: { label: `${providerLabel("agy")} / ${providerLabel("codex")}`, icon: "cpu" },
   post: { label: "Hậu kỳ", icon: "cut" },
   story: { label: "Story", icon: "story" },
 };
@@ -65,12 +66,16 @@ export function providerState(h: ProviderHealth | undefined): "ok" | "danger" | 
 
 // ───────── Sức khỏe engine ─────────
 
-function EngineRow({ name, ok, detail, icon }: { name: string; ok: boolean | null; detail?: React.ReactNode; icon: IconName }) {
+function EngineRow({ name, ok, detail, icon, provider }: { name: string; ok: boolean | null; detail?: React.ReactNode; icon: IconName; provider?: string }) {
   return (
     <li className="flex items-center gap-3 py-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-m1 bg-white/[.04] text-muted">
-        <Icon name={icon} size={16} />
-      </span>
+      {provider ? (
+        <ProviderLogo provider={provider} size={32} />
+      ) : (
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-m1 bg-white/[.04] text-muted">
+          <Icon name={icon} size={16} />
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{name}</span>
         {detail && <span className="block truncate text-xs text-muted">{detail}</span>}
@@ -116,9 +121,9 @@ export function HealthPanel({ className }: { className?: string }) {
         )
       ) : (
         <ul className="divide-y divide-line">
-          <EngineRow icon="bolt" name="MUSE" ok={h.muse.ok} detail={h.muse.ok ? `${h.muse.driver ?? "?"} · ${h.muse.accounts ?? 0} tài khoản` : "Không kết nối"} />
-          <EngineRow icon="sparkle" name="agy" ok={h.agy.ok} detail={h.agy.version} />
-          <EngineRow icon="cpu" name="Codex" ok={h.codex.ok} detail={h.codex.version} />
+          <EngineRow icon="bolt" provider="muse" name="Muse" ok={h.muse.ok} detail={h.muse.ok ? `${h.muse.driver ?? "?"} · ${h.muse.accounts ?? 0} tài khoản` : "Không kết nối"} />
+          <EngineRow icon="sparkle" provider="agy" name={providerLabel("agy")} ok={h.agy.ok} detail={h.agy.version} />
+          <EngineRow icon="cpu" provider="codex" name={providerLabel("codex")} ok={h.codex.ok} detail={h.codex.version} />
           <EngineRow icon="mic" name="VieNeu" ok={h.vieneu.ok} />
           <EngineRow icon="film" name="ffmpeg" ok={h.ffmpeg.ok} />
         </ul>
@@ -133,7 +138,8 @@ export function HealthPanel({ className }: { className?: string }) {
               <Link key={p} href="/admin/ai" className="press min-w-0 rounded-m1 bg-white/[.03] px-2.5 py-2 hairline hover:bg-white/[.06]">
                 <span className="flex items-center gap-1.5 text-xs font-medium">
                   <Dot tone={st} />
-                  <span className="truncate">{PROVIDER_LABEL[p]}</span>
+                  <ProviderLogo provider={p} size={14} plain />
+                  <span className="truncate">{providerLabel(p, { chat: true })}</span>
                 </span>
                 <span className="mt-0.5 block truncate text-[11px] text-dim tabular-nums">
                   {gateway.data ? (ph?.lastMs != null ? formatMs(ph.lastMs) : "—") : "…"}

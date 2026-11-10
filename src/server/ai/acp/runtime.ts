@@ -113,7 +113,7 @@ export class AcpUnavailable extends EngineError {
 export async function getAcpPool(): Promise<AgentPool> {
   if (rt.pool && rt.pool.stats().alive > 0) return rt.pool;
   if (rt.starting) return rt.starting;
-  if (Date.now() < rt.downUntil) throw new AcpUnavailable(`agy ACP chưa khởi động được: ${rt.lastError ?? ""}`);
+  if (Date.now() < rt.downUntil) throw new AcpUnavailable(`Google ACP chưa khởi động được: ${rt.lastError ?? ""}`);
   const old = rt.pool;
   rt.pool = null;
   if (old) void old.stop().catch(() => undefined);
@@ -128,7 +128,7 @@ export async function getAcpPool(): Promise<AgentPool> {
     (err: unknown) => {
       rt.lastError = (err as Error).message?.slice(0, 300) ?? String(err);
       rt.downUntil = Date.now() + DOWN_MS;
-      throw new AcpUnavailable(`agy ACP không khởi động được: ${rt.lastError}`);
+      throw new AcpUnavailable(`Google ACP không khởi động được: ${rt.lastError}`);
     },
   );
   rt.starting = starting;
@@ -214,8 +214,8 @@ export async function acpText(args: {
   try {
     const r = await lease.agent.prompt(lease.sessionId, [{ type: "text", text: args.text }], undefined, args.timeoutMs);
     if (args.signal?.aborted) throw new EngineError("CANCELED", "Đã hủy");
-    if (r.stopReason === "cancelled") throw new EngineError("CANCELED", "agy ACP đã hủy lượt");
-    if (!r.text.trim()) throw new EngineError("AGY_FAILED", `agy ACP trả rỗng (${r.stopReason}${r.agyBlocked ? ", bị bộ lọc chặn" : ""})`);
+    if (r.stopReason === "cancelled") throw new EngineError("CANCELED", "Google ACP đã hủy lượt");
+    if (!r.text.trim()) throw new EngineError("AGY_FAILED", `Google ACP trả rỗng (${r.stopReason}${r.agyBlocked ? ", bị bộ lọc chặn" : ""})`);
     return { text: r.text, model: lease.model, breakdown: { startMs: t1 - t0, sessionMs: t2 - t1, modelMs: Date.now() - t2 } };
   } catch (err) {
     throw toEngineError(err);
@@ -228,10 +228,10 @@ export async function acpText(args: {
 function toEngineError(err: unknown): Error {
   if (err instanceof EngineError) return err;
   if (err instanceof RpcError) {
-    if (err.code === -32010) return new EngineError("TIMEOUT", `agy ACP: ${err.message}`);
-    if (err.code === -32602) return new EngineError("BAD_MODEL", `agy ACP: ${err.message}`);
+    if (err.code === -32010) return new EngineError("TIMEOUT", `Google ACP: ${err.message}`);
+    if (err.code === -32602) return new EngineError("BAD_MODEL", `Google ACP: ${err.message}`);
     if (err.code === -32001) return new AcpUnavailable(err.message);
-    return new EngineError("AGY_FAILED", `agy ACP: ${err.message}`);
+    return new EngineError("AGY_FAILED", `Google ACP: ${err.message}`);
   }
-  return new EngineError("AGY_FAILED", `agy ACP: ${(err as Error).message ?? String(err)}`);
+  return new EngineError("AGY_FAILED", `Google ACP: ${(err as Error).message ?? String(err)}`);
 }

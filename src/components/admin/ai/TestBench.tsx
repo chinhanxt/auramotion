@@ -8,13 +8,14 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import { Segmented } from "@/components/ui/Segmented";
 import { Select } from "@/components/ui/Select";
-import { PROVIDER_LABEL, formatMs } from "../format";
+import { ProviderLogo } from "@/components/ui/VendorLogo";
+import { KNOWN_MODEL_IDS, shortModelLabel } from "@/lib/model-names";
+import { formatMs, providerLabel } from "../format";
 import { jsonInit } from "../hooks";
 import { FieldRow, Panel } from "../kit";
 import type { Call } from "./Accounts";
 import { useNow } from "./bits";
 import { EffortPicker, ModelSelect } from "./ModelSelect";
-import { Monogram } from "./Monogram";
 import type { ModelLists } from "./Roles";
 import { AI_PROVIDERS, stepLabel, type AiProvider, type ChainStep, type TestResult } from "./types";
 
@@ -101,6 +102,8 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
     return out;
   }, [models, chain]);
   const sel = picked ?? new Set(chain.map(stepLabel));
+  const known = useMemo(() => [...KNOWN_MODEL_IDS, ...models.agy.map((m) => m.id), ...models.codex.map((m) => m.id)], [models]);
+  const name = (s: { provider: string; model?: string | null }) => (s.model ? shortModelLabel(s.model, known) : providerLabel(s.provider, { chat: true }));
 
   const body = (s: ChainStep): Body => ({ provider: s.provider, ...(s.model ? { model: s.model } : {}), ...(s.effort ? { effort: s.effort } : {}), ...(s.profile ? { profile: s.profile } : {}), ...(skillId ? { skillId } : {}), kind, idea: idea.trim() });
   const busy = since !== null;
@@ -178,7 +181,7 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
                 setModel(p === "muse" ? "" : (m?.id ?? ""));
                 setEffort(m?.defaultEffort ?? m?.efforts?.[0] ?? "");
               }}
-              options={AI_PROVIDERS.map((p) => ({ value: p, label: PROVIDER_LABEL[p] }))}
+              options={AI_PROVIDERS.map((p) => ({ value: p, label: providerLabel(p, { chat: true }) }))}
             />
             {provider !== "muse" && <ModelSelect models={list} value={model} onChange={setModel} className="min-w-44 flex-1" />}
             {provider === "codex" && cur?.efforts && <EffortPicker compact efforts={cur.efforts} value={effort} onChange={setEffort} />}
@@ -204,8 +207,8 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
                     on ? "bg-white/[.1] text-fg shadow-[inset_0_0_0_1px_rgba(212,255,58,.45)]" : "bg-white/[.04] text-muted shadow-[inset_0_0_0_1px_var(--color-line)] hover:text-fg",
                   )}
                 >
-                  <Monogram provider={s.provider} size={22} className="!rounded-full" />
-                  <span className="font-mono">{s.model ?? "muse-chat"}</span>
+                  <ProviderLogo provider={s.provider} model={s.model} size={22} className="!rounded-full" />
+                  <span title={s.model ?? undefined}>{name(s)}</span>
                   {s.effort && <span className="text-dim">{s.effort}</span>}
                 </button>
               );
@@ -248,8 +251,8 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
             {busy ? (
               <div className="space-y-3">
                 <span className="flex items-center gap-2 text-xs text-muted">
-                  <Monogram provider={provider} size={18} className="!rounded-[6px]" />
-                  {model || PROVIDER_LABEL[provider]} đang viết…
+                  <ProviderLogo provider={provider} model={model} size={18} className="!rounded-[6px]" />
+                  {name({ provider, model })} đang viết…
                 </span>
                 <WritingLines />
               </div>
@@ -259,8 +262,8 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
               <div className="text-in space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="aura">
-                    {PROVIDER_LABEL[res.provider] ?? res.provider}
-                    {res.model ? ` · ${res.model}` : ""}
+                    {providerLabel(res.provider, { chat: true })}
+                    {res.model ? ` · ${shortModelLabel(res.model, known)}` : ""}
                   </Badge>
                   <Badge tone="accent">{formatMs(res.ms)}</Badge>
                 </div>
@@ -272,14 +275,14 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
             )}
           </div>
         ) : (
-          <BenchTable rows={rows} />
+          <BenchTable rows={rows} name={name} />
         )}
       </div>
     </Panel>
   );
 }
 
-function BenchTable({ rows }: { rows: BenchRow[] }) {
+function BenchTable({ rows, name }: { rows: BenchRow[]; name: (s: ChainStep) => string }) {
   if (rows.length === 0) return <div className="rounded-m2 bg-black/25 p-3.5 text-sm text-dim hairline">Chọn model rồi bấm Đo — xếp hạng nhanh → chậm</div>;
   const done = rows.filter((r) => r.status === "ok").sort((a, b) => (a.ms ?? 0) - (b.ms ?? 0));
   const rest = rows.filter((r) => r.status !== "ok").sort((a, b) => Number(a.status === "err") - Number(b.status === "err"));
@@ -299,8 +302,8 @@ function BenchTable({ rows }: { rows: BenchRow[] }) {
           >
             <span className={cx("text-center text-[13px] font-bold tabular-nums", top ? "text-accent" : "text-dim")}>{r.status === "ok" ? i + 1 : "–"}</span>
             <span className="flex min-w-0 items-center gap-2">
-              <Monogram provider={r.step.provider} size={22} className="!rounded-[7px]" />
-              <span className="truncate font-mono text-[12.5px]">{r.step.model ?? "muse-chat"}</span>
+              <ProviderLogo provider={r.step.provider} model={r.step.model} size={22} className="!rounded-[7px]" />
+              <span className="truncate text-[13px] font-medium" title={r.step.model ?? undefined}>{name(r.step)}</span>
               {r.step.effort && <span className="text-[11px] text-dim">{r.step.effort}</span>}
               {top && rows.length > 1 && <Badge tone="accent" className="!h-5">Nhanh nhất</Badge>}
             </span>

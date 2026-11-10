@@ -116,7 +116,7 @@ export function JobsView({ data, models }: { data: Data; models: { id: string; n
             cell: (j) => (
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                 <Icon name={KIND_ICON[j.kind]} size={15} className="text-muted" />
-                {j.model.name}
+                {j.model.displayName || j.model.name}
               </span>
             ),
           },

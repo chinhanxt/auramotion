@@ -7,10 +7,10 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import { Segmented } from "@/components/ui/Segmented";
 import { Select } from "@/components/ui/Select";
-import { PROVIDER_LABEL } from "../format";
+import { ProviderLogo } from "@/components/ui/VendorLogo";
+import { providerLabel } from "../format";
 import { NumberInput, Panel } from "../kit";
 import { EffortPicker, ModelSelect } from "./ModelSelect";
-import { Monogram } from "./Monogram";
 import { AI_PROVIDERS, type AiModel, type AiProvider, type AiRoles, type ChainStep, type Strategy } from "./types";
 
 export type ModelLists = Record<AiProvider, AiModel[]>;
@@ -93,15 +93,15 @@ export function ChainEditor({
                   <Icon name="drag" size={16} />
                 </span>
                 <span className="relative">
-                  <Monogram provider={s.provider} size={30} />
+                  <ProviderLogo provider={s.provider} model={s.model} size={30} />
                   <span className="absolute -right-1 -bottom-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-s1 px-0.5 text-[10px] font-bold tabular-nums shadow-[0_0_0_1px_var(--color-line2)]">{i + 1}</span>
                 </span>
-                <Segmented size="sm" ariaLabel="Provider" value={s.provider} onChange={(p) => setProvider(i, p)} options={AI_PROVIDERS.map((p) => ({ value: p, label: PROVIDER_LABEL[p] }))} />
+                <Segmented size="sm" ariaLabel="Provider" value={s.provider} onChange={(p) => setProvider(i, p)} options={AI_PROVIDERS.map((p) => ({ value: p, label: providerLabel(p, { chat: true }) }))} />
                 <div className="flex min-w-0 flex-1 basis-56 flex-wrap items-center gap-2">
                   {s.provider === "codex" && profiles.length > 1 && (
                     <Select
                       inputSize="sm"
-                      aria-label="Profile Codex"
+                      aria-label="Profile OpenAI"
                       className="w-32 shrink-0"
                       value={s.profile ?? ""}
                       onChange={(e) => patch(i, { profile: e.target.value || undefined })}
@@ -115,7 +115,7 @@ export function ChainEditor({
                     </Select>
                   )}
                   {s.provider === "muse" ? (
-                    <span className="flex h-9 min-w-0 flex-1 items-center px-1 font-mono text-[12.5px] text-dim">muse-chat</span>
+                    <span className="flex h-9 min-w-0 flex-1 items-center px-1 text-[13px] text-dim">Muse Chat</span>
                   ) : (
                     <ModelSelect
                       models={list}
