@@ -1,13 +1,11 @@
-import { GenerateForm } from "@/components/studio/GenerateForm";
+import { Workspace } from "@/components/studio/Workspace";
 
-export const metadata = { title: "Tạo ảnh · AuraMotion" };
+export const metadata = { title: "Ảnh · AuraMotion" };
 
-export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { from } = await searchParams;
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Tạo ảnh</h1>
-      <GenerateForm kind="image" fromJobId={typeof from === "string" ? from : undefined} />
-    </div>
-  );
+type SP = Promise<Record<string, string | string[] | undefined>>;
+const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
+
+export default async function Page({ searchParams }: { searchParams: SP }) {
+  const sp = await searchParams;
+  return <Workspace kind="image" fromJobId={one(sp.from)} initialPrompt={one(sp.prompt)} initialFrame={one(sp.ref)} />;
 }
