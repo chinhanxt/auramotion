@@ -129,3 +129,51 @@ export function ThemeStrip() {
     </div>
   );
 }
+
+// Nền ô tính năng landing: media thật (ảnh / video lặp chỉ phát khi trong màn hình, poster trước) phủ lên gradient.
+// File chưa có hoặc lỗi → giữ gradient + khung kính như cũ.
+export function FeatureArt({ art, frames, image, video, poster }: { art: string; frames: boolean; image?: string; video?: string; poster?: string }) {
+  const still = image ?? poster;
+  const [stillOk, setStillOk] = useState<boolean | null>(null);
+  const [videoOk, setVideoOk] = useState<boolean | null>(null);
+  const shown = stillOk === true || videoOk === true;
+  return (
+    <>
+      <div className="feature-art absolute -inset-[15%]" style={{ background: art }} aria-hidden="true" />
+      {(still || video) && (
+        <div className={cx("feature-media absolute inset-0 transition-opacity duration-700", shown ? "opacity-100" : "opacity-0")} aria-hidden="true">
+          {still && stillOk !== false && (
+            <img
+              ref={(el) => {
+                // Ảnh có thể đã tải / lỗi xong trước khi hydrate.
+                if (el?.complete) setStillOk(el.naturalWidth > 0);
+              }}
+              src={still}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setStillOk(true)} onError={() => setStillOk(false)} className="absolute inset-0 h-full w-full object-cover" />
+          )}
+          {video && videoOk !== false && (
+            <SmartVideo src={video} mode="inview" preload="none" plain className="absolute inset-0" onReady={() => setVideoOk(true)} onError={() => setVideoOk(false)} />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/10" />
+        </div>
+      )}
+      <div className="grain absolute inset-0" aria-hidden="true" />
+      {frames && !shown && (
+        <div className="feature-frames absolute inset-x-0 top-[16%] flex justify-center" aria-hidden="true">
+          {[0, 1, 2].map((k) => (
+            <span
+              key={k}
+              className={cx(
+                "mx-[-14px] block rounded-m2 bg-[linear-gradient(160deg,rgba(255,255,255,.22),rgba(255,255,255,.05)_55%,rgba(255,255,255,.1))] shadow-[inset_0_0_0_1px_rgba(255,255,255,.18),0_20px_40px_-10px_rgba(0,0,0,.55)] backdrop-blur-md",
+                k === 1 ? "z-10 h-24 w-16 sm:h-36 sm:w-24" : "mt-4 h-20 w-14 opacity-80 sm:mt-5 sm:h-28 sm:w-20",
+              )}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}

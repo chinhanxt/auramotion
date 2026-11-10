@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { formatVnd } from "@/components/billing/labels";
+import { FeatureArt } from "@/components/landing/Showcase";
 import { LinkButton } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { formatCredit } from "@/lib/api-client";
 
-const FEATURES: { href: string; title: string; line: string; icon: IconName; art: string }[] = [
-  { href: "/studio/image", title: "Ảnh", line: "Phong cách dựng sẵn, nhiều engine.", icon: "image", art: "radial-gradient(70% 70% at 30% 30%, rgba(124,92,255,.7), transparent 60%), radial-gradient(60% 60% at 80% 80%, rgba(45,212,191,.45), transparent 60%)" },
-  { href: "/studio/video", title: "Video", line: "Khung đầu + camera, chạy mượt.", icon: "video", art: "radial-gradient(70% 70% at 70% 25%, rgba(255,79,216,.65), transparent 60%), radial-gradient(60% 60% at 20% 85%, rgba(255,179,107,.45), transparent 60%)" },
-  { href: "/studio/story", title: "Story", line: "Một ý tưởng, nhiều cảnh song song.", icon: "story", art: "radial-gradient(70% 70% at 25% 70%, rgba(255,179,107,.6), transparent 60%), radial-gradient(60% 60% at 80% 20%, rgba(124,92,255,.55), transparent 60%)" },
-  { href: "/studio/edit", title: "Ghép", line: "Giọng Việt, nhạc, phụ đề.", icon: "cut", art: "radial-gradient(70% 70% at 70% 70%, rgba(212,255,58,.4), transparent 60%), radial-gradient(60% 60% at 20% 20%, rgba(96,165,250,.5), transparent 60%)" },
+type FeatureMedia = { image: string } | { video: string; poster: string };
+
+const FEATURES: { href: string; title: string; line: string; icon: IconName; art: string; media: FeatureMedia }[] = [
+  { href: "/studio/image", title: "Ảnh", line: "Phong cách dựng sẵn, nhiều engine.", icon: "image", media: { image: "/showcase/image.webp" }, art: "radial-gradient(70% 70% at 30% 30%, rgba(124,92,255,.7), transparent 60%), radial-gradient(60% 60% at 80% 80%, rgba(45,212,191,.45), transparent 60%)" },
+  { href: "/studio/video", title: "Video", line: "Khung đầu + camera, chạy mượt.", icon: "video", media: { video: "/showcase/video.mp4", poster: "/showcase/video.jpg" }, art: "radial-gradient(70% 70% at 70% 25%, rgba(255,79,216,.65), transparent 60%), radial-gradient(60% 60% at 20% 85%, rgba(255,179,107,.45), transparent 60%)" },
+  { href: "/studio/story", title: "Story", line: "Một ý tưởng, nhiều cảnh song song.", icon: "story", media: { video: "/showcase/story.mp4", poster: "/showcase/story.jpg" }, art: "radial-gradient(70% 70% at 25% 70%, rgba(255,179,107,.6), transparent 60%), radial-gradient(60% 60% at 80% 20%, rgba(124,92,255,.55), transparent 60%)" },
+  { href: "/studio/edit", title: "Ghép", line: "Giọng Việt, nhạc, phụ đề.", icon: "cut", media: { video: "/showcase/edit.mp4", poster: "/showcase/edit.jpg" }, art: "radial-gradient(70% 70% at 70% 70%, rgba(212,255,58,.4), transparent 60%), radial-gradient(60% 60% at 20% 20%, rgba(96,165,250,.5), transparent 60%)" },
 ];
 
 export function FeatureTiles({ compact = false }: { compact?: boolean }) {
@@ -17,21 +20,7 @@ export function FeatureTiles({ compact = false }: { compact?: boolean }) {
     <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
       {FEATURES.map((f, i) => (
         <Link key={f.href} href={f.href} className={cx("feature-tile reveal lift group relative flex flex-col justify-end overflow-hidden rounded-m3 bg-s1 p-4 hairline sm:rounded-m4 sm:p-6", compact ? "aspect-[4/3] sm:aspect-[16/10]" : "aspect-[3/4] sm:aspect-[5/6]")} style={{ "--i": i } as React.CSSProperties}>
-          <div className="feature-art absolute -inset-[15%]" style={{ background: f.art }} aria-hidden="true" />
-          <div className="grain absolute inset-0" aria-hidden="true" />
-          {!compact && (
-          <div className="feature-frames absolute inset-x-0 top-[16%] flex justify-center" aria-hidden="true">
-            {[0, 1, 2].map((k) => (
-              <span
-                key={k}
-                className={cx(
-                  "mx-[-14px] block rounded-m2 bg-[linear-gradient(160deg,rgba(255,255,255,.22),rgba(255,255,255,.05)_55%,rgba(255,255,255,.1))] shadow-[inset_0_0_0_1px_rgba(255,255,255,.18),0_20px_40px_-10px_rgba(0,0,0,.55)] backdrop-blur-md",
-                  k === 1 ? "z-10 h-24 w-16 sm:h-36 sm:w-24" : "mt-4 h-20 w-14 opacity-80 sm:mt-5 sm:h-28 sm:w-20",
-                )}
-              />
-            ))}
-          </div>
-          )}
+          <FeatureArt art={f.art} frames={!compact} {...f.media} />
           <div className="relative">
             <span className="mb-3 flex h-9 w-9 sm:mb-4 sm:h-10 sm:w-10 items-center justify-center rounded-m1 bg-black/30 backdrop-blur-md hairline">
               <Icon name={f.icon} size={20} />
