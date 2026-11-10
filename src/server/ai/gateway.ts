@@ -84,7 +84,19 @@ function joinText(prompt: string, system?: string): string {
 
 function defaultRunners(deps: GatewayDeps): Record<AiProvider, ProviderRun> {
   return {
-    agy: ({ prompt, system, signal, setting }) => agyText(joinText(prompt, system), setting.agyModel || DEFAULT_AGY_MODEL, signal),
+    agy: async ({ prompt, system, signal, setting }) => {
+      const model = setting.agyModel || DEFAULT_AGY_MODEL;
+      try {
+        return await agyText(joinText(prompt, system), model, signal);
+      } catch (err) {
+        // Model cũ (Admin/setting cũ) không còn trong agy: thử lại 1 lần với model mặc định.
+        if (model !== DEFAULT_AGY_MODEL && /invalid model selection|not recognized as a known model/i.test((err as Error).message)) {
+          console.warn(`[ai] agy không nhận model "${model}", dùng ${DEFAULT_AGY_MODEL}`);
+          return agyText(joinText(prompt, system), DEFAULT_AGY_MODEL, signal);
+        }
+        throw err;
+      }
+    },
     codex: ({ prompt, system, signal, setting }) =>
       codexText(joinText(prompt, system), "low", { model: setting.codexModel || undefined, signal }),
     muse: async ({ prompt, system, threadKey, signal, setting }) => {

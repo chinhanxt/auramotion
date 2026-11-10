@@ -149,7 +149,9 @@ function spawnInGroup(opts: RunCliOptions<unknown>, dir: string): Promise<string
       } else if (spawnError) {
         reject(new EngineError("CLI_FAILED", `Không chạy được ${name}: ${spawnError.message}`));
       } else if (code !== 0) {
-        const tail = (stderr.trim() || stdout.trim()).slice(-STDERR_TAIL);
+        // Giữ cả đầu (lý do lỗi thật) lẫn cuối (agy in kèm danh sách model rất dài ở cuối).
+        const out = stderr.trim() || stdout.trim();
+        const tail = out.length <= STDERR_TAIL ? out : `${out.slice(0, STDERR_TAIL / 2)} … ${out.slice(-STDERR_TAIL / 2)}`;
         reject(new EngineError("CLI_FAILED", `${name} thoát mã ${code ?? sig}: ${tail}`));
       } else {
         resolve(stdout);
