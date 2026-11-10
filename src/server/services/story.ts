@@ -638,7 +638,7 @@ export async function listAdminStories(input: z.input<typeof adminStoryQuery>) {
   // Số cảnh đã xong + tổng Credit các job của từng story (cho bảng admin).
   const stats = rows.length
     ? await db.job.groupBy({
-        by: ["storyId", "status"],
+        by: ["storyId", "shotIndex", "status"],
         where: { storyId: { in: rows.map((r) => r.id) } },
         _count: { _all: true },
         _sum: { cost: true },
@@ -647,7 +647,8 @@ export async function listAdminStories(input: z.input<typeof adminStoryQuery>) {
   const statOf = (id: string) => {
     const mine = stats.filter((x) => x.storyId === id);
     return {
-      doneCount: mine.filter((x) => x.status === "SUCCEEDED").reduce((n, x) => n + x._count._all, 0),
+      // Cảnh xong = số shotIndex khác nhau có job SUCCEEDED (bỏ job ghép, lần quay lại trùng cảnh).
+      doneCount: new Set(mine.filter((x) => x.status === "SUCCEEDED" && x.shotIndex !== null).map((x) => x.shotIndex)).size,
       cost: mine.reduce((sum, x) => sum + (x._sum.cost?.toNumber() ?? 0), 0),
     };
   };

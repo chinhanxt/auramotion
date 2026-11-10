@@ -369,7 +369,10 @@ describe("admin v2 routes", () => {
     for (const [i, status] of (["SUCCEEDED", "RUNNING"] as const).entries()) {
       await db.job.create({ data: { userId: member.id, modelId: video.id, kind: "VIDEO", prompt: "s", cost: 2.5, status, storyId: story.id, shotIndex: i } });
     }
-    expect((await json(call("stories", "GET"))).body.items[0]).toMatchObject({ jobCount: 2, doneCount: 1, cost: 5 });
+    // Quay lại cảnh 0 thành công thêm lần nữa + job ghép không có shotIndex: vẫn 1 cảnh xong.
+    await db.job.create({ data: { userId: member.id, modelId: video.id, kind: "VIDEO", prompt: "s", cost: 2.5, status: "SUCCEEDED", storyId: story.id, shotIndex: 0 } });
+    await db.job.create({ data: { userId: member.id, modelId: video.id, kind: "VIDEO", prompt: "s", cost: 0, status: "SUCCEEDED", storyId: story.id } });
+    expect((await json(call("stories", "GET"))).body.items[0]).toMatchObject({ jobCount: 4, doneCount: 1, cost: 7.5 });
     expect((await json(call("stories/[id]", "GET", undefined, { id: story.id }))).body.story.id).toBe(story.id);
     expect((await call("stories/[id]", "DELETE", undefined, { id: story.id })).status).toBe(200);
     expect((await db.story.findUniqueOrThrow({ where: { id: story.id } })).status).toBe("CANCELED");
