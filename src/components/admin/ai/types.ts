@@ -1,4 +1,5 @@
 // Kiểu dữ liệu `/api/admin/ai` (docs/v2-ai-runtime.md). Mọi trường tùy chọn: backend có thể chưa trả đủ.
+import type { AgyQuotaGroups, CodexQuota } from "@/lib/api-client";
 import type { ProviderHealth } from "../engine/live";
 
 export type AiProvider = "agy" | "codex" | "muse";
@@ -17,7 +18,7 @@ export type AiRoles = {
 };
 
 export type Quota = { group: string; pct: number; resetAt?: string | number | null };
-export type AgyAccount = { id: string; email: string; active?: boolean; quota?: Quota[] };
+export type AgyAccount = { id: string; email: string; active?: boolean; quota?: Quota[]; groups?: AgyQuotaGroups | null; checkedAt?: string | number | null };
 // Codex: `profiles` = các profile có model này (catalog khác nhau theo tài khoản), `hidden` = visibility hide.
 export type AiModel = { id: string; name?: string; efforts?: string[]; defaultEffort?: string; profiles?: string[]; hidden?: boolean };
 
@@ -30,9 +31,9 @@ export type AgyInfo = {
   proxy?: { enabled?: boolean; port?: number; running?: boolean };
   models?: AiModel[];
 };
-export type CodexProfile = { name: string; loggedIn?: boolean; method?: string | null; active?: boolean; models?: AiModel[] };
+export type CodexProfile = { name: string; loggedIn?: boolean; method?: string | null; active?: boolean; models?: AiModel[]; quota?: CodexQuota | null };
 export type CodexInfo = { installed?: boolean; version?: string | null; profiles?: CodexProfile[]; models?: AiModel[] };
-export type MuseInfo = { ok?: boolean; accounts?: number | unknown[] | null };
+export type MuseInfo = { ok?: boolean; accounts?: number | unknown[] | null; models?: AiModel[] };
 
 export type AiData = {
   roles?: Partial<AiRoles>;
@@ -88,4 +89,21 @@ export function toTime(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined || v === "") return null;
   const t = typeof v === "number" ? v : Date.parse(v);
   return Number.isFinite(t) ? t : null;
+}
+
+// Catalog Codex: `codex.models[].profiles`; backend cũ chỉ có `profiles[].models` → gộp lại.
+export function codexModels(data?: AiData): AiModel[] {
+  const c = data?.providers?.codex;
+  const base = c?.models ?? [];
+  const byId = new Map<string, AiModel>(base.map((m) => [m.id, { ...m }]));
+  for (const p of c?.profiles ?? []) {
+    for (const m of p.models ?? []) {
+      const known = byId.get(m.id);
+      if (known?.profiles && base.some((b) => b.id === m.id && b.profiles)) continue; // backend đã ghi sẵn
+      const cur = known ?? { ...m };
+      cur.profiles = [...new Set([...(cur.profiles ?? []), p.name])];
+      byId.set(m.id, cur);
+    }
+  }
+  return [...byId.values()];
 }
