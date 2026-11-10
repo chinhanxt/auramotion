@@ -81,6 +81,23 @@ describe("GET /api/catalog", () => {
     expect(body.music?.[0]).toHaveProperty("file");
   });
 
+  it("story kind: video models, style+camera presets with theme fields, story skills, plan cost", async () => {
+    const res = await GET(new Request("http://localhost/api/catalog?kind=story"));
+    const body = (await res.json()) as CatalogBody & {
+      skills: { kind: string; locked: boolean; slug: string }[];
+      presets: { kind: string; palette: string[]; cover: string }[];
+      story: { planCost: number; maxShots: number };
+      videoUnavailable: boolean;
+    };
+    expect(body.models.every((m) => m.kind === "VIDEO")).toBe(true);
+    expect(new Set(body.presets.map((p) => p.kind))).toEqual(new Set(["STYLE", "CAMERA"]));
+    expect(body.presets.every((p) => p.palette.length > 0 && p.cover)).toBe(true);
+    expect(body.skills.some((s) => s.kind === "STORY")).toBe(true);
+    expect(body.skills[0]).not.toHaveProperty("instructions");
+    expect(body.story).toEqual({ planCost: 0.5, maxShots: 8 });
+    expect(body.videoUnavailable).toBe(false);
+  });
+
   it("rejects bad kind and anonymous user", async () => {
     expect((await getCatalog("audio")).status).toBe(400);
     current.user = null;
