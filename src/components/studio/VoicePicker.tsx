@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Notice } from "@/components/ui/Bits";
+import { Button, IconButton, Spinner } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Controls";
+import { cx } from "@/components/ui/cx";
+import { Icon } from "@/components/ui/Icon";
+import { Segmented } from "@/components/ui/Segmented";
 import { api, planLabel, postJson } from "@/lib/api-client";
 
 type Voice = { id: string; name: string; gender: string; region: string; style: string };
@@ -24,20 +30,6 @@ function audioDuration(file: File): Promise<number> {
     audio.onerror = () => done(NaN);
     audio.src = url;
   });
-}
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full border px-2.5 py-0.5 text-xs ${
-        active ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white hover:border-neutral-500"
-      }`}
-    >
-      {children}
-    </button>
-  );
 }
 
 // Giọng VieNeu có sẵn (lọc giới tính / miền, nghe thử) hoặc "Giọng của tôi" clone từ audio mẫu (gói Pro).
@@ -146,38 +138,41 @@ export function VoicePicker({
   const shown = (voices ?? []).filter((v) => (!gender || v.gender === gender) && (!region || v.region === region));
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-neutral-700">Giọng đọc</span>
-        <div className="flex rounded-md border border-neutral-300 bg-white p-0.5">
-          <button
-            type="button"
-            onClick={() => switchTab("preset")}
-            className={`rounded px-3 py-1 text-sm ${tab === "preset" ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"}`}
-          >
-            Giọng có sẵn
-          </button>
-          <button
-            type="button"
-            disabled={cloneLocked}
-            onClick={() => switchTab("clone")}
-            className={`flex items-center gap-1.5 rounded px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
-              tab === "clone" ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
-            }`}
-          >
-            Giọng của tôi
-            {cloneLocked && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">{planLabel(1)}</span>}
-          </button>
-        </div>
-      </div>
+    <div className="space-y-3">
+      <Segmented
+        block
+        size="sm"
+        ariaLabel="Nguồn giọng"
+        options={[
+          { value: "preset" as const, label: "Giọng có sẵn" },
+          {
+            value: "clone" as const,
+            disabled: cloneLocked,
+            title: cloneLocked ? `Cần gói ${planLabel(1)}` : undefined,
+            label: (
+              <>
+                Giọng của tôi {cloneLocked && <Icon name="lock" size={12} />}
+              </>
+            ),
+          },
+        ]}
+        value={tab}
+        onChange={switchTab}
+      />
 
       {tab === "preset" && (
         <>
-          {loadError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{loadError}</p>}
-          {!voices && !loadError && <p className="text-sm text-neutral-500">Đang tải danh sách giọng...</p>}
+          {loadError && <Notice tone="danger">{loadError}</Notice>}
+          {!voices && !loadError && (
+            <div className="space-y-1.5">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="skel h-12 rounded-m1" />
+              ))}
+            </div>
+          )}
           {voices && (
             <>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1">
                 <Chip active={!gender} onClick={() => setGender("")}>
                   Tất cả
                 </Chip>
@@ -186,7 +181,7 @@ export function VoicePicker({
                     {g}
                   </Chip>
                 ))}
-                <span className="mx-1 w-px bg-neutral-200" />
+                <span className="mx-0.5 w-px shrink-0 bg-line2" />
                 <Chip active={!region} onClick={() => setRegion("")}>
                   Mọi miền
                 </Chip>
@@ -196,31 +191,34 @@ export function VoicePicker({
                   </Chip>
                 ))}
               </div>
-              <ul className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-neutral-200 p-1">
+              <ul className="max-h-72 space-y-1 overflow-y-auto pr-0.5" role="listbox" aria-label="Giọng đọc">
                 {shown.map((v) => {
                   const active = value.preset === v.id;
                   return (
-                    <li key={v.id} className={`flex items-center gap-2 rounded px-2 py-1.5 ${active ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}>
-                      <button type="button" onClick={() => onChange({ preset: v.id })} className="min-w-0 flex-1 text-left text-sm">
-                        <span className="font-medium">{v.name}</span>
-                        <span className={`ml-2 text-xs ${active ? "text-neutral-300" : "text-neutral-500"}`}>
-                          {[v.gender, v.region, v.style].filter(Boolean).join(" · ")}
-                        </span>
+                    <li
+                      key={v.id}
+                      className={cx(
+                        "flex items-center gap-2 rounded-m1 py-1 pr-1 pl-3 transition-colors",
+                        active ? "bg-white/[.08] shadow-[inset_0_0_0_1px_rgba(212,255,58,.55)]" : "hover:bg-white/[.04]",
+                      )}
+                    >
+                      <button type="button" role="option" aria-selected={active} onClick={() => onChange({ preset: v.id })} className="min-w-0 flex-1 py-1.5 text-left">
+                        <span className="block truncate text-sm font-medium">{v.name}</span>
+                        <span className="block truncate text-xs text-muted">{[v.gender, v.region, v.style].filter(Boolean).join(" · ")}</span>
                       </button>
-                      <button
-                        type="button"
-                        disabled={previewing !== ""}
+                      <IconButton
+                        icon="play"
+                        label="Nghe thử"
+                        size="sm"
+                        variant={active ? "subtle" : "ghost"}
+                        loading={previewing === v.id}
+                        disabled={previewing !== "" && previewing !== v.id}
                         onClick={() => preview(v.id, { preset: v.id })}
-                        className={`shrink-0 rounded border px-2 py-0.5 text-xs disabled:opacity-50 ${
-                          active ? "border-neutral-500 hover:bg-neutral-800" : "border-neutral-300 hover:bg-white"
-                        }`}
-                      >
-                        {previewing === v.id ? "Đang đọc..." : "Nghe thử"}
-                      </button>
+                      />
                     </li>
                   );
                 })}
-                {shown.length === 0 && <li className="px-2 py-1.5 text-sm text-neutral-500">Không có giọng phù hợp</li>}
+                {shown.length === 0 && <li className="px-3 py-2 text-sm text-muted">Không có giọng phù hợp</li>}
               </ul>
             </>
           )}
@@ -230,37 +228,39 @@ export function VoicePicker({
       {tab === "clone" && (
         <div className="space-y-2">
           {value.refUrl ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <audio src={value.refUrl} controls className="h-9 max-w-full" />
-              <button
-                type="button"
-                disabled={previewing !== ""}
-                onClick={() => preview("ref", { refUrl: value.refUrl })}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
-              >
-                {previewing === "ref" ? "Đang đọc..." : "Nghe thử giọng clone"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  lastRef.current = undefined;
-                  onChange({});
-                }}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100"
-              >
-                Đổi mẫu
-              </button>
+            <div className="space-y-2 rounded-m2 bg-white/[.03] p-3 hairline">
+              <audio src={value.refUrl} controls className="h-9 w-full" />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="subtle" icon="play" loading={previewing === "ref"} disabled={previewing !== "" && previewing !== "ref"} onClick={() => preview("ref", { refUrl: value.refUrl })}>
+                  Nghe giọng clone
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon="refresh"
+                  onClick={() => {
+                    lastRef.current = undefined;
+                    onChange({});
+                  }}
+                >
+                  Đổi mẫu
+                </Button>
+              </div>
             </div>
           ) : (
-            <label className="flex cursor-pointer items-center justify-center rounded-md border border-dashed border-neutral-300 bg-white px-3 py-4 text-sm text-neutral-600 hover:border-neutral-500">
-              {uploading ? "Đang tải lên..." : `Tải audio mẫu giọng ${REF_MIN_SEC}–${REF_MAX_SEC} giây (WAV, MP3, M4A, WebM)`}
+            <label className="press flex cursor-pointer flex-col items-center justify-center gap-2 rounded-m2 border border-dashed border-white/15 bg-white/[.02] px-4 py-6 text-center text-sm text-muted hover:border-white/30 hover:text-fg">
+              {uploading ? <Spinner /> : <Icon name="mic" size={22} />}
+              <span className="font-medium text-fg/85">{uploading ? "Đang tải lên…" : "Tải mẫu giọng"}</span>
+              <span className="text-xs">
+                {REF_MIN_SEC}–{REF_MAX_SEC} giây · WAV, MP3, M4A, WebM
+              </span>
               <input ref={fileRef} type="file" accept="audio/*" className="hidden" disabled={uploading} onChange={(e) => onFile(e.target.files?.[0])} />
             </label>
           )}
         </div>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { cx } from "@/components/ui/cx";
+import { Icon } from "@/components/ui/Icon";
 
 type Track = { id: string; name: string; file: string };
 
@@ -21,34 +23,43 @@ export function MusicPicker({ tracks, value, onChange }: { tracks: Track[]; valu
     audio.play().catch(() => setPlaying(""));
   }
 
-  const option = (active: boolean) =>
-    `flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm ${
-      active ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white hover:border-neutral-500"
-    }`;
+  const row = (active: boolean) =>
+    cx(
+      "flex items-center gap-2 rounded-m1 py-1 pr-1 pl-3 transition-colors",
+      active ? "bg-white/[.08] shadow-[inset_0_0_0_1px_rgba(212,255,58,.55)]" : "hover:bg-white/[.04]",
+    );
 
   return (
-    <div className="space-y-2">
-      <span className="text-sm font-medium text-neutral-700">Nhạc nền</span>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <button type="button" onClick={() => onChange("")} className={option(value === "")}>
+    <ul className="space-y-1" role="listbox" aria-label="Nhạc nền">
+      <li className={row(value === "")}>
+        <button type="button" role="option" aria-selected={value === ""} onClick={() => onChange("")} className="flex min-w-0 flex-1 items-center gap-2.5 py-2 text-left text-sm">
+          <Icon name="close" size={16} className="text-muted" />
           Không nhạc
         </button>
-        {tracks.map((t) => (
-          <div key={t.id} className={option(value === t.id)}>
-            <button type="button" onClick={() => onChange(t.id)} className="min-w-0 flex-1 truncate text-left">
-              {t.name}
-            </button>
-            <button
-              type="button"
-              onClick={() => toggle(t)}
-              aria-label={playing === t.id ? "Dừng" : "Nghe thử"}
-              className="shrink-0 rounded px-1.5 text-xs opacity-80 hover:opacity-100"
-            >
-              {playing === t.id ? "■ Dừng" : "▶ Nghe"}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
+      </li>
+      {tracks.map((t) => (
+        <li key={t.id} className={row(value === t.id)}>
+          <button type="button" role="option" aria-selected={value === t.id} onClick={() => onChange(t.id)} className="flex min-w-0 flex-1 items-center gap-2.5 py-2 text-left text-sm">
+            <Icon name="music" size={16} className="text-muted" />
+            <span className="truncate">{t.name}</span>
+            {playing === t.id && (
+              <span className="flex h-3 items-end gap-[2px]" aria-hidden="true">
+                <span className="eq-bar" />
+                <span className="eq-bar [animation-delay:-.3s]" />
+                <span className="eq-bar [animation-delay:-.6s]" />
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => toggle(t)}
+            aria-label={playing === t.id ? "Dừng" : "Nghe thử"}
+            className={cx("press flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] hover:bg-white/[.08]", playing === t.id ? "text-accent" : "text-muted")}
+          >
+            <Icon name={playing === t.id ? "stop" : "play"} size={15} />
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
