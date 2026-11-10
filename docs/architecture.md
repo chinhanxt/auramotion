@@ -37,11 +37,12 @@ auramotion/
 │   │   └── api/              auth · jobs · uploads · credits · payments(/webhook) · ai/prompt · voices · catalog · admin
 │   ├── components/           ui · layout · studio · library · admin
 │   ├── server/               Logic phía server (dùng chung app + worker)
-│   │   ├── services/         credit, pricing, plan, account, job, payment, admin, settings
-│   │   └── engines/          muse (muse2api), cli (chạy CLI tạm + dọn), agy, codex, prompt-writer, voice, assemble
-│   ├── lib/                  db, redis, queue, storage (ổ đĩa), mail, auth, errors, http
+│   │   ├── ai/               gateway (agy | codex | Muse chat, dự phòng + health), template skill, sửa JSON
+│   │   ├── services/         credit, pricing, plan, account, job, story, assemble, catalog, payment, admin, admin-ops, settings
+│   │   └── engines/          muse (muse2api), muse-scheduler (slot chat phụ), muse-block, media (ffprobe), cli, agy, codex, prompt-writer, voice, assemble
+│   ├── lib/                  db, redis, queue, events (pub/sub), sse, storage (ổ đĩa), mail, auth, errors, http
 │   └── types/
-├── worker/                   `npm run worker`: 3 hàng đợi muse · cli · post + cron
+├── worker/                   `npm run worker`: 4 hàng đợi muse · cli · post · story + cron
 ├── tests/
 ├── .env.example
 └── README.md
