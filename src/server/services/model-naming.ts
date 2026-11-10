@@ -1,9 +1,12 @@
 // Đặt tên đẹp + hãng cho model (dùng khi đồng bộ, sắp xếp catalog). Thuần, không I/O.
+// Tên ngắn dùng chung với client: src/lib/model-names.ts.
+import { KNOWN_MODEL_IDS, effortBadge, shortModelName } from "@/lib/model-names";
+
+export { KNOWN_MODEL_IDS, effortBadge, shortModelName };
 
 export const VENDORS = ["muse", "google", "anthropic", "openai", "local"] as const;
 export type Vendor = (typeof VENDORS)[number];
 
-const EFFORT_BADGE: Record<string, string> = { low: "Nhanh", medium: "Cân bằng", high: "Kỹ" };
 const WORD: Record<string, string> = { gpt: "GPT", gemini: "Gemini", claude: "Claude", muse: "Muse", codex: "Codex" };
 
 // Thứ tự hãng hiển thị: Muse, Google, Anthropic, OpenAI, local, còn lại cuối.
@@ -30,19 +33,13 @@ export function vendorOf(provider: string, engineModel: string): Vendor {
   return "google";
 }
 
-// Hậu tố effort của id agy (-low/-medium/-high) → nhãn ngắn; không có thì "".
-export function effortBadge(engineModel: string): string {
-  const m = /-(low|medium|high)$/i.exec(engineModel);
-  return m ? EFFORT_BADGE[m[1].toLowerCase()] : "";
-}
-
 function word(w: string): string {
   return WORD[w] ?? (/^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1));
 }
 
-// "gemini-3.8-flash-low" → "Gemini 3.8 Flash"; "claude-sonnet-5-5-low" → "Claude Sonnet 5.5";
-// "gpt-6.1-sol" → "GPT-6.1 Sol"; "muse-image" → "Muse Image".
-export function prettyModelName(engineModel: string): string {
+// Tên tự sinh CŨ (trước tên ngắn): "gemini-3.8-flash-low" → "Gemini 3.8 Flash"; "claude-sonnet-5-5-low" → "Claude Sonnet 5.5";
+// "gpt-6.1-sol" → "GPT-6.1 Sol". Chỉ dùng để nhận ra dòng chưa bị Admin đổi tên (seed đổi sang tên ngắn).
+export function legacyModelName(engineModel: string): string {
   const parts = engineModel
     .trim()
     .replace(/-(low|medium|high)$/i, "")

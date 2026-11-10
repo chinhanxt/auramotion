@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { getBalance } from "@/server/services/credit";
 import { getActivePlan } from "@/server/services/plan";
 import { getSetting } from "@/server/services/settings";
-import { seed } from "../../prisma/seed";
+import { seed, shortenModelNames } from "../../prisma/seed";
 import { resetDb } from "../helpers/db";
 
 async function counts() {
@@ -56,8 +56,8 @@ describe("seed", () => {
     expect(enabled.every((m) => m.vendor && m.displayName)).toBe(true);
     // "Codex Ảnh" = GPT-6.1 Sol: dùng lại dòng cũ, không tạo trùng; điền verified/badge.
     const sol = await db.aiModel.findUniqueOrThrow({ where: { name: "Codex Ảnh" } });
-    expect(sol).toMatchObject({ displayName: "GPT-6.1 Sol", vendor: "openai", badge: "Pro", etaSec: 44, verified: { ok: true, ms: 44000 } });
-    expect((await db.aiModel.findUniqueOrThrow({ where: { name: "Gemini Ảnh" } })).displayName).toBe("Gemini 3.8 Flash · Medium");
+    expect(sol).toMatchObject({ displayName: "Sol 6.1", vendor: "openai", badge: "Cao cấp", etaSec: 44, verified: { ok: true, ms: 44000 } });
+    expect(await db.aiModel.findUniqueOrThrow({ where: { name: "Gemini Ảnh" } })).toMatchObject({ displayName: "Flash 3.8", badge: "Cân bằng" });
     expect((await db.aiModel.findMany({ where: { provider: "CODEX" } })).every((m) => m.minPlanRank === 1 && m.baseCost.toNumber() === 2)).toBe(true);
     expect(await getSetting("voice_line_cost")).toBe(1);
     expect(await db.user.count({ where: { role: "ADMIN" } })).toBe(1);
@@ -91,6 +91,18 @@ describe("seed", () => {
     const admin = await db.user.findFirstOrThrow({ where: { role: "ADMIN" } });
     expect((await getActivePlan(admin.id)).plan.code).toBe("free");
     expect((await getBalance(admin.id)).plan.toFixed(2)).toBe("20.00");
+  });
+
+  it("đổi sang tên ngắn chỉ dòng còn tên tự sinh cũ, giữ tên Admin đã sửa, chạy lại vô hại", async () => {
+    const opus = await db.aiModel.findUniqueOrThrow({ where: { name: "agy:claude-opus-5-5-low:IMAGE" } });
+    const sonnet = await db.aiModel.findUniqueOrThrow({ where: { name: "agy:claude-sonnet-5-5-low:IMAGE" } });
+    await db.aiModel.update({ where: { id: opus.id }, data: { displayName: "Claude Opus 5.5", badge: "Pro" } });
+    await db.aiModel.update({ where: { id: sonnet.id }, data: { displayName: "Sonnet của tôi" } });
+    expect(await shortenModelNames()).toBe(1);
+    expect(await db.aiModel.findUniqueOrThrow({ where: { id: opus.id } })).toMatchObject({ displayName: "Opus", badge: "Cao cấp" });
+    expect((await db.aiModel.findUniqueOrThrow({ where: { id: sonnet.id } })).displayName).toBe("Sonnet của tôi");
+    expect(await shortenModelNames()).toBe(0);
+    await db.aiModel.update({ where: { id: sonnet.id }, data: { displayName: "Sonnet" } });
   });
 
   it("is idempotent", async () => {

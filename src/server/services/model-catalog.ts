@@ -12,7 +12,7 @@ import type { HttpMuseClient } from "@/server/engines/muse";
 import { getScheduler, type Lease, type MuseScheduler } from "@/server/engines/muse-scheduler";
 import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
 import { museAccountOf } from "@/server/services/job";
-import { effortBadge, prettyModelName, vendorOf } from "@/server/services/model-naming";
+import { KNOWN_MODEL_IDS, effortBadge, shortModelName, vendorOf } from "@/server/services/model-naming";
 
 // Admin Model: đồng bộ danh sách model thật (agy ACP, codex các profile, Muse) thành dòng `synced` (mặc định tắt)
 // và test vẽ thật 1 ảnh nhỏ / 1 video 5 s bằng đúng dòng model đó (ghi `verified` + ảnh mẫu trong storage).
@@ -82,13 +82,15 @@ export async function syncModels(deps: SyncDeps = {}): Promise<SyncResult> {
     for (const m of models) {
       if (m.hidden) continue;
       const partial = m.profiles.length < profiles.length;
-      candidates.push({ provider: "CODEX", engineModel: m.id, kind: "IMAGE", ...(partial ? { description: `Chỉ có ở profile codex: ${m.profiles.join(", ")}` } : {}) });
+      candidates.push({ provider: "CODEX", engineModel: m.id, kind: "IMAGE", ...(partial ? { description: `Chỉ có ở profile OpenAI: ${m.profiles.join(", ")}` } : {}) });
     }
   } catch (err) {
     errors.codex = (err as Error).message.slice(0, 300);
   }
 
   const out: SyncResult = { created: 0, existing: 0, models: [], errors };
+  // Đếm phiên bản mỗi dòng model trên danh sách thật vừa lấy (+ danh sách đã biết) để quyết định có giữ số phiên bản không.
+  const known = [...KNOWN_MODEL_IDS, ...candidates.map((c) => c.engineModel)];
   const seen = new Set<string>();
   for (const c of candidates) {
     const id = c.engineModel.trim();
@@ -116,7 +118,7 @@ export async function syncModels(deps: SyncDeps = {}): Promise<SyncResult> {
             enabled: false,
             sort: SYNC_SORT,
             vendor: vendorOf(c.provider, id),
-            displayName: prettyModelName(id),
+            displayName: shortModelName(id, known),
             badge: c.provider === "AGY" ? effortBadge(id) : "",
             description: c.description ?? "",
             source: "synced",
