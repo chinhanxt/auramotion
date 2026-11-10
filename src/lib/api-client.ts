@@ -16,7 +16,23 @@ export type CatalogModel = {
   locked: boolean;
 };
 
-export type CatalogPreset = { id: string; kind: "STYLE" | "CAMERA"; name: string; promptSuffix: string; thumbnailUrl: string | null };
+// Trường mới của v2 (slug, category, description, cover, palette) có thể chưa có khi backend cũ.
+export type CatalogPreset = {
+  id: string;
+  kind: "STYLE" | "CAMERA";
+  name: string;
+  promptSuffix: string;
+  thumbnailUrl: string | null;
+  slug?: string | null;
+  category?: string;
+  description?: string;
+  cover?: string | null;
+  palette?: string[];
+  featured?: boolean;
+};
+
+export type SkillKind = "IMAGE" | "VIDEO" | "STORY" | "SCRIPT";
+export type CatalogSkill = { id: string; slug: string; name: string; kind: SkillKind; description: string; locked: boolean };
 
 export type CatalogPlan = { code: "free" | "pro" | "ultra"; name: string; rank: number; maxDurationSec: number; maxConcurrent: number };
 
@@ -25,6 +41,9 @@ export type Catalog = {
   presets: CatalogPreset[];
   plan: CatalogPlan;
   music?: { id: string; name: string; file: string }[];
+  skills?: CatalogSkill[];
+  // Tài khoản Muse bị chặn tạo video (khu vực): khóa nút tạo video / quay story.
+  videoUnavailable?: boolean;
 };
 
 export type JobItem = {
@@ -36,7 +55,61 @@ export type JobItem = {
   resultUrls: string[];
   error: string | null;
   createdAt: string;
+  // v2: tiến độ 0–100, thuộc story nào, cảnh số mấy, tham số tạo.
+  progress?: number;
+  storyId?: string | null;
+  shotIndex?: number | null;
+  params?: Record<string, unknown>;
+  inputUrl?: string | null;
+  finishedAt?: string | null;
 };
+
+// Sự kiện SSE `job` (hợp đồng v2 §3).
+export type JobEvent = {
+  id: string;
+  status: JobStatus;
+  progress?: number;
+  resultUrls?: string[];
+  error?: string | null;
+  storyId?: string | null;
+  shotIndex?: number | null;
+  kind?: JobItem["kind"];
+};
+
+export type StoryStatus = "PLANNING" | "READY" | "RENDERING" | "ASSEMBLING" | "DONE" | "FAILED" | "CANCELED";
+export type StoryShot = { index: number; title: string; prompt: string; camera?: string; durationSec: number };
+export type StoryItem = {
+  id: string;
+  title: string;
+  idea: string;
+  status: StoryStatus;
+  aspect: string;
+  shotCount: number;
+  shotDurationSec: number;
+  mode: "PARALLEL" | "CHAIN";
+  autoAssemble: boolean;
+  plan: { shots: StoryShot[] } | null;
+  error: string | null;
+  finalJobId: string | null;
+  createdAt: string;
+  cover?: string;
+};
+export type StoryDetail = StoryItem & { jobs: JobItem[] };
+export type StoryEvent = { id: string; status: StoryStatus; plan?: StoryItem["plan"]; error?: string | null };
+
+export const STORY_ACTIVE: StoryStatus[] = ["PLANNING", "RENDERING", "ASSEMBLING"];
+export const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
+  PLANNING: "Đang lập kịch bản",
+  READY: "Sẵn sàng quay",
+  RENDERING: "Đang quay",
+  ASSEMBLING: "Đang ghép",
+  DONE: "Hoàn tất",
+  FAILED: "Lỗi",
+  CANCELED: "Đã hủy",
+};
+
+export type ExploreItem = { id: string; kind: JobItem["kind"]; prompt: string; resultUrls: string[]; presetName?: string | null };
+export type ThemeItem = CatalogPreset;
 
 export const ACTIVE_STATUSES: JobStatus[] = ["PENDING", "RUNNING"];
 
@@ -56,6 +129,15 @@ export const STATUS_COLOR: Record<JobStatus, string> = {
   CANCELED: "bg-neutral-200 text-neutral-700",
 };
 
+// Tông màu trạng thái cho giao diện tối (STATUS_COLOR giữ cho trang admin sáng).
+export const STATUS_TONE: Record<JobStatus, "warn" | "info" | "ok" | "danger" | "neutral"> = {
+  PENDING: "warn",
+  RUNNING: "info",
+  SUCCEEDED: "ok",
+  FAILED: "danger",
+  CANCELED: "neutral",
+};
+
 // Mã lỗi job (cột `error`) → câu hiển thị; mã lạ thì hiện kèm mã để báo admin.
 const JOB_ERROR_TEXT: Record<string, string> = {
   TIMEOUT: "quá thời gian xử lý",
@@ -70,6 +152,9 @@ const JOB_ERROR_TEXT: Record<string, string> = {
   REFUSED: "nội dung bị từ chối, hãy đổi prompt",
   QUOTA: "engine tạm hết lượt",
   ASSEMBLE_FAILED: "ghép video lỗi",
+  REGION_BLOCKED: "tài khoản Muse không được tạo video ở khu vực này",
+  MUSE_VIDEO_UNAVAILABLE: "video Muse tạm không khả dụng",
+  BAD_MEDIA: "file kết quả hỏng, đang thử lại",
 };
 
 export function jobErrorText(code: string): string {
@@ -80,6 +165,25 @@ const KIND_PATH: Record<JobItem["kind"], string> = { IMAGE: "image", VIDEO: "vid
 
 export function remakeHref(job: { id: string; kind: JobItem["kind"] }): string {
   return `/studio/${KIND_PATH[job.kind]}?from=${job.id}`;
+}
+
+// Tỷ lệ khung của job (lưu trong params) → "w / h" cho CSS aspect-ratio.
+export function jobAspect(job: Pick<JobItem, "kind" | "params">): string {
+  const p = (job.params ?? {}) as { aspectRatio?: string; aspect?: string };
+  return p.aspectRatio ?? p.aspect ?? (job.kind === "IMAGE" ? "1:1" : "9:16");
+}
+
+export function ratioCss(ratio: string): string {
+  const [w, h] = ratio.split(":").map(Number);
+  return w > 0 && h > 0 ? `${w} / ${h}` : "1 / 1";
+}
+
+export function isVideoUrl(url: string): boolean {
+  return /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(url);
+}
+
+export function isNotFound(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 404 || err.status === 405);
 }
 
 // Gói tối thiểu theo rank (seed: 0 Free, 1 Pro, 2 Ultra).
@@ -119,4 +223,8 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function postJson<T>(url: string, data: unknown, signal?: AbortSignal): Promise<T> {
   return api<T>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), signal });
+}
+
+export function patchJson<T>(url: string, data: unknown): Promise<T> {
+  return api<T>(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 }
