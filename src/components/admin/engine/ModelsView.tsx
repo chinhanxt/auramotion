@@ -397,7 +397,7 @@ function ModelRow({
             <Icon name={KIND_ICON[m.kind]} size={11} />
             {KIND_LABEL[m.kind]}
             {optionSummary(m) && <span className="truncate">· {optionSummary(m)}</span>}
-            {m.source === "synced" && <span className="rounded-[5px] bg-white/[.05] px-1 font-medium text-muted">đồng bộ</span>}
+            {m.source === "synced" && <span className="shrink-0 rounded-[5px] bg-white/[.05] px-1 font-medium whitespace-nowrap text-muted">đồng bộ</span>}
           </p>
         </div>
         <IconButton icon="more" label="Sửa đầy đủ" size="sm" className="self-start lg:hidden" onClick={() => onOpen(m)} />

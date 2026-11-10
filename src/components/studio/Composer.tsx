@@ -235,7 +235,7 @@ export function AiWriteControl({
           )}
         >
           <span className={cx("relative flex shrink-0", pending && "animate-spin [animation-duration:2.2s]")}>
-            <Icon name="sparkle" size={16} className={on || pending ? "text-accent" : undefined} />
+            {on && writer && !pending ? <VendorLogo vendor={writer.vendor} size={16} plain /> : <Icon name="sparkle" size={16} className={on || pending ? "text-accent" : undefined} />}
             {pre && !pending && (
               <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2" aria-hidden="true">
                 {!ready && <span className="absolute inset-0 animate-ping rounded-full bg-[#b7a6ff]" />}
@@ -247,10 +247,7 @@ export function AiWriteControl({
             <span>AI đang viết</span>
           ) : on ? (
             <>
-              <span className="inline-flex items-center gap-1 max-sm:hidden">
-                {writer && <VendorLogo vendor={writer.vendor} size={14} plain />}
-                {who} viết
-              </span>
+              <span className="max-sm:hidden">{who} viết</span>
               <span className="text-muted max-sm:hidden">·</span>
               <span className="min-w-0 truncate text-[#c9bdff]">{skill?.name ?? pre?.skillName ?? "Tự chọn"}</span>
             </>

@@ -124,9 +124,10 @@ async function seedTestedModels(): Promise<void> {
 const LEGACY_SEED_NAMES: Record<string, string> = { "Gemini Ảnh": "Gemini 3.8 Flash · Medium", "MUSE Ảnh 2": "Muse Image · TK2" };
 
 // Một lần, chạy lại vô hại: đổi displayName sang tên ngắn CHỈ cho dòng còn tên tự sinh cũ (không đè tên Admin đã sửa);
-// badge "Pro" (trùng tên gói) → "Cao cấp"; dòng agy chưa có badge thì điền effort (Nhanh / Cân bằng / Kỹ).
+// badge "Pro" (trùng tên gói) → "Cao cấp"; dòng agy chưa có badge thì điền effort (Nhanh / Cân bằng / Kỹ);
+// mô tả đồng bộ cũ "profile codex" → "profile OpenAI".
 export async function shortenModelNames(): Promise<number> {
-  const rows = await db.aiModel.findMany({ select: { id: true, name: true, provider: true, engineModel: true, displayName: true, badge: true } });
+  const rows = await db.aiModel.findMany({ select: { id: true, name: true, provider: true, engineModel: true, displayName: true, badge: true, description: true } });
   const known = [...KNOWN_MODEL_IDS, ...rows.filter((r) => r.provider !== "LOCAL").map((r) => r.engineModel)];
   let changed = 0;
   for (const r of rows) {
@@ -135,6 +136,7 @@ export async function shortenModelNames(): Promise<number> {
     const old = new Set([legacyModelName(r.engineModel), LEGACY_SEED_NAMES[r.name]].filter(Boolean));
     const data: Prisma.AiModelUpdateInput = {};
     if (next && r.displayName !== next && (!r.displayName || old.has(r.displayName))) data.displayName = next;
+    if (r.description.startsWith("Chỉ có ở profile codex:")) data.description = r.description.replace("profile codex:", "profile OpenAI:");
     if (r.badge === "Pro") data.badge = "Cao cấp";
     else if (!r.badge && r.provider === "AGY" && effortBadge(r.engineModel)) data.badge = effortBadge(r.engineModel);
     if (Object.keys(data).length) {
