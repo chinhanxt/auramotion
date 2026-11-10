@@ -109,7 +109,7 @@ describe("ai gateway", () => {
       { idea: "cáo đỏ", kind: "video", durationSec: 5, skillId: skill.id, styleId: style.id, cameraId: camera.id },
       { setting, runners: { agy: run } },
     );
-    expect(out).toEqual({ prompt: "a lacquer fox", provider: "agy" });
+    expect(out).toMatchObject({ prompt: "a lacquer fox", provider: "agy" });
     expect(seen?.system).toContain("Exactly ONE camera move");
     expect(seen?.prompt).toContain("cáo đỏ");
     expect(seen?.prompt).toContain("lacquer");

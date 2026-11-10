@@ -103,6 +103,7 @@ export function jobEventData(job: Job, extra: { stage?: "writing" | "rendering" 
     status: job.status,
     progress: job.progress,
     prompt: job.prompt,
+    ...(params.written ? { written: params.written } : {}),
     ...(extra.stage ? { stage: extra.stage } : params.autoWrite && !params.written && (job.status === "PENDING" || job.status === "RUNNING") ? { stage: "writing" as const } : {}),
     resultUrls: job.resultUrls,
     error: job.error,
