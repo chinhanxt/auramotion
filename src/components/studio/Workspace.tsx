@@ -440,8 +440,9 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
                   ariaLabel="Prompt"
                 />
               </div>
-              <div className="mt-2.5 flex items-center gap-1.5">
-                <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+              {/* Điện thoại: hàng 1 = AI viết → model (đủ tên), hàng 2 = phong cách, thiết lập, Tạo. Máy tính: 1 hàng. */}
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 md:flex-nowrap">
+                <div className="flex w-full min-w-0 items-center gap-1.5 md:w-auto md:shrink-0">
                   <AiWriteControl
                     skills={skills}
                     skillId={skillId}
@@ -458,11 +459,13 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
                   />
                   {/* Luồng: AI viết prompt → model người dùng chọn tạo kết quả */}
                   {catalog && (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Icon name="arrowRight" size={14} className={cx("shrink-0 max-md:hidden", autoWrite ? "text-[#c9bdff]" : "text-dim")} />
+                    <div className="flex min-w-0 flex-1 items-center gap-1 md:flex-none md:shrink-0">
+                      <Icon name="arrowRight" size={14} className={cx("shrink-0", autoWrite ? "text-[#c9bdff]" : "text-dim")} />
                       <ModelPicker models={catalog.models} value={modelId} onChange={onPickModel} unit={text.unit} />
                     </div>
                   )}
+                </div>
+                <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
                   {presetButton}
                   <div className="hidden items-center gap-1.5 md:flex">
                     <AspectMenu ratios={ratios} value={aspectRatio} onChange={setAspectRatio} />

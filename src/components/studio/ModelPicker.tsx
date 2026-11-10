@@ -193,13 +193,13 @@ function ChipFace({ m, interactive }: { m?: CatalogModel; interactive: boolean }
   return (
     <>
       {m ? <VendorLogo vendor={vendorOf(m)} size={20} /> : <Icon name="cpu" size={16} />}
-      <span className="max-w-40 truncate max-sm:max-w-24">{m ? modelLabel(m) : "Model"}</span>
+      <span className="max-w-40 min-w-0 truncate max-md:max-w-none">{m ? modelLabel(m) : "Model"}</span>
       {interactive && <Icon name="chevronDown" size={14} className="shrink-0 text-muted" />}
     </>
   );
 }
 
-const CHIP = "press inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[11px] pr-2.5 pl-1.5 text-[13px] font-medium whitespace-nowrap";
+const CHIP = "press inline-flex h-9 min-w-0 items-center gap-1.5 rounded-[11px] pr-2.5 pl-1.5 text-[13px] font-medium whitespace-nowrap md:shrink-0 max-md:flex-1";
 
 export function ModelPicker({ models, value, onChange, unit }: { models: CatalogModel[]; value: string; onChange: (m: CatalogModel) => void; unit: string }) {
   const sel = models.find((m) => m.id === value);
