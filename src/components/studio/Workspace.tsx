@@ -410,7 +410,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
             e.preventDefault();
             submit();
           }}
-          className="composer pointer-events-auto relative mx-auto max-w-[1040px] rounded-m4 glass-strong px-3 pt-3 pb-2.5 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-20px_rgba(0,0,0,.9)] sm:px-4 sm:pt-3 sm:pb-3"
+          className="composer pointer-events-auto relative mx-auto max-w-[1040px] rounded-m4 glass-strong px-3 pt-3 pb-2.5 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-20px_rgba(0,0,0,.9)] transition-shadow duration-200 focus-within:shadow-[0_0_0_1px_rgba(212,255,58,.32),0_30px_80px_-20px_rgba(0,0,0,.9)] sm:px-4 sm:pt-3 sm:pb-3"
         >
           {videoBlocked && (
             <Notice tone="warn" className="mb-2.5">

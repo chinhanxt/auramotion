@@ -74,7 +74,7 @@ export function StoryComposer({ initialIdea = "" }: { initialIdea?: string }) {
         e.preventDefault();
         submit();
       }}
-      className="relative mx-auto w-full max-w-[1040px] rounded-m4 bg-s1 px-3 pt-3 pb-3 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-30px_rgba(124,92,255,.35)] sm:px-4 sm:pt-3 sm:pb-4"
+      className="relative mx-auto w-full max-w-[1040px] rounded-m4 bg-s1 px-3 pt-3 pb-3 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-30px_rgba(124,92,255,.35)] transition-shadow duration-200 focus-within:shadow-[0_0_0_1px_rgba(212,255,58,.32),0_30px_80px_-30px_rgba(124,92,255,.35)] sm:px-4 sm:pt-3 sm:pb-4"
     >
       <AutoTextarea value={idea} onChange={setIdea} onSubmit={submit} placeholder="Kể ý tưởng câu chuyện của bạn…" className="min-h-24 px-0.5 pt-1 pb-1 text-[17px] sm:pt-1.5" ariaLabel="Ý tưởng" />
       {!idea && (

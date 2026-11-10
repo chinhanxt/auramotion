@@ -58,7 +58,7 @@ export function AutoTextarea({
           onSubmit?.();
         }
       }}
-      className={cx("block w-full resize-none bg-transparent text-[15px] leading-relaxed text-fg outline-none placeholder:text-dim", className)}
+      className={cx("block w-full resize-none bg-transparent text-[15px] leading-relaxed text-fg !outline-none placeholder:text-dim", className)}
     />
   );
 }

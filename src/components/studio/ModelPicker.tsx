@@ -99,7 +99,7 @@ export function ModelList({ models, value, onPick, unit, autoFocus = true, class
             aria-label="Tìm model"
             aria-controls={`${uid}-list`}
             aria-activedescendant={flat[active] ? `${uid}-${active}` : undefined}
-            className="h-9 w-full rounded-[10px] bg-white/[.05] pr-2 pl-9 text-[13.5px] outline-none placeholder:text-dim focus:bg-white/[.08]"
+            className="h-9 w-full rounded-[10px] bg-white/[.05] pr-2 pl-9 text-[13.5px] !outline-none placeholder:text-dim focus:bg-white/[.08] focus:shadow-[inset_0_0_0_1px_rgba(255,255,255,.12)]"
           />
         </div>
       )}
@@ -111,7 +111,7 @@ export function ModelList({ models, value, onPick, unit, autoFocus = true, class
         tabIndex={search ? -1 : 0}
         onKeyDown={search ? undefined : onKey}
         aria-activedescendant={!search && flat[active] ? `${uid}-${active}` : undefined}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain !outline-none"
       >
         {groups.map(([vendor, items], gi) => (
           <div key={vendor} role="group" aria-label={vendorName(vendor)} className={cx(gi > 0 && "mt-1")}>

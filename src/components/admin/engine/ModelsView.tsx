@@ -139,7 +139,7 @@ function InlineText({
             setEdit(false);
           }
         }}
-        className={cx("-mx-1.5 w-[calc(100%+12px)] rounded-[8px] bg-white/[.06] px-1.5 outline-none shadow-[inset_0_0_0_1px_rgba(212,255,58,.35)]", className)}
+        className={cx("-mx-1.5 w-[calc(100%+12px)] rounded-[8px] bg-white/[.06] px-1.5 !outline-none shadow-[inset_0_0_0_1px_rgba(212,255,58,.35)]", className)}
       />
     );
   }

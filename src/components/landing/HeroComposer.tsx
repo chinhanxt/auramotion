@@ -85,7 +85,7 @@ export function HeroComposer({ loggedIn }: { loggedIn: boolean }) {
           onBlur={() => setFocused(false)}
           placeholder={focused ? "Mô tả điều bạn muốn tạo…" : shown}
           aria-label="Mô tả điều bạn muốn tạo"
-          className="h-14 min-w-0 flex-1 bg-transparent px-2 text-[16px] sm:px-3 text-fg outline-none placeholder:text-fg/45 sm:text-[17px]"
+          className="h-14 min-w-0 flex-1 bg-transparent px-2 text-[16px] text-fg !outline-none sm:px-3 placeholder:text-fg/45 sm:text-[17px]"
         />
         <button
           type="submit"
