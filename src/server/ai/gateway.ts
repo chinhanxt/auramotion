@@ -160,10 +160,33 @@ export async function getGatewayHealth(): Promise<Record<AiProvider, ProviderHea
   return out;
 }
 
+// Provider báo hết quota: tạm bỏ qua tới lúc reset (đọc "Resets in 2h34m33s", không có thì 15 phút).
+const QUOTA_RE = /quota|exhausted your capacity|resource[_ ]exhausted|rate limit|usage limit|\b429\b/i;
+const cooldownKey = (p: AiProvider) => `am:gw:cooldown:${p}`;
+
+export function quotaCooldownSec(message: string): number | null {
+  if (!QUOTA_RE.test(message)) return null;
+  const m = /resets? in\s+(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i.exec(message);
+  const sec = m ? Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) : 0;
+  return Math.min(Math.max(sec || 15 * 60, 60), 24 * 3600);
+}
+
+export async function getCooldowns(): Promise<Partial<Record<AiProvider, number>>> {
+  const out: Partial<Record<AiProvider, number>> = {};
+  for (const p of AI_PROVIDERS) {
+    const ttl = await redis.ttl(cooldownKey(p)).catch(() => -2);
+    if (ttl > 0) out[p] = ttl;
+  }
+  return out;
+}
+
 export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promise<AiTextResult> {
   const setting = deps.setting ?? (await getGatewaySetting());
   const runners = { ...defaultRunners(deps), ...deps.runners };
-  const order = input.provider ? [input.provider, ...setting.order.filter((p) => p !== input.provider)] : setting.order;
+  const preferred = input.provider ? [input.provider, ...setting.order.filter((p) => p !== input.provider)] : setting.order;
+  // Provider đang hết quota xuống cuối hàng (vẫn dùng nếu mọi provider khác đều lỗi).
+  const cooling = deps.runners ? {} : await getCooldowns();
+  const order = [...preferred.filter((p) => !cooling[p]), ...preferred.filter((p) => cooling[p])];
   const errors: string[] = [];
 
   for (const provider of order) {
@@ -191,11 +214,14 @@ export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promis
       }
       const ms = Date.now() - started;
       await recordHealth(provider, true, ms);
+      if (cooling[provider]) await redis.del(cooldownKey(provider)).catch(() => 0);
       return { text, ...(input.json || input.validate ? { data } : {}), provider, ms };
     } catch (err) {
       const ms = Date.now() - started;
       const message = (err as Error).message ?? String(err);
       await recordHealth(provider, false, ms, message);
+      const cool = quotaCooldownSec(message);
+      if (cool) await redis.set(cooldownKey(provider), "1", "EX", cool).catch(() => null);
       errors.push(`${provider}: ${message.slice(0, 200)}`);
       console.warn(`[ai] ${provider} lỗi sau ${ms} ms: ${message.slice(0, 300)}`);
     }

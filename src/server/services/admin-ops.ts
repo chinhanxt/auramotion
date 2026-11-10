@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { ALL_QUEUE_NAMES, anyQueue, type AnyQueueName } from "@/lib/queue";
-import { aiText, extractJson, getGatewayHealth, getGatewaySetting, type GatewayDeps } from "@/server/ai/gateway";
+import { aiText, extractJson, getCooldowns, getGatewayHealth, getGatewaySetting, type GatewayDeps } from "@/server/ai/gateway";
 import { renderTemplate } from "@/server/ai/template";
 import { getMuse } from "@/server/engines";
 import { clearVideoBlocked, getVideoBlocked } from "@/server/engines/muse-block";
@@ -131,8 +131,9 @@ export async function setJobFeatured(id: string, input: unknown) {
 // ---------- AI Gateway ----------
 
 export async function getGatewayAdmin() {
-  const [setting, health] = await Promise.all([getGatewaySetting(), getGatewayHealth()]);
-  return { setting, health };
+  const [setting, health, cooldowns] = await Promise.all([getGatewaySetting(), getGatewayHealth(), getCooldowns()]);
+  // cooldowns: provider đang hết quota → số giây còn lại trước khi gateway dùng lại.
+  return { setting, health, cooldowns };
 }
 
 export async function putGatewayAdmin(input: unknown) {

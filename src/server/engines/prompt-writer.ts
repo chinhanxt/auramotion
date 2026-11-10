@@ -85,16 +85,16 @@ export async function loadSkill(skillId: string, kind: PromptSkill["kind"], plan
 
 // Từ khóa (không dấu) gợi ý skill hợp với ý tưởng; skill mới không có ở đây thì dùng tên + mô tả của skill.
 const SKILL_HINTS: Record<string, string[]> = {
-  "image-product-hero": ["san pham", "chai", "lo", "hop", "my pham", "nuoc hoa", "dong ho", "giay", "tui", "quang cao", "product", "packshot", "ban hang", "shop", "kem", "son"],
+  "image-product-hero": ["san pham", "chai", "hop qua", "my pham", "nuoc hoa", "dong ho", "doi giay", "giay the thao", "giay dep", "tui xach", "quang cao", "product", "packshot", "ban hang", "shop", "kem duong", "son moi", "serum", "tai nghe", "dien thoai"],
   "image-character-lock": ["nhan vat", "mascot", "linh vat", "character", "con meo", "con cho", "chu meo", "chu cho", "be gai", "be trai", "nhat quan"],
   "image-cinematic-frame": ["dien anh", "canh phim", "cinematic", "khung hinh", "phim", "bau khong khi", "toi", "mua dem"],
-  "image-food-drink": ["mon an", "do an", "do uong", "pho", "bun", "banh", "ca phe", "cafe", "tra sua", "tra", "nuoc ep", "cocktail", "food", "an uong", "nha hang", "quan an", "com"],
+  "image-food-drink": ["mon an", "do an", "do uong", "pho", "bun", "banh", "banh mi", "banh xeo", "bun cha", "com tam", "xoi", "che", "lau", "nuong", "thit", "gion", "hai san", "ca phe", "cafe", "tra sua", "tra", "nuoc ep", "sinh to", "cocktail", "food", "an uong", "nha hang", "quan an", "com", "boc khoi", "ngon"],
   "image-portrait-fashion": ["chan dung", "nguoi mau", "thoi trang", "ao dai", "outfit", "trang phuc", "portrait", "fashion", "co gai", "chang trai", "lookbook"],
   "image-vietnam-landscape": ["phong canh", "du lich", "ha long", "hoi an", "sapa", "da lat", "ruong bac thang", "bien", "nui", "pho co", "landscape", "travel", "hue", "mien tay"],
   "video-one-move": ["canh", "khung canh", "scene"],
-  "video-product-reveal": ["san pham", "chai", "hop", "my pham", "nuoc hoa", "giay", "tui", "quang cao", "product", "ban hang", "shop", "unbox"],
+  "video-product-reveal": ["san pham", "chai", "hop qua", "my pham", "nuoc hoa", "doi giay", "giay the thao", "tui xach", "quang cao", "product", "ban hang", "shop", "unbox", "serum", "dong ho"],
   "video-character-motion": ["nhan vat", "mascot", "con meo", "con cho", "chu meo", "chu cho", "be gai", "be trai", "di bo", "chay", "nhay mua", "character"],
-  "video-food-motion": ["mon an", "do an", "do uong", "pho", "bun", "banh", "ca phe", "cafe", "tra sua", "nuoc ep", "khoi boc", "rot", "food", "nau an"],
+  "video-food-motion": ["mon an", "do an", "do uong", "pho", "bun", "banh", "banh mi", "banh xeo", "bun cha", "com tam", "lau", "nuong", "thit", "gion", "ca phe", "cafe", "tra sua", "nuoc ep", "sinh to", "boc khoi", "rot", "food", "nau an", "ngon"],
   "video-travel-scenic": ["phong canh", "du lich", "ha long", "hoi an", "sapa", "da lat", "ruong bac thang", "bien", "nui", "flycam", "drone", "travel", "hoang hon", "binh minh"],
   "video-fashion-showcase": ["thoi trang", "outfit", "trang phuc", "ao dai", "vay", "nguoi mau", "catwalk", "fashion", "lookbook", "mac do"],
   "video-animate-still": [],
@@ -128,7 +128,11 @@ export function chooseSkill<T extends Pick<PromptSkill, "slug" | "name" | "descr
   for (const s of [...skills].sort((a, b) => a.sort - b.sort)) {
     const hints = SKILL_HINTS[s.slug] ?? fold(`${s.name} ${s.description}`).split(" ").filter((w) => w.length > 3);
     let score = 0;
-    for (const h of hints) if (h && text.includes(` ${h} `)) score += h.includes(" ") ? 2 : 1;
+    for (const h of hints) {
+      if (!h) continue;
+      const hits = text.split(` ${h} `).length - 1;
+      score += hits * (h.includes(" ") ? 2 : 1);
+    }
     if (score > bestScore) {
       best = s;
       bestScore = score;
