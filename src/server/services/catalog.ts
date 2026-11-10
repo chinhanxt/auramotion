@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getVideoBlocked } from "@/server/engines/muse-block";
 import { getActivePlan } from "@/server/services/plan";
 import { getSetting } from "@/server/services/settings";
+import { sortByVendor } from "@/server/services/model-naming";
 import { getStorySetting } from "@/server/services/story";
 
 export type CatalogKind = "image" | "video" | "assemble" | "story";
@@ -49,7 +50,13 @@ export async function getCatalog(userId: string, kind: CatalogKind) {
   const videoUnavailable = usesVideo && models.some((m) => m.provider === "MUSE") ? Boolean(await getVideoBlocked()) : false;
   const story = kind === "story" ? await getStorySetting() : undefined;
   return {
-    models: models.map((m) => ({ ...m, options: publicOptions(m.options), locked: m.minPlanRank > plan.rank })),
+    // Nhóm theo hãng (Muse, Google, Anthropic, OpenAI, local) rồi theo sort. Chỉ lộ verified.ok.
+    models: sortByVendor(models).map(({ verified, source: _source, ...m }) => ({
+      ...m,
+      options: publicOptions(m.options),
+      verified: verifiedOk(verified),
+      locked: m.minPlanRank > plan.rank,
+    })),
     presets,
     skills: skills.map(({ minPlanRank, ...s }) => ({ ...s, locked: minPlanRank > plan.rank })),
     plan,
@@ -90,6 +97,10 @@ export async function getExplore(cursor?: string) {
     }),
     nextCursor: rows.length > EXPLORE_PAGE ? page[page.length - 1].id : null,
   };
+}
+
+function verifiedOk(v: unknown): { ok: boolean } | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? { ok: (v as { ok?: unknown }).ok === true } : null;
 }
 
 // Bỏ cấu hình nội bộ (vd museAccount) trước khi trả options model cho trình duyệt.

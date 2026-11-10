@@ -20,7 +20,7 @@ vi.mock("@/lib/auth", async () => {
 const { GET } = await import("@/app/api/catalog/route");
 
 type CatalogBody = {
-  models: { name: string; kind: string; locked: boolean }[];
+  models: { name: string; kind: string; locked: boolean; vendor: string; displayName: string; badge: string; etaSec: number | null; verified: unknown; source?: string }[];
   presets: { kind: string; name: string }[];
   plan: { code: string; rank: number };
   music?: { id: string; name: string; file: string }[];
@@ -52,7 +52,28 @@ describe("GET /api/catalog", () => {
     expect(byName["MUSE Ảnh"].locked).toBe(false);
     expect(byName["Gemini Ảnh"].locked).toBe(false);
     expect(body.models.every((m) => m.kind === "IMAGE")).toBe(true);
-    expect(body.models.map((m) => m.name)).toEqual(["MUSE Ảnh", "Gemini Ảnh", "Codex Ảnh"]);
+    // Nhóm theo hãng (muse → google → anthropic → openai) rồi theo sort.
+    expect(body.models.map((m) => `${m.vendor}:${m.displayName}`)).toEqual([
+      "muse:Muse Image",
+      "google:Gemini 3.8 Flash",
+      "google:Gemini 3.8 Flash · Medium",
+      "google:Gemini 4 Argon",
+      "anthropic:Claude Sonnet 5.5",
+      "anthropic:Claude Opus 5.5",
+      "openai:GPT-6 Luna",
+      "openai:GPT-6 Astra",
+      "openai:GPT-6.1 Sol",
+      "openai:GPT-6 Sol",
+      "openai:GPT-6.1 Terra",
+      "openai:GPT-5.6 Sol",
+      "openai:GPT-5.6 Terra",
+      "openai:GPT-5.6 Luna",
+    ]);
+    // Chỉ lộ verified.ok (không testedAt / lỗi / ảnh mẫu), không lộ source.
+    expect(byName["agy:gemini-3.8-flash-low:IMAGE"]).toMatchObject({ badge: "Nhanh", etaSec: 24, verified: { ok: true } });
+    expect(byName["agy:gemini-3.8-flash-low:IMAGE"].verified).toEqual({ ok: true });
+    expect(byName["Gemini Ảnh"].verified).toBeNull();
+    expect(body.models.some((m) => "source" in m)).toBe(false);
     expect(body.presets.length).toBeGreaterThan(0);
     expect(body.presets.every((p) => p.kind === "STYLE")).toBe(true);
     expect(body.music).toBeUndefined();
