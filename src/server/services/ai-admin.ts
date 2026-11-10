@@ -244,14 +244,15 @@ export async function getFlow() {
   });
   edges.push({ from: "gateway", to: "skill" });
 
-  const chainNodes = (prefix: "writer" | "story", role: AiRoles["writer"], from: string) => {
+  const TITLE = { writer: "Viết prompt", story: "Kịch bản", router: "Chọn skill AI" } as const;
+  const chainNodes = (prefix: "writer" | "story" | "router", role: AiRoles["writer"], from: string) => {
     role.chain.forEach((step, i) => {
       const id = `${prefix}:${i}`;
       const profile = step.provider === "codex" ? step.profile || roles.codex.profile : undefined;
       nodes.push({
         id,
         kind: "writer",
-        title: `${prefix === "writer" ? "Viết prompt" : "Kịch bản"} #${i + 1}`,
+        title: `${TITLE[prefix]} #${i + 1}`,
         subtitle: [step.provider, step.model, step.effort].filter(Boolean).join(" · "),
         ai: { provider: step.provider, ...(step.model ? { model: step.model } : {}), ...(profile ? { account: profile } : {}) },
       });
@@ -263,6 +264,8 @@ export async function getFlow() {
   };
   chainNodes("writer", roles.writer, "skill");
   chainNodes("story", roles.story, "gateway");
+  // Bộ chọn skill 2 tầng: luật lọc 10 ứng viên, chưa rõ thì hỏi chuỗi `router`.
+  chainNodes("router", roles.router, "skill");
 
   for (const m of models) {
     const account = museAccountOf(m.options);
