@@ -273,7 +273,7 @@ async function insertJobs(userId: string, plan: Plan, items: Prepared[]): Promis
           params: { ...p, ...(opts.extraParams ?? {}) } as Prisma.InputJsonObject,
           inputUrl: p.kind === "assemble" ? null : (p.inputUrl ?? null),
           cost,
-          expiresAt: plan.code === "free" ? new Date(now.getTime() + FREE_RESULT_TTL_MS) : null,
+          expiresAt: plan.code === "free" && !opts.free ? new Date(now.getTime() + FREE_RESULT_TTL_MS) : null,
           storyId: opts.storyId ?? null,
           shotIndex: opts.shotIndex ?? null,
           queuedAt: opts.enqueue === false ? null : now,
@@ -390,6 +390,7 @@ export async function finishJob(
     return;
   }
   const urls: string[] = [];
+  let meta: { width: number; height: number; durationSec?: number } | null = null;
   try {
     for (const [i, f] of files.entries()) {
       const key = `results/${job.userId}/${job.id}/${i}${extOf(f, job.kind)}`;
@@ -401,7 +402,13 @@ export async function finishJob(
       }
       // File tải về hỏng (Muse từng trả mp4 cụt): BAD_MEDIA, BullMQ chạy lại để tải / tạo lại.
       const stored = storagePath(key);
-      await validateMedia(stored, mediaKindOf(stored, job.kind === "IMAGE" ? "image" : "video"));
+      const kind = mediaKindOf(stored, job.kind === "IMAGE" ? "image" : "video");
+      const info = await validateMedia(stored, kind);
+      meta ??= {
+        width: info.width,
+        height: info.height,
+        ...(kind === "video" ? { durationSec: Math.round(info.duration * 100) / 100 } : {}),
+      };
     }
   } catch (err) {
     await deleteByUrls(urls);
@@ -410,7 +417,15 @@ export async function finishJob(
   const done = await db.$transaction(async (tx) => {
     const updated = await tx.job.updateMany({
       where: { id: jobId, status: "RUNNING" },
-      data: { status: "SUCCEEDED", resultUrls: urls, finishedAt: new Date(), error: null, progress: 100 },
+      data: {
+        status: "SUCCEEDED",
+        resultUrls: urls,
+        finishedAt: new Date(),
+        error: null,
+        progress: 100,
+        // Kích thước / thời lượng thật đo bằng ffprobe (params.result).
+        ...(meta ? { params: { ...(job.params as Prisma.JsonObject), result: meta } as Prisma.InputJsonObject } : {}),
+      },
     });
     if (updated.count === 0) return false;
     await charge(jobId, tx);

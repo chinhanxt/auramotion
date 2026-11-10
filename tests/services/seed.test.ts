@@ -63,7 +63,7 @@ describe("seed", () => {
       expect(s.instructions).toContain('"shots"');
       expect(s.template).toContain("{{shots}}");
     }
-    expect(await getSetting("muse_slots")).toEqual({ image: 2, video: 2, chat: 1, gapSec: 20, sendVideoAspect: false });
+    expect(await getSetting("muse_slots")).toEqual({ image: 2, video: 3, chat: 1, gapSec: 15, sendVideoAspect: true });
   });
 
   it("gives admin the free plan", async () => {

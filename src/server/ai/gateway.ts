@@ -33,6 +33,10 @@ export type AiTextInput = {
   // Muse: khóa hội thoại (chat chính), cùng khóa = cùng thread.
   threadKey?: string;
   signal?: AbortSignal;
+  // Kiểm / đọc chữ AI trả (ném lỗi = chưa đạt). Kết quả trả về ở `data`.
+  validate?: (text: string) => unknown;
+  // Muse (có threadKey): chưa đạt thì nhắn thêm 1 câu trong CÙNG thread trước khi chuyển provider.
+  followUp?: string;
 };
 
 export type AiTextResult = { text: string; data?: unknown; provider: AiProvider; ms: number };
@@ -156,9 +160,18 @@ export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promis
     const timeout = AbortSignal.timeout(setting.timeoutSec * 1000);
     const signal = input.signal ? AbortSignal.any([timeout, input.signal]) : timeout;
     try {
-      const text = await runners[provider]({ prompt: input.prompt, system: input.system, threadKey: input.threadKey, signal, setting });
+      let text = await runners[provider]({ prompt: input.prompt, system: input.system, threadKey: input.threadKey, signal, setting });
       let data: unknown;
-      if (input.json) {
+      if (input.validate) {
+        try {
+          data = input.validate(text);
+        } catch (first) {
+          if (!(input.followUp && provider === "muse" && input.threadKey)) throw first;
+          console.warn(`[ai] muse trả chưa đạt, nhắn lại trong thread ${input.threadKey}: ${(first as Error).message.slice(0, 200)}`);
+          text = await runners.muse({ prompt: input.followUp, threadKey: input.threadKey, signal, setting });
+          data = input.validate(text);
+        }
+      } else if (input.json) {
         data = extractJson(text);
         if (data === undefined || data === null || typeof data !== "object") {
           throw new EngineError("BAD_OUTPUT", `${provider} không trả JSON: ${text.slice(0, 200)}`);
@@ -166,7 +179,7 @@ export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promis
       }
       const ms = Date.now() - started;
       await recordHealth(provider, true, ms);
-      return { text, ...(input.json ? { data } : {}), provider, ms };
+      return { text, ...(input.json || input.validate ? { data } : {}), provider, ms };
     } catch (err) {
       const ms = Date.now() - started;
       const message = (err as Error).message ?? String(err);

@@ -58,8 +58,9 @@ export function mediaKindOf(file: string, fallback: "image" | "video"): "image" 
   return VIDEO_EXTS.some((e) => lower.endsWith(e)) ? "video" : fallback;
 }
 
-// File hỏng → EngineError BAD_MEDIA (retryable: tải / tạo lại).
-export async function validateMedia(file: string, kind: "image" | "video"): Promise<void> {
+// File hỏng → EngineError BAD_MEDIA (retryable: tải / tạo lại). Trả kích thước / thời lượng thật.
+// Thời lượng khác yêu cầu (Muse đôi khi trả 10 s khi xin 5 s) không phải lỗi.
+export async function validateMedia(file: string, kind: "image" | "video"): Promise<ProbeResult> {
   const info = await probeMedia(file);
   if (!info?.hasVideo || info.width <= 0 || info.height <= 0) {
     throw new EngineError("BAD_MEDIA", `File ${kind} không đọc được`, true);
@@ -73,6 +74,7 @@ export async function validateMedia(file: string, kind: "image" | "video"): Prom
     const dec = await run(ffmpegBin(), ["-v", "error", "-xerror", "-i", file, "-frames:v", "1", "-f", "null", "-"]);
     if (dec.code !== 0) throw new EngineError("BAD_MEDIA", `Ảnh hỏng: ${dec.stderr.slice(-200)}`, true);
   }
+  return info;
 }
 
 // Khung cuối của video → ảnh PNG (khung đầu cho cảnh kế tiếp ở chế độ CHAIN).

@@ -9,7 +9,8 @@ import { getSetting } from "@/server/services/settings";
 export type SlotType = "image" | "video" | "chat";
 export type MuseSlots = { image: number; video: number; chat: number; gapSec: number; sendVideoAspect: boolean };
 
-export const DEFAULT_MUSE_SLOTS: MuseSlots = { image: 2, video: 2, chat: 1, gapSec: 20, sendVideoAspect: false };
+// Đo thật 10/11: 3 video song song (gửi cách 20 s) ~61 s; gửi size thì Muse ra đúng tỷ lệ (9:16 → 720×1280).
+export const DEFAULT_MUSE_SLOTS: MuseSlots = { image: 2, video: 3, chat: 1, gapSec: 15, sendVideoAspect: true };
 export const SLOT_TYPES: SlotType[] = ["image", "video", "chat"];
 
 const LEASE_MS = 60_000;

@@ -73,7 +73,7 @@ const SETTINGS: Record<string, Prisma.InputJsonValue> = {
   prompt_writer: { provider: "agy", model: "claude-sonnet-5-5-low" },
   music_tracks: MUSIC_TRACKS,
   ai_gateway: { order: ["agy", "codex", "muse"], agyModel: "claude-sonnet-5-5-low", codexModel: "", timeoutSec: 120 },
-  muse_slots: { image: 2, video: 2, chat: 1, gapSec: 20, sendVideoAspect: false },
+  muse_slots: { image: 2, video: 3, chat: 1, gapSec: 15, sendVideoAspect: true },
   story: { planCost: 0.5, maxShots: 8, planner: "muse", assemble: { subtitles: false, keepClipAudio: true } },
 };
 

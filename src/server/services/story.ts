@@ -10,6 +10,7 @@ import { publishEvent } from "@/lib/events";
 import { storyQueue } from "@/lib/queue";
 import { putFile, storagePath } from "@/lib/storage";
 import { aiText, extractJson, type AiProvider, type GatewayDeps } from "@/server/ai/gateway";
+import { repairStoryJson } from "@/server/ai/json-repair";
 import { presetText, renderTemplate } from "@/server/ai/template";
 import { extractLastFrame } from "@/server/engines/media";
 import { loadPreset, loadSkill } from "@/server/engines/prompt-writer";
@@ -36,6 +37,8 @@ export type StorySetting = {
   planner: AiProvider;
   assemble: { musicId?: string; subtitles?: boolean; keepClipAudio?: boolean };
 };
+
+export const PLAN_FOLLOW_UP = "Return only valid JSON, shots must be an array.";
 
 export const DEFAULT_STORY_SETTING: StorySetting = {
   planCost: 0.5,
@@ -162,7 +165,11 @@ function str(v: unknown, max: number): string {
 // Đọc kịch bản AI trả: chấp nhận chữ có ```json, mảng shots trần, tên trường khác (description/text);
 // cắt bớt nếu thừa cảnh, lỗi nếu < 2 cảnh. Thời lượng mỗi cảnh luôn theo story.
 export function parseStoryPlan(raw: unknown, opts: { shotCount: number; durationSec: number }): { title: string; plan: StoryPlan } {
-  const data = typeof raw === "string" ? (extractJson(raw) ?? tryArray(raw)) : raw;
+  let data: unknown = raw;
+  if (typeof raw === "string") {
+    const direct = extractJson(raw) as { shots?: unknown } | undefined;
+    data = direct && Array.isArray(direct.shots) && direct.shots.length ? direct : (repairStoryJson(raw) ?? tryArray(raw));
+  }
   const obj = (Array.isArray(data) ? { shots: data } : (data ?? {})) as { title?: unknown; shots?: unknown; scenes?: unknown };
   const list = Array.isArray(obj.shots) ? obj.shots : Array.isArray(obj.scenes) ? obj.scenes : [];
   const shots: StoryPlanShot[] = [];
@@ -297,17 +304,19 @@ export async function planStory(storyId: string, deps: GatewayDeps = {}): Promis
 
   let parsed: ReturnType<typeof parseStoryPlan>;
   try {
+    const opts = { shotCount: story.shotCount, durationSec: story.shotDurationSec };
     const res = await aiText(
       {
         prompt,
         system: skill?.instructions ?? FALLBACK_SYSTEM,
-        json: true,
+        validate: (text) => parseStoryPlan(text, opts),
+        followUp: PLAN_FOLLOW_UP,
         provider: story.planner as AiProvider,
         threadKey: story.threadKey,
       },
       deps,
     );
-    parsed = parseStoryPlan(res.data ?? res.text, { shotCount: story.shotCount, durationSec: story.shotDurationSec });
+    parsed = res.data as ReturnType<typeof parseStoryPlan>;
   } catch (err) {
     console.warn(`[story] lập kịch bản ${storyId} lỗi: ${(err as Error).message.slice(0, 300)}`);
     await failPlanning(storyId, "PLAN_FAILED");
