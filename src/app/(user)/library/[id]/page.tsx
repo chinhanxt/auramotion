@@ -5,7 +5,8 @@ import { Badge, Notice } from "@/components/ui/Bits";
 import { Icon } from "@/components/ui/Icon";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { STATUS_LABEL, STATUS_TONE, formatCredit, jobErrorText } from "@/lib/api-client";
+import { JobPrompt } from "@/components/library/JobPrompt";
+import { ACTIVE_STATUSES, STATUS_LABEL, STATUS_TONE, formatCredit, jobErrorText, type WriteParams } from "@/lib/api-client";
 
 export const metadata = { title: "Chi tiết · AuraMotion" };
 
@@ -17,7 +18,7 @@ type Params = {
   presetId?: string;
   clips?: unknown[];
   lines?: string[];
-};
+} & WriteParams;
 
 const KIND_LABEL = { IMAGE: "Ảnh", VIDEO: "Video", ASSEMBLE: "Video ghép" } as const;
 
@@ -47,6 +48,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   if (job.finishedAt) rows.push(["Xong lúc", formatDate(job.finishedAt)]);
   if (job.expiresAt) rows.push(["Lưu đến", formatDate(job.expiresAt)]);
   const progress = (job as unknown as { progress?: number }).progress;
+  const writing = ACTIVE_STATUSES.includes(job.status) && Boolean(p.autoWrite && !p.written);
 
   return (
     <div className="px-3 pt-3 pb-10 sm:px-5 lg:px-6">
@@ -59,12 +61,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </Badge>
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
-        <MediaViewer job={{ id: job.id, kind: job.kind, status: job.status, resultUrls: job.resultUrls, prompt: job.prompt, aspect, progress }} />
+        <MediaViewer job={{ id: job.id, kind: job.kind, status: job.status, resultUrls: job.resultUrls, prompt: job.prompt, aspect, progress, writing, skillName: p.skillName }} />
         <aside className="space-y-5 self-start rounded-m4 bg-s1 p-5 hairline lg:sticky lg:top-[72px]">
-          <div className="space-y-2">
-            <h2 className="t-label">{job.kind === "ASSEMBLE" ? "Lời thoại" : "Prompt"}</h2>
-            <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-fg/90">{job.prompt}</p>
-          </div>
+          <JobPrompt prompt={job.prompt} params={p} label={job.kind === "ASSEMBLE" ? "Lời thoại" : "Prompt"} writing={writing} />
           {job.status === "FAILED" && (
             <Notice tone="danger" icon="alert">
               Tạo thất bại{job.error ? `: ${jobErrorText(job.error)}` : ""}. Credit đã được hoàn.

@@ -35,8 +35,24 @@ export function useInView<T extends Element>(ref: React.RefObject<T | null>) {
 
 const POSITIONED = /(^|\s)(absolute|fixed|relative|sticky)(\s|$)/;
 
-// Ảnh hiện dần (blur → nét) khi tải xong.
-export function FadeImage({ src, alt, className, imgClassName, style }: { src: string; alt: string; className?: string; imgClassName?: string; style?: React.CSSProperties }) {
+// Ảnh hiện dần (blur → nét) khi tải xong. `skeleton={false}`: để nền của cha (gradient) hiện trong lúc tải.
+export function FadeImage({
+  src,
+  alt,
+  className,
+  imgClassName,
+  style,
+  skeleton = true,
+  onError,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  imgClassName?: string;
+  style?: React.CSSProperties;
+  skeleton?: boolean;
+  onError?: () => void;
+}) {
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement>(null);
   useEffect(() => {
@@ -44,7 +60,7 @@ export function FadeImage({ src, alt, className, imgClassName, style }: { src: s
   }, []);
   return (
     <span className={cx("block overflow-hidden", !POSITIONED.test(className ?? "") && "relative", className)} style={style}>
-      {!loaded && <span className="skel absolute inset-0" aria-hidden="true" />}
+      {!loaded && skeleton && <span className="skel absolute inset-0" aria-hidden="true" />}
       <img
         ref={ref}
         src={src}
@@ -52,6 +68,7 @@ export function FadeImage({ src, alt, className, imgClassName, style }: { src: s
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
+        onError={onError}
         className={cx("h-full w-full object-cover", loaded ? "blur-in" : "opacity-0", imgClassName)}
       />
     </span>
@@ -59,18 +76,27 @@ export function FadeImage({ src, alt, className, imgClassName, style }: { src: s
 }
 
 // Video tắt tiếng: chỉ phát khi đang trong màn hình (autoplay) hoặc khi rê chuột (hover); rời màn hình thì dừng.
+// `plain`: không nền / skeleton (nền của cha hiện trong lúc tải); `onError` để cha rút về nền dự phòng.
 export function SmartVideo({
   src,
   mode = "hover",
   className,
   poster,
   hovering,
+  preload = "metadata",
+  plain,
+  onReady,
+  onError,
 }: {
   src: string;
   mode?: "hover" | "inview";
   className?: string;
   poster?: string;
   hovering?: boolean;
+  preload?: "none" | "metadata" | "auto";
+  plain?: boolean;
+  onReady?: () => void;
+  onError?: () => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const visible = useInView(ref);
@@ -80,6 +106,12 @@ export function SmartVideo({
   useEffect(() => {
     if ((ref.current?.readyState ?? 0) >= 2) setReady(true);
   }, []);
+
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  useEffect(() => {
+    if (ready) onReadyRef.current?.();
+  }, [ready]);
 
   useEffect(() => {
     const v = ref.current;
@@ -94,8 +126,8 @@ export function SmartVideo({
   }, [visible, hovering, mode]);
 
   return (
-    <span className={cx("block overflow-hidden bg-s2", !POSITIONED.test(className ?? "") && "relative", className)}>
-      {!ready && <span className="skel absolute inset-0" aria-hidden="true" />}
+    <span className={cx("block overflow-hidden", !plain && "bg-s2", !POSITIONED.test(className ?? "") && "relative", className)}>
+      {!ready && !plain && <span className="skel absolute inset-0" aria-hidden="true" />}
       <video
         ref={ref}
         src={`${src}#t=0.1`}
@@ -103,9 +135,10 @@ export function SmartVideo({
         muted
         loop
         playsInline
-        preload="metadata"
+        preload={preload}
         onLoadedData={() => setReady(true)}
         onCanPlay={() => setReady(true)}
+        onError={onError}
         className={cx("h-full w-full object-cover transition-opacity duration-500", ready ? "opacity-100" : "opacity-0")}
       />
     </span>

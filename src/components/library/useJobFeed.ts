@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useJobEvents, useRealtime } from "@/components/realtime/Events";
-import { ACTIVE_STATUSES, api, type GenKind, type JobEvent, type JobItem, type JobStatus } from "@/lib/api-client";
+import { ACTIVE_STATUSES, api, isWriting, writeParams, type GenKind, type JobEvent, type JobItem, type JobStatus } from "@/lib/api-client";
 
 type Page = { items: JobItem[]; nextCursor: string | null };
 
@@ -18,22 +18,51 @@ export function toEvent(j: JobItem): JobEvent {
     storyId: j.storyId ?? null,
     shotIndex: j.shotIndex ?? null,
     kind: j.kind,
+    prompt: j.prompt,
+    stage: j.stage,
+    written: writeParams(j).written,
   };
 }
 
 export function applyEvent(j: JobItem, e: JobEvent): JobItem {
-  if (j.status === e.status && j.progress === e.progress && (e.resultUrls === undefined || e.resultUrls.length === j.resultUrls.length)) return j;
+  const prompt = e.prompt ?? j.prompt;
+  const stage = e.stage ?? j.stage;
+  const newWritten = e.written && !writeParams(j).written;
+  if (
+    j.status === e.status &&
+    j.progress === e.progress &&
+    (e.resultUrls === undefined || e.resultUrls.length === j.resultUrls.length) &&
+    prompt === j.prompt &&
+    stage === j.stage &&
+    !newWritten
+  )
+    return j;
   return {
     ...j,
     status: e.status,
     progress: e.progress ?? j.progress,
     resultUrls: e.resultUrls ?? j.resultUrls,
     error: e.error !== undefined ? e.error : j.error,
+    prompt,
+    stage,
+    params: newWritten ? { ...j.params, written: e.written } : j.params,
   };
 }
 
 function changed(a: JobItem, b: JobItem) {
-  return a.status !== b.status || a.progress !== b.progress || a.resultUrls.length !== b.resultUrls.length;
+  return (
+    a.status !== b.status ||
+    a.progress !== b.progress ||
+    a.resultUrls.length !== b.resultUrls.length ||
+    a.prompt !== b.prompt ||
+    Boolean(writeParams(a).written) !== Boolean(writeParams(b).written)
+  );
+}
+
+// Job autoWrite đã viết xong nhưng sự kiện chưa kèm `written` → tải lại job một lần để có skill · người viết.
+function needsWritten(j: JobItem) {
+  const p = writeParams(j);
+  return Boolean(p.autoWrite && !p.written && !isWriting(j) && j.status !== "FAILED" && j.status !== "CANCELED");
 }
 
 // Poll job đang chạy khi SSE chưa sẵn: kết quả phát qua bus để toast + mọi danh sách cùng cập nhật.
@@ -133,6 +162,26 @@ export function useJobFeed({ kind, status }: { kind?: GenKind; status?: JobStatu
     });
   });
   useActivePolling(items);
+
+  // Bổ sung params.written cho job vừa viết xong (mỗi job một lần).
+  const fetchedWritten = useRef(new Set<string>());
+  useEffect(() => {
+    const ids = items.filter((j) => needsWritten(j) && !fetchedWritten.current.has(j.id)).map((j) => j.id);
+    if (ids.length === 0) return;
+    ids.forEach((id) => fetchedWritten.current.add(id));
+    api<Page>(`/api/jobs?ids=${ids.join(",")}`)
+      .then(({ items: fresh }) => {
+        const map = new Map(fresh.map((f) => [f.id, f]));
+        setItems((list) =>
+          list.map((j) => {
+            const f = map.get(j.id);
+            const written = f && writeParams(f).written;
+            return written ? { ...j, prompt: f.prompt, params: { ...j.params, ...f.params, written } } : j;
+          }),
+        );
+      })
+      .catch(() => {});
+  }, [items]);
 
   const prepend = useCallback((job: JobItem) => setItems((l) => [job, ...l.filter((j) => j.id !== job.id)]), []);
   const remove = useCallback((id: string) => setItems((l) => l.filter((j) => j.id !== id)), []);

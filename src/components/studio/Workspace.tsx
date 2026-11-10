@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TileAction } from "@/components/library/JobTile";
 import { useJobFeed } from "@/components/library/useJobFeed";
 import { useCreditBalance } from "@/components/realtime/Events";
@@ -14,7 +14,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Overlay";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, api, formatCredit, planLabel, postJson, type Catalog, type CatalogModel, type JobItem } from "@/lib/api-client";
-import { AiWriteButton, AspectMenu, AutoTextarea, EngineMenu, GenerateButton, RATIO_LABEL, RatioShape, ToolButton } from "./Composer";
+import { AiWriteControl, AspectMenu, AutoTextarea, EngineMenu, GenerateButton, RATIO_LABEL, RatioShape, ToolButton } from "./Composer";
 import { describeError, toApiError, useErrorToast } from "./errors";
 import { GenerationFeed, JustifiedSkeleton } from "./GenerationFeed";
 import { PresetCover, PresetGallery } from "./PresetGallery";
@@ -31,7 +31,29 @@ type SavedParams = {
   durationSec?: number;
   presetId?: string;
   inputUrl?: string;
+  idea?: string;
+  autoWrite?: boolean;
+  skillId?: string;
 };
+
+// Chế độ "AI viết" + skill, nhớ theo từng loại (ảnh / video).
+type WritePref = { on: boolean; skillId: string };
+const prefKey = (kind: Kind) => `am:ai-write:${kind}`;
+function readPref(kind: Kind): WritePref {
+  try {
+    const v = JSON.parse(localStorage.getItem(prefKey(kind)) ?? "null") as Partial<WritePref> | null;
+    return { on: v?.on !== false, skillId: typeof v?.skillId === "string" ? v.skillId : "" };
+  } catch {
+    return { on: true, skillId: "" };
+  }
+}
+function writePref(kind: Kind, pref: WritePref) {
+  try {
+    localStorage.setItem(prefKey(kind), JSON.stringify(pref));
+  } catch {
+    // trình duyệt chặn storage
+  }
+}
 
 const QUOTE_DEBOUNCE_MS = 300;
 const IMAGE_ACTIONS: TileAction[] = ["download", "ref", "frame", "remake", "delete"];
@@ -42,6 +64,7 @@ const TEXT = {
     title: "Ảnh",
     unit: "ảnh",
     placeholder: "Mô tả ảnh bạn muốn tạo…",
+    autoPlaceholder: "Kể ý tưởng — AI viết prompt rồi tạo",
     preset: "Phong cách",
     ref: "Ảnh tham chiếu",
     empty: "Ảnh đầu tiên của bạn sẽ hiện ở đây",
@@ -51,6 +74,7 @@ const TEXT = {
     title: "Video",
     unit: "5 giây",
     placeholder: "Mô tả chuyển động bạn muốn…",
+    autoPlaceholder: "Kể ý tưởng chuyển động — AI viết prompt rồi tạo",
     preset: "Camera",
     ref: "Khung đầu",
     empty: "Video đầu tiên của bạn sẽ hiện ở đây",
@@ -79,6 +103,8 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
   const [durationSec, setDurationSec] = useState(5);
   const [presetId, setPresetId] = useState("");
   const [skillId, setSkillId] = useState("");
+  const [autoWrite, setAutoWrite] = useState(true);
+  const pref = useRef<WritePref>({ on: true, skillId: "" });
   const [inputUrl, setInputUrl] = useState<string | null>(initialFrame ?? null);
   const [uploading, setUploading] = useState(false);
   const [cost, setCost] = useState<number | null>(null);
@@ -113,12 +139,21 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
         ]);
         if (cancelled) return;
         setCatalog(cat);
+        const kindSkills = (cat.skills ?? []).filter((s) => s.kind === (kind === "image" ? "IMAGE" : "VIDEO") && !s.locked);
+        const validSkill = (id?: string) => (id && kindSkills.some((s) => s.id === id) ? id : "");
+        pref.current = readPref(kind);
+        setAutoWrite(pref.current.on);
+        setSkillId(validSkill(pref.current.skillId));
         const usable = cat.models.filter((m) => !m.locked);
         const fromSaved = saved?.kind === kind ? usable.find((m) => m.id === saved.modelId) : undefined;
         const first = fromSaved ?? usable[0];
         if (first) applyModel(first, cat.plan.maxDurationSec, saved?.kind === kind ? saved : {});
         if (saved?.kind === kind) {
-          setPrompt(saved.prompt ?? "");
+          // Job do AI viết → nạp lại ý tưởng gốc + bật AI viết; job thủ công → nạp prompt, gửi nguyên văn (không ghi đè lựa chọn đã nhớ).
+          const savedAuto = saved.autoWrite === true && Boolean(saved.idea?.trim());
+          setPrompt(savedAuto ? (saved.idea ?? "") : (saved.prompt ?? ""));
+          setAutoWrite(savedAuto);
+          if (savedAuto && saved.skillId !== undefined) setSkillId(validSkill(saved.skillId));
           setPresetId(cat.presets.some((p) => p.id === saved.presetId) ? (saved.presetId ?? "") : "");
           setInputUrl(saved.inputUrl ?? null);
           if (!fromSaved && saved.modelId) toast.info("Engine cũ không còn dùng được, đã chọn engine khác");
@@ -161,6 +196,23 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
     };
   }, [kind, modelId, aspectRatio, imageCount, durationSec]);
 
+  // Ô trống lại sau khi tạm tắt (Viết vào ô / tạo lại job thủ công) → trở về chế độ đã nhớ.
+  useEffect(() => {
+    if (prompt.trim() === "" && pref.current.on) setAutoWrite(true);
+  }, [prompt]);
+
+  function onToggleWrite(on: boolean) {
+    setAutoWrite(on);
+    pref.current = { ...pref.current, on };
+    writePref(kind, pref.current);
+  }
+
+  function onSkill(id: string) {
+    setSkillId(id);
+    pref.current = { ...pref.current, skillId: id };
+    writePref(kind, pref.current);
+  }
+
   async function onAiWrite() {
     const idea = prompt.trim();
     if (!idea) return toast.info("Nhập ý tưởng vào ô trước");
@@ -176,7 +228,9 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
       });
       if (res.prompt) {
         setPrompt(res.prompt);
-        toast.success("AI đã viết prompt", res.provider ? { body: res.provider } : undefined);
+        // Prompt đã nằm trong ô: Tạo sẽ gửi nguyên văn (không viết lại lần nữa).
+        setAutoWrite(false);
+        toast.success("AI đã viết prompt", { body: `${res.provider ? `${res.provider} · ` : ""}Sửa rồi bấm Tạo` });
       }
     } catch (err) {
       showError(err);
@@ -188,17 +242,27 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
   async function submit() {
     if (!model || !prompt.trim() || submitting || videoBlocked) return;
     setSubmitting(true);
+    const raw = prompt.trim();
+    const skill = autoWrite ? skills.find((s) => s.id === skillId) : undefined;
     try {
       const job = await postJson<JobItem>("/api/jobs", {
         kind,
         modelId,
-        prompt: prompt.trim(),
+        prompt: raw,
         aspectRatio,
         ...(kind === "image" ? { imageCount } : { durationSec }),
         ...(presetId ? { presetId } : {}),
         ...(inputUrl ? { inputUrl } : {}),
+        ...(autoWrite ? { autoWrite: true, ...(skill ? { skillId: skill.id } : {}) } : {}),
       });
-      feed.prepend({ ...job, resultUrls: job.resultUrls ?? [], params: job.params ?? { aspectRatio, imageCount, durationSec } });
+      const params: Record<string, unknown> = { ...(job.params ?? { aspectRatio, imageCount, durationSec }) };
+      // Ô hiện "AI đang viết prompt…" ngay, kể cả khi backend chưa trả đủ params.
+      if (autoWrite) {
+        params.autoWrite ??= true;
+        params.idea ??= raw;
+        if (skill) params.skillName ??= skill.name;
+      }
+      feed.prepend({ ...job, resultUrls: job.resultUrls ?? [], params });
       refreshCredit();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
@@ -331,7 +395,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
                 <AutoTextarea
                   value={prompt}
                   onChange={setPrompt}
-                  placeholder={text.placeholder}
+                  placeholder={autoWrite ? text.autoPlaceholder : text.placeholder}
                   onSubmit={submit}
                   className="min-h-14 py-1.5 pr-1"
                   ariaLabel="Prompt"
@@ -339,12 +403,26 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
               </div>
               <div className="mt-2 flex items-center gap-1.5">
                 <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
-                  <AiWriteButton skills={skills} skillId={skillId} onSkill={setSkillId} onWrite={onAiWrite} pending={aiWriting} compact />
+                  <AiWriteControl
+                    skills={skills}
+                    skillId={skillId}
+                    onSkill={onSkill}
+                    on={autoWrite}
+                    onToggle={onToggleWrite}
+                    onWrite={onAiWrite}
+                    pending={aiWriting}
+                  />
+                  {/* Luồng: AI viết prompt → engine người dùng chọn tạo kết quả */}
+                  {catalog && (
+                    <div className="hidden items-center gap-1 md:flex">
+                      <Icon name="arrowRight" size={14} className={cx("shrink-0", autoWrite ? "text-[#c9bdff]" : "text-dim")} />
+                      <EngineMenu models={catalog.models} value={modelId} onChange={(m) => applyModel(m, maxDuration)} unit={text.unit} />
+                    </div>
+                  )}
                   {presetButton}
                   <div className="hidden items-center gap-1.5 md:flex">
                     <AspectMenu ratios={ratios} value={aspectRatio} onChange={setAspectRatio} />
                     {countControl}
-                    {catalog && <EngineMenu models={catalog.models} value={modelId} onChange={(m) => applyModel(m, maxDuration)} unit={text.unit} />}
                   </div>
                   <ToolButton onClick={() => setSettings(true)} className="md:hidden" aria-label="Thiết lập">
                     <Icon name="sliders" size={16} />

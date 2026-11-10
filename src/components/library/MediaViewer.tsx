@@ -10,12 +10,24 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import { ConfirmDialog } from "@/components/ui/Overlay";
 import { useToast } from "@/components/ui/Toast";
-import { ACTIVE_STATUSES, STATUS_LABEL, api, isVideoUrl, ratioCss, remakeHref, type JobItem, type JobStatus } from "@/lib/api-client";
+import { ACTIVE_STATUSES, STATUS_LABEL, api, isVideoUrl, ratioCss, remakeHref, type JobItem, type JobStage, type JobStatus } from "@/lib/api-client";
+import { WritingLabel, WritingLines } from "./JobPrompt";
 import { downloadName } from "./JobTile";
 
 const REFRESH_MS = 3000;
 
-type ViewerJob = { id: string; kind: JobItem["kind"]; status: JobStatus; resultUrls: string[]; prompt: string; aspect: string; progress?: number };
+type ViewerJob = {
+  id: string;
+  kind: JobItem["kind"];
+  status: JobStatus;
+  resultUrls: string[];
+  prompt: string;
+  aspect: string;
+  progress?: number;
+  // Job autoWrite chưa viết xong prompt.
+  writing?: boolean;
+  skillName?: string;
+};
 
 export function MediaViewer({ job }: { job: ViewerJob }) {
   const router = useRouter();
@@ -25,12 +37,16 @@ export function MediaViewer({ job }: { job: ViewerJob }) {
   const [confirm, setConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [progress, setProgress] = useState(job.progress);
+  const [stage, setStage] = useState<JobStage | undefined>();
   const active = ACTIVE_STATUSES.includes(job.status);
+  const writing = active && (stage ? stage === "writing" : Boolean(job.writing));
 
   useJobEvents((e) => {
     if (e.id !== job.id) return;
     setProgress(e.progress);
-    if (!ACTIVE_STATUSES.includes(e.status)) router.refresh();
+    if (e.stage) setStage(e.stage);
+    // Viết xong prompt / job kết thúc → tải lại để có prompt + skill · người viết.
+    if (!ACTIVE_STATUSES.includes(e.status) || (e.stage === "rendering" && writing)) router.refresh();
   });
 
   useEffect(() => {
@@ -66,10 +82,17 @@ export function MediaViewer({ job }: { job: ViewerJob }) {
           )
         ) : active ? (
           <div className="skel skel-aura w-full max-w-md rounded-m3" style={{ aspectRatio: ratioCss(job.aspect) }}>
-            <div className="absolute inset-x-5 bottom-5 space-y-2">
-              <p className="text-sm font-medium">{STATUS_LABEL[job.status]}…</p>
-              <AuraBar value={progress} />
-            </div>
+            {writing ? (
+              <div className="absolute inset-x-5 bottom-5 space-y-3">
+                <WritingLabel skillName={job.skillName} className="text-sm" />
+                <WritingLines />
+              </div>
+            ) : (
+              <div className="absolute inset-x-5 bottom-5 space-y-2">
+                <p className="text-sm font-medium">{STATUS_LABEL[job.status]}…</p>
+                <AuraBar value={progress} />
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-sm text-muted">Không có kết quả</p>

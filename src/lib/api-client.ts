@@ -46,6 +46,14 @@ export type Catalog = {
   videoUnavailable?: boolean;
 };
 
+// AI Gateway viết prompt cho job (autoWrite): ai viết, skill nào, mất bao lâu.
+export type WriterProvider = "agy" | "codex" | "muse";
+export type WrittenInfo = { provider: WriterProvider; skillSlug: string; skillName: string; ms: number };
+export type JobStage = "writing" | "rendering";
+// Phần params liên quan AI viết: `idea` = ý tưởng gốc, `prompt` của job = prompt đã viết (hoặc ý tưởng khi chưa viết).
+// `skillName` chỉ là gợi ý phía trình duyệt khi vừa gửi (skill đã chọn) để ô hiện tên trong lúc viết.
+export type WriteParams = { idea?: string; autoWrite?: boolean; written?: WrittenInfo; skillName?: string };
+
 export type JobItem = {
   id: string;
   kind: "IMAGE" | "VIDEO" | "ASSEMBLE";
@@ -62,6 +70,8 @@ export type JobItem = {
   params?: Record<string, unknown>;
   inputUrl?: string | null;
   finishedAt?: string | null;
+  // Giai đoạn job autoWrite (từ SSE); không có thì suy từ params.
+  stage?: JobStage;
 };
 
 // Sự kiện SSE `job` (hợp đồng v2 §3).
@@ -74,6 +84,9 @@ export type JobEvent = {
   storyId?: string | null;
   shotIndex?: number | null;
   kind?: JobItem["kind"];
+  stage?: JobStage;
+  prompt?: string;
+  written?: WrittenInfo;
 };
 
 export type StoryStatus = "PLANNING" | "READY" | "RENDERING" | "ASSEMBLING" | "DONE" | "FAILED" | "CANCELED";
@@ -107,6 +120,20 @@ export const STORY_STATUS_LABEL: Record<StoryStatus, string> = {
   FAILED: "Lỗi",
   CANCELED: "Đã hủy",
 };
+
+export function writeParams(job: Pick<JobItem, "params">): WriteParams {
+  return (job.params ?? {}) as WriteParams;
+}
+
+// Job đang chờ AI Gateway viết prompt (ô hiện skeleton "AI đang viết prompt…").
+export function isWriting(job: Pick<JobItem, "status" | "params" | "stage">): boolean {
+  if (!ACTIVE_STATUSES.includes(job.status)) return false;
+  if (job.stage) return job.stage === "writing";
+  const p = writeParams(job);
+  return Boolean(p.autoWrite && !p.written);
+}
+
+export const WRITER_LABEL: Record<WriterProvider, string> = { agy: "agy", codex: "Codex", muse: "Muse" };
 
 export type ExploreItem = { id: string; kind: JobItem["kind"]; prompt: string; resultUrls: string[]; presetName?: string | null };
 export type ThemeItem = CatalogPreset;
@@ -155,6 +182,7 @@ const JOB_ERROR_TEXT: Record<string, string> = {
   REGION_BLOCKED: "tài khoản Muse không được tạo video ở khu vực này",
   MUSE_VIDEO_UNAVAILABLE: "video Muse tạm không khả dụng",
   BAD_MEDIA: "file kết quả hỏng, đang thử lại",
+  WRITE_FAILED: "AI chưa viết được prompt, đã hoàn Credit",
 };
 
 export function jobErrorText(code: string): string {

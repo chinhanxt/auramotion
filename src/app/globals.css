@@ -368,6 +368,33 @@ body {
   animation: am-drift-a 14s linear infinite;
 }
 
+/* AI đang viết prompt: vạch chữ chảy dần */
+@keyframes am-write {
+  0% {
+    transform: scaleX(0);
+    opacity: 0.35;
+  }
+  55%,
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+.write-lines > i {
+  display: block;
+  height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18), rgba(201, 189, 255, 0.32));
+  transform-origin: left;
+  animation: am-write 2.4s var(--ease-out) infinite;
+}
+.write-lines > i:nth-child(2) {
+  animation-delay: 0.45s;
+}
+.write-lines > i:nth-child(3) {
+  animation-delay: 0.9s;
+}
+
 /* Thanh tiến độ aura */
 .aura-bar {
   position: relative;
@@ -644,6 +671,12 @@ body {
 }
 .feature-tile:hover .feature-art {
   transform: translate3d(-6%, -4%, 0) rotate(-4deg);
+}
+.feature-tile .feature-media {
+  transition: opacity 700ms var(--ease-out), transform 1200ms var(--ease-out);
+}
+.feature-tile:hover .feature-media {
+  transform: scale(1.035);
 }
 .feature-tile .feature-frames > * {
   transition: transform 700ms var(--ease-out), opacity 700ms var(--ease-out);
