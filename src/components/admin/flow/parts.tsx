@@ -66,7 +66,17 @@ export const STAT_LABEL: Record<string, string> = {
   limit: "slot",
 };
 
-function Stats({ stats }: { stats?: Record<string, number | string | null | undefined> }) {
+// Số liệu node có thể là số, chữ, true/false hoặc object nhỏ: luôn đổi thành chữ ngắn.
+export function fmtStat(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "boolean") return v ? "bật" : "tắt";
+  if (typeof v === "number" || typeof v === "string") return String(v);
+  if (Array.isArray(v)) return v.map(fmtStat).join(", ");
+  if (typeof v === "object") return Object.entries(v as Record<string, unknown>).filter(([, x]) => x !== null && x !== undefined).map(([k, x]) => `${k} ${fmtStat(x)}`).join(" · ");
+  return String(v);
+}
+
+function Stats({ stats }: { stats?: Record<string, unknown> }) {
   if (!stats) return null;
   const entries = Object.entries(stats).filter(([k, v]) => v !== null && v !== undefined && k !== "limit");
   if (entries.length === 0) return null;
@@ -80,13 +90,13 @@ function Stats({ stats }: { stats?: Record<string, number | string | null | unde
             {k === "ms" ? (
               <>
                 <Icon name="clock" size={10} />
-                {v}
+                {fmtStat(v)}
               </>
             ) : (
               <>
                 <b>
-                  {v}
-                  {k === "active" && limit !== undefined && limit !== null ? <span className="opacity-60">/{limit}</span> : null}
+                  {fmtStat(v)}
+                  {k === "active" && limit !== undefined && limit !== null ? <span className="opacity-60">/{fmtStat(limit)}</span> : null}
                 </b>
                 {STAT_LABEL[k] ?? k}
               </>

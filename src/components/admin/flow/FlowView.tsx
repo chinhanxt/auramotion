@@ -33,7 +33,7 @@ import { usePoll } from "../hooks";
 import { KV, PageHeader } from "../kit";
 import { demoFlow, demoJobs } from "./demo";
 import { buildLayout, buildReplay, realAt, segAt, storyGraph, visualAt, withUi, type PipeNodeData, type Replay } from "./graph";
-import { FlowCtx, LaneNode, PipeEdge, PipeNode, STAT_LABEL, roleOf, type FlowVisual, type NodeLive } from "./parts";
+import { FlowCtx, LaneNode, PipeEdge, PipeNode, STAT_LABEL, roleOf, type FlowVisual, type NodeLive, fmtStat } from "./parts";
 import type { ActiveJob, EdgeVisual, FlowData, FlowGraph, FlowJob, FlowNode, Tab } from "./types";
 
 const nodeTypes = { pipe: PipeNode, lane: LaneNode };
@@ -660,7 +660,7 @@ export function FlowView({ demo = false }: { demo?: boolean }) {
             {open.stats && Object.keys(open.stats).length > 0 && (
               <div className="space-y-2">
                 <h3 className="t-label">Số liệu</h3>
-                <KV items={Object.entries(open.stats).map(([k, val]) => [STAT_LABEL[k] ?? k, <span key={k} className="tabular-nums">{String(val ?? "—")}</span>])} />
+                <KV items={Object.entries(open.stats).map(([k, val]) => [STAT_LABEL[k] ?? k, <span key={k} className="tabular-nums">{fmtStat(val)}</span>])} />
               </div>
             )}
             {hop && replay && (

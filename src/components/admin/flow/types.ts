@@ -29,7 +29,7 @@ export type FlowNode = {
   title: string;
   subtitle?: string;
   ai?: FlowAi;
-  stats?: Record<string, number | string | null | undefined>;
+  stats?: Record<string, unknown>;
   // Story: số thứ tự cảnh; writer của Story: vai "lập kịch bản".
   index?: number;
   role?: "planner";

@@ -82,8 +82,108 @@ export function withUi(g: FlowGraph): FlowGraph {
   };
 }
 
+// Đồ thị thật từ /api/admin/flow chi tiết hơn bản vẽ: gộp 4 hàng đợi, gộp chuỗi router thành 1 nút "AI chọn skill",
+// bỏ chuỗi lập kịch bản ở tab Ảnh/Video, chèn "Kiểm prompt" giữa AI viết và engine nếu backend chưa có.
+export function normalizeGraph(g: FlowGraph, tab: Tab): FlowGraph {
+  let nodes = [...g.nodes];
+  let edges = [...g.edges];
+  const remap = new Map<string, string>();
+  const sumStats = (list: FlowNode[]) => {
+    const out: Record<string, unknown> = {};
+    for (const n of list)
+      for (const [k, v] of Object.entries(n.stats ?? {})) {
+        if (typeof v === "number") out[k] = (typeof out[k] === "number" ? (out[k] as number) : 0) + v;
+        else if (out[k] === undefined) out[k] = v;
+      }
+    return out;
+  };
+
+  const queues = nodes.filter((n) => n.kind === "queue");
+  if (queues.length > 1) {
+    const merged: FlowNode = {
+      id: "queue",
+      kind: "queue",
+      title: "BullMQ",
+      subtitle: queues.map((q) => q.title.replace(/^Hàng đợi\s*/i, "")).join(" · "),
+      stats: sumStats(queues) as FlowNode["stats"],
+    };
+    queues.forEach((q) => remap.set(q.id, merged.id));
+    nodes = [...nodes.filter((n) => n.kind !== "queue"), merged];
+  }
+
+  if (tab === "media") nodes = nodes.filter((n) => !n.id.startsWith("story:"));
+
+  const routers = nodes.filter((n) => n.id.startsWith("router:")).sort((a, b) => a.id.localeCompare(b.id));
+  if (routers.length) {
+    const label = (n: FlowNode) => [n.ai?.provider, n.ai?.model].filter(Boolean).join(" · ") || n.title;
+    const merged: FlowNode = {
+      id: "router",
+      kind: "router",
+      title: "AI chọn skill",
+      subtitle: routers.map(label).join(" → "),
+      ...(routers[0].ai ? { ai: routers[0].ai } : {}),
+      stats: sumStats(routers) as FlowNode["stats"],
+    };
+    routers.forEach((r) => remap.set(r.id, merged.id));
+    nodes = [...nodes.filter((n) => !n.id.startsWith("router:")), merged];
+  }
+
+  const ids = new Set(nodes.map((n) => n.id));
+  edges = edges.map((e) => ({ ...e, from: remap.get(e.from) ?? e.from, to: remap.get(e.to) ?? e.to })).filter((e) => e.from !== e.to && ids.has(e.from) && ids.has(e.to));
+
+  // "Chọn skill" (luật) → "AI chọn skill" → AI viết đầu tiên.
+  if (ids.has("router")) {
+    const skill = nodes.find((n) => n.kind === "skill");
+    const firstWriter = nodes.find((n) => n.id === "writer:0") ?? nodes.find((n) => n.kind === "writer");
+    edges = edges.filter((e) => !(skill && e.from === skill.id && e.to.startsWith("writer")));
+    if (skill) edges.push({ from: skill.id, to: "router" });
+    if (firstWriter) edges.push({ from: "router", to: firstWriter.id });
+  }
+
+  if (tab === "media") {
+    // Luồng thật: AI viết → Kiểm prompt → engine ảnh/video. Ghép video (post) nhận thẳng từ worker.
+    if (!nodes.some((n) => n.kind === "guard")) nodes.push({ id: "guard", kind: "guard", title: "Kiểm prompt", subtitle: "Lint luật Muse + tự sửa" });
+    const guardId = nodes.find((n) => n.kind === "guard")!.id;
+    const kinds = new Map(nodes.map((n) => [n.id, n.kind]));
+    const writers = nodes.filter((n) => n.kind === "writer").map((n) => n.id);
+    const next: FlowEdge[] = [];
+    for (const e of edges) {
+      const fk = kinds.get(e.from);
+      const tk = kinds.get(e.to);
+      if (fk === "writer" && tk === "muse2api") continue;
+      if (fk === "worker" && tk === "executor" && e.label !== "post") {
+        next.push({ from: guardId, to: e.to, label: e.label });
+        continue;
+      }
+      next.push(e);
+    }
+    for (const w of writers) next.push({ from: w, to: guardId });
+    edges = next;
+  }
+
+  // Bỏ cạnh phụ cắt chéo các làn: chỉ người dùng → API, chỉ lưu trữ → realtime / giao diện.
+  const kindOf = new Map(nodes.map((n) => [n.id, n.kind]));
+  edges = edges.filter((e) => {
+    const fk = kindOf.get(e.from);
+    const tk = kindOf.get(e.to);
+    if (fk === "user" && tk !== "api") return false;
+    if (tk === "user") return false;
+    if ((tk === "realtime" || tk === "ui") && fk !== "storage" && fk !== "realtime") return false;
+    return true;
+  });
+
+  const seen = new Set<string>();
+  edges = edges.filter((e) => {
+    const k = `${e.from}->${e.to}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return { nodes, edges };
+}
+
 export function buildLayout(g0: FlowGraph, tab: Tab): { nodes: Node[]; edges: Edge[] } {
-  const g = withUi(g0);
+  const g = withUi(normalizeGraph(g0, tab));
   const { place, lanes, fallbackRow } = LAYOUT[tab];
   const maxCol = Math.max(...Object.values(place).map(([, c]) => c));
   // Gom nút theo ô (hàng, cột); loại lạ xếp sau cùng của hàng cuối.

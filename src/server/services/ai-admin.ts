@@ -231,7 +231,7 @@ export async function getFlow() {
     kind: "gateway",
     title: "AI Gateway",
     subtitle: writerSub,
-    stats: { agyTransport: agyTransport(roles), agyProxy: roles.agy.proxy, acp: { alive: acp.alive, processes: acp.processes, sessions: acp.sessions }, codexProfile: roles.codex.profile },
+    stats: { agyTransport: agyTransport(roles), agyProxy: roles.agy.proxy, acpProcesses: acp.alive ? acp.processes : 0, acpSessions: acp.sessions, codexProfile: roles.codex.profile },
   });
   edges.push({ from: "worker", to: "gateway", label: "autoWrite" });
   edges.push({ from: "api", to: "gateway", label: "prewrite" });
