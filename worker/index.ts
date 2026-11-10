@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { db } from "@/lib/db";
 import { QUEUE_NAMES, queues, storyQueue, type QueueJobData, type QueueName, type StoryJobData } from "@/lib/queue";
 import { redis } from "@/lib/redis";
+import { stopAcp } from "@/server/ai/acp/runtime";
 import { QUEUE_TIMEOUT_MS } from "@/server/services/job";
 import { startCron } from "./cron";
 import { processGenerate } from "./processors/generate";
@@ -63,6 +64,8 @@ async function main(): Promise<void> {
       await Promise.race([closeAll, new Promise((resolve) => setTimeout(resolve, SHUTDOWN_GRACE_MS))]);
       // Hết thời gian chờ: buộc đóng (job dở trả về stalled).
       await Promise.all(workers.map((w) => w.close(true).catch(() => undefined)));
+      // Tắt các tiến trình agy acp của worker (xóa dữ liệu phiên).
+      await stopAcp();
       await Promise.all([...Object.values(queues), storyQueue].map((q) => q.close()));
       await redis.quit();
       await db.$disconnect();
