@@ -20,7 +20,7 @@ import { AI_PROVIDERS, stepLabel, type AiProvider, type ChainStep, type TestResu
 
 type Skill = { id: string; name: string; kind: string; enabled?: boolean };
 type Kind = "image" | "video";
-type Body = { provider: AiProvider; model?: string; effort?: string; skillId?: string; kind: Kind; idea: string };
+type Body = { provider: AiProvider; model?: string; effort?: string; profile?: string; skillId?: string; kind: Kind; idea: string };
 
 const SEG = [
   { key: "startMs", label: "Khởi động", color: "#5c7cff" },
@@ -94,7 +94,7 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
   const candidates = useMemo(() => {
     const out: ChainStep[] = [
       ...models.agy.map((m) => ({ provider: "agy" as const, model: m.id })),
-      ...models.codex.map((m) => ({ provider: "codex" as const, model: m.id, effort: m.defaultEffort ?? m.efforts?.[0] })),
+      ...models.codex.filter((m) => !m.hidden).map((m) => ({ provider: "codex" as const, model: m.id, effort: m.defaultEffort ?? m.efforts?.[0] })),
       { provider: "muse" as const },
     ];
     for (const s of chain) if (!out.some((o) => stepLabel(o) === stepLabel(s))) out.unshift(s);
@@ -102,7 +102,7 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
   }, [models, chain]);
   const sel = picked ?? new Set(chain.map(stepLabel));
 
-  const body = (s: ChainStep): Body => ({ provider: s.provider, ...(s.model ? { model: s.model } : {}), ...(s.effort ? { effort: s.effort } : {}), ...(skillId ? { skillId } : {}), kind, idea: idea.trim() });
+  const body = (s: ChainStep): Body => ({ provider: s.provider, ...(s.model ? { model: s.model } : {}), ...(s.effort ? { effort: s.effort } : {}), ...(s.profile ? { profile: s.profile } : {}), ...(skillId ? { skillId } : {}), kind, idea: idea.trim() });
   const busy = since !== null;
 
   async function runOne() {

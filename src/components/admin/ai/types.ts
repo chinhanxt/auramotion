@@ -4,7 +4,7 @@ import type { ProviderHealth } from "../engine/live";
 export type AiProvider = "agy" | "codex" | "muse";
 export const AI_PROVIDERS: AiProvider[] = ["agy", "codex", "muse"];
 
-export type ChainStep = { provider: AiProvider; model?: string; effort?: string };
+export type ChainStep = { provider: AiProvider; model?: string; effort?: string; profile?: string };
 export type Strategy = "fallback" | "race";
 
 export type AiRoles = {
@@ -18,7 +18,8 @@ export type AiRoles = {
 
 export type Quota = { group: string; pct: number; resetAt?: string | number | null };
 export type AgyAccount = { id: string; email: string; active?: boolean; quota?: Quota[] };
-export type AiModel = { id: string; name?: string; efforts?: string[]; defaultEffort?: string };
+// Codex: `profiles` = các profile có model này (catalog khác nhau theo tài khoản), `hidden` = visibility hide.
+export type AiModel = { id: string; name?: string; efforts?: string[]; defaultEffort?: string; profiles?: string[]; hidden?: boolean };
 
 export type AgyInfo = {
   installed?: boolean;
@@ -29,7 +30,7 @@ export type AgyInfo = {
   proxy?: { enabled?: boolean; port?: number; running?: boolean };
   models?: AiModel[];
 };
-export type CodexProfile = { name: string; loggedIn?: boolean; method?: string | null; active?: boolean };
+export type CodexProfile = { name: string; loggedIn?: boolean; method?: string | null; active?: boolean; models?: AiModel[] };
 export type CodexInfo = { installed?: boolean; version?: string | null; profiles?: CodexProfile[]; models?: AiModel[] };
 export type MuseInfo = { ok?: boolean; accounts?: number | unknown[] | null };
 
@@ -79,8 +80,8 @@ export function normalizeRoles(r?: Partial<AiRoles> | null): AiRoles {
   };
 }
 
-export function stepLabel(s: { provider: string; model?: string | null; effort?: string | null }): string {
-  return [s.provider, s.model, s.effort].filter(Boolean).join(" · ");
+export function stepLabel(s: { provider: string; model?: string | null; effort?: string | null; profile?: string | null }): string {
+  return [s.provider, s.profile && `@${s.profile}`, s.model, s.effort].filter(Boolean).join(" · ");
 }
 
 export function toTime(v: string | number | null | undefined): number | null {

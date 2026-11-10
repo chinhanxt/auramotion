@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/Controls";
 import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import { Segmented } from "@/components/ui/Segmented";
+import { Select } from "@/components/ui/Select";
 import { PROVIDER_LABEL } from "../format";
 import { NumberInput, Panel } from "../kit";
 import { EffortPicker, ModelSelect } from "./ModelSelect";
@@ -21,12 +22,14 @@ export function ChainEditor({
   models,
   strategy = "fallback",
   max = 5,
+  profiles = [],
 }: {
   chain: ChainStep[];
   onChange: (c: ChainStep[]) => void;
   models: ModelLists;
   strategy?: Strategy;
   max?: number;
+  profiles?: string[];
 }) {
   const [drag, setDrag] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
@@ -41,7 +44,7 @@ export function ChainEditor({
   const patch = (i: number, p: Partial<ChainStep>) => onChange(chain.map((s, j) => (j === i ? { ...s, ...p } : s)));
   const setProvider = (i: number, provider: AiProvider) => {
     const m = models[provider][0];
-    patch(i, { provider, model: provider === "muse" ? undefined : m?.id, effort: provider === "codex" ? (m?.defaultEffort ?? m?.efforts?.[0]) : undefined });
+    patch(i, { provider, model: provider === "muse" ? undefined : m?.id, effort: provider === "codex" ? (m?.defaultEffort ?? m?.efforts?.[0]) : undefined, profile: undefined });
   };
 
   return (
@@ -95,12 +98,29 @@ export function ChainEditor({
                 </span>
                 <Segmented size="sm" ariaLabel="Provider" value={s.provider} onChange={(p) => setProvider(i, p)} options={AI_PROVIDERS.map((p) => ({ value: p, label: PROVIDER_LABEL[p] }))} />
                 <div className="flex min-w-0 flex-1 basis-48 items-center gap-2">
+                  {s.provider === "codex" && profiles.length > 1 && (
+                    <Select
+                      inputSize="sm"
+                      aria-label="Profile Codex"
+                      className="w-28 shrink-0"
+                      value={s.profile ?? ""}
+                      onChange={(e) => patch(i, { profile: e.target.value || undefined })}
+                    >
+                      <option value="">Profile chung</option>
+                      {profiles.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
                   {s.provider === "muse" ? (
                     <span className="flex h-9 min-w-0 flex-1 items-center px-1 font-mono text-[12.5px] text-dim">muse-chat</span>
                   ) : (
                     <ModelSelect
                       models={list}
                       value={s.model ?? ""}
+                      profile={s.provider === "codex" ? s.profile : undefined}
                       className="flex-1"
                       onChange={(id) => {
                         const nm = list.find((x) => x.id === id);
@@ -152,13 +172,13 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-export function RolesPanel({ roles, set, models }: { roles: AiRoles; set: (r: AiRoles) => void; models: ModelLists }) {
+export function RolesPanel({ roles, set, models, profiles }: { roles: AiRoles; set: (r: AiRoles) => void; models: ModelLists; profiles?: string[] }) {
   const w = roles.writer;
   return (
     <Panel title="Vai trò AI" icon="route">
       <div className="space-y-6">
         <Section title="AI viết prompt" hint="Ý tưởng → prompt cho engine">
-          <ChainEditor chain={w.chain} strategy={w.strategy} models={models} onChange={(chain) => set({ ...roles, writer: { ...w, chain } })} />
+          <ChainEditor chain={w.chain} strategy={w.strategy} models={models} profiles={profiles} onChange={(chain) => set({ ...roles, writer: { ...w, chain } })} />
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
             <Segmented<Strategy>
               size="sm"
@@ -179,7 +199,7 @@ export function RolesPanel({ roles, set, models }: { roles: AiRoles; set: (r: Ai
         </Section>
         <div className="h-px bg-line" />
         <Section title="Lập kịch bản Story" hint="Chat chính lên kế hoạch các cảnh">
-          <ChainEditor chain={roles.story.chain} models={models} onChange={(chain) => set({ ...roles, story: { chain } })} />
+          <ChainEditor chain={roles.story.chain} models={models} profiles={profiles} onChange={(chain) => set({ ...roles, story: { chain } })} />
         </Section>
         <div className="h-px bg-line" />
         <div className="grid gap-3 sm:grid-cols-2">

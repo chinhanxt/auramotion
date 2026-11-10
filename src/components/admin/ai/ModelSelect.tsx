@@ -8,7 +8,23 @@ import { Popover } from "@/components/ui/Overlay";
 import { Segmented } from "@/components/ui/Segmented";
 import type { AiModel } from "./types";
 
+function ProfileTags({ list, all }: { list?: string[]; all: number }) {
+  if (!list?.length || all <= 1) return null;
+  if (list.length >= all) return <span className="shrink-0 text-[10.5px] text-dim">mọi profile</span>;
+  return (
+    <span className="flex shrink-0 gap-1">
+      {list.slice(0, 2).map((p) => (
+        <span key={p} className="rounded-[5px] bg-white/[.06] px-1.5 py-px font-mono text-[10px] text-muted">
+          {p}
+        </span>
+      ))}
+      {list.length > 2 && <span className="text-[10.5px] text-dim">+{list.length - 2}</span>}
+    </span>
+  );
+}
+
 // Ô chọn model có tìm kiếm; gõ tên lạ + Enter để dùng model ngoài danh sách.
+// Codex: lọc theo profile (catalog khác nhau theo tài khoản), model ẩn chỉ hiện khi bật.
 export function ModelSelect({
   models,
   value,
@@ -17,6 +33,7 @@ export function ModelSelect({
   className,
   disabled,
   ariaLabel = "Model",
+  profile,
 }: {
   models: AiModel[];
   value: string;
@@ -25,15 +42,26 @@ export function ModelSelect({
   className?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  profile?: string;
 }) {
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
+  const [showHidden, setShowHidden] = useState(false);
+  const [pf, setPf] = useState(profile ?? "");
+  useEffect(() => setPf(profile ?? ""), [profile]);
   const input = useRef<HTMLInputElement>(null);
+  const allProfiles = useMemo(() => [...new Set(models.flatMap((m) => m.profiles ?? []))], [models]);
+  const anyHidden = models.some((m) => m.hidden);
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? models.filter((m) => m.id.toLowerCase().includes(s) || m.name?.toLowerCase().includes(s)) : models;
-  }, [models, q]);
-  useEffect(() => setHi(0), [q]);
+    return models.filter(
+      (m) =>
+        (showHidden || !m.hidden || m.id === value) &&
+        (!pf || !m.profiles || m.profiles.includes(pf)) &&
+        (!s || m.id.toLowerCase().includes(s) || m.name?.toLowerCase().includes(s)),
+    );
+  }, [models, q, showHidden, pf, value]);
+  useEffect(() => setHi(0), [q, pf, showHidden]);
   const sel = models.find((m) => m.id === value);
   const custom = q.trim() && !models.some((m) => m.id === q.trim()) ? q.trim() : null;
 
@@ -90,6 +118,34 @@ export function ModelSelect({
                 className="h-9 w-full rounded-[9px] bg-white/[.04] pr-3 pl-8 text-[13px] outline-none placeholder:text-dim"
               />
             </div>
+            {(allProfiles.length > 1 || anyHidden) && (
+              <div className="no-scrollbar flex items-center gap-1 overflow-x-auto border-b border-line px-1.5 py-1.5">
+                {allProfiles.length > 1 &&
+                  ["", ...allProfiles].map((p) => (
+                    <button
+                      key={p || "*"}
+                      type="button"
+                      onClick={() => setPf(p)}
+                      className={cx(
+                        "press h-6 shrink-0 rounded-full px-2 text-[11px] font-medium whitespace-nowrap",
+                        pf === p ? "bg-fg text-bg" : "bg-white/[.05] text-muted hover:text-fg",
+                      )}
+                    >
+                      {p || "Mọi profile"}
+                    </button>
+                  ))}
+                {anyHidden && (
+                  <button
+                    type="button"
+                    aria-pressed={showHidden}
+                    onClick={() => setShowHidden((v) => !v)}
+                    className={cx("press ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-[11px] font-medium", showHidden ? "bg-aura1/25 text-fg" : "text-dim hover:text-fg")}
+                  >
+                    <Icon name="eye" size={12} /> Model ẩn
+                  </button>
+                )}
+              </div>
+            )}
             <ul role="listbox" className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {!q && (
                 <Row active={!value} onClick={() => pick("")}>
@@ -98,7 +154,11 @@ export function ModelSelect({
               )}
               {list.map((m, i) => (
                 <Row key={m.id} active={m.id === value} hot={i === hi} onClick={() => pick(m.id)} onHover={() => setHi(i)}>
-                  <span className="block truncate font-mono text-[12.5px]">{m.id}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className={cx("min-w-0 flex-1 truncate font-mono text-[12.5px]", m.hidden && "text-muted")}>{m.id}</span>
+                    {m.hidden && <Icon name="eye" size={12} className="shrink-0 text-dim" />}
+                    <ProfileTags list={m.profiles} all={allProfiles.length} />
+                  </span>
                   {m.name && m.name !== m.id && <span className="block truncate text-[11.5px] text-muted">{m.name}</span>}
                 </Row>
               ))}

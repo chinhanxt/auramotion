@@ -383,7 +383,7 @@ function CodexLoginModal({ profile, onClose, call, onDone }: { profile: string |
         <div className="space-y-3">
           <label className="block space-y-1.5">
             <span className="text-[13px] font-medium text-fg/75">Profile</span>
-            <TextInput value={name} onChange={(e) => setName(e.target.value.replace(/[^\w.-]/g, ""))} placeholder="default" className="font-mono" />
+            <TextInput value={name} onChange={(e) => setName(e.target.value.replace(/[^\w .-]/g, ""))} placeholder="default" className="font-mono" />
           </label>
           <Button variant="primary" size="sm" icon="qr" loading={isBusy("start")} onClick={() => void start()}>
             Lấy mã đăng nhập

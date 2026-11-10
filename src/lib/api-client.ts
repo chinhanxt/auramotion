@@ -32,7 +32,17 @@ export type CatalogPreset = {
 };
 
 export type SkillKind = "IMAGE" | "VIDEO" | "STORY" | "SCRIPT";
-export type CatalogSkill = { id: string; slug: string; name: string; kind: SkillKind; description: string; locked: boolean };
+export type CatalogSkill = {
+  id: string;
+  slug: string;
+  name: string;
+  kind: SkillKind;
+  description: string;
+  locked: boolean;
+  // Nhóm hiển thị ("Review sản phẩm", "Bán hàng", "Thời trang"…) + từ khóa tìm.
+  category?: string;
+  tags?: string[];
+};
 
 export type CatalogPlan = { code: "free" | "pro" | "ultra"; name: string; rank: number; maxDurationSec: number; maxConcurrent: number };
 
@@ -101,6 +111,10 @@ export type JobTrace = {
   slotAt?: number;
   submitAt?: number;
   engine?: { provider: string; model?: string | null; account?: string | null };
+  // Chọn skill 2 bước: lọc luật (~10 ứng viên) → AI router chọn 1.
+  router?: { method: "rule" | "ai"; candidates?: string[]; chosen?: string; ms?: number };
+  // Kiểm prompt sau khi viết: lint luật + tự sửa.
+  guard?: { fixes?: string[] };
   doneAt?: number;
   failedAt?: number;
   error?: string | null;
@@ -134,6 +148,8 @@ export function toTrace(raw: unknown): JobTrace | null {
     failedAt: ms(r.failedAt),
     writer: (r.writer as JobTrace["writer"]) ?? undefined,
     engine: (r.engine as JobTrace["engine"]) ?? undefined,
+    router: (r.router as JobTrace["router"]) ?? undefined,
+    guard: (r.guard as JobTrace["guard"]) ?? undefined,
     error: typeof r.error === "string" ? r.error : null,
   };
   return t.createdAt || t.writeStart || t.submitAt || t.doneAt ? t : null;
