@@ -80,14 +80,25 @@ export function parseLoginStatus(text: string): LoginStatus {
   return { loggedIn: false, method: null };
 }
 
+// `codex login status` in kết quả ra STDERR (stdout rỗng) và thoát mã 1 khi chưa đăng nhập: đọc cả hai luồng.
 async function loginStatus(home: string): Promise<LoginStatus> {
-  try {
-    const { stdout } = await runCli({ bin: codexBin(), args: ["login", "status"], env: { CODEX_HOME: home }, timeoutMs: 15_000 });
-    return parseLoginStatus(stdout);
-  } catch (err) {
-    // `codex login status` thoát mã 1 khi chưa đăng nhập.
-    return parseLoginStatus((err as Error).message);
-  }
+  const out = await new Promise<string>((resolve) => {
+    let text = "";
+    const proc = spawn(codexBin(), ["login", "status"], {
+      env: { PATH: process.env.PATH ?? "", HOME: os.homedir(), CODEX_HOME: home },
+      stdio: ["ignore", "pipe", "pipe"],
+      cwd: os.tmpdir(),
+    });
+    const timer = setTimeout(() => proc.kill("SIGKILL"), 15_000);
+    proc.stdout?.on("data", (d: Buffer) => (text += d.toString("utf8")));
+    proc.stderr?.on("data", (d: Buffer) => (text += d.toString("utf8")));
+    proc.on("error", () => resolve(text));
+    proc.on("close", () => {
+      clearTimeout(timer);
+      resolve(text);
+    });
+  });
+  return parseLoginStatus(out);
 }
 
 type ProfileMeta = { email?: string; alias?: string };
