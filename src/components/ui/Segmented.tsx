@@ -42,8 +42,8 @@ export function Segmented<T extends string | number>({
       role="radiogroup"
       aria-label={ariaLabel}
       className={cx(
-        "relative isolate inline-flex shrink-0 items-center rounded-m1 bg-white/[.04] p-[3px] shadow-[inset_0_0_0_1px_var(--color-line)]",
-        block && "flex w-full",
+        "relative isolate shrink-0 items-center rounded-m1 bg-white/[.04] p-[3px] shadow-[inset_0_0_0_1px_var(--color-line)]",
+        block ? "flex w-full" : "inline-flex",
         className,
       )}
     >

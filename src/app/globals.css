@@ -31,7 +31,7 @@
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
 
   --animate-shimmer: am-shimmer 1.6s linear infinite;
-  --animate-rise: am-rise 420ms var(--ease-out) both;
+  --animate-rise: am-rise 420ms var(--ease-out) backwards;
   --animate-fade: am-fade 260ms var(--ease-out) both;
   --animate-spin-slow: spin 0.9s linear infinite;
 }
@@ -103,6 +103,7 @@ body {
   background: transparent;
 }
 
+@layer components {
 /* ───────── Type ───────── */
 .t-display {
   font-size: clamp(2.4rem, 1.2rem + 5.2vw, 6.4rem);
@@ -305,20 +306,20 @@ body {
 }
 
 .page-enter {
-  animation: am-rise var(--d3) var(--ease-out) both;
+  animation: am-rise var(--d3) var(--ease-out) backwards;
 }
 .reveal {
-  animation: am-rise var(--d3) var(--ease-out) both;
+  animation: am-rise var(--d3) var(--ease-out) backwards;
   animation-delay: calc(min(var(--i, 0), 12) * 40ms);
 }
 .pop-in {
-  animation: am-pop var(--d2) var(--ease-spring) both;
+  animation: am-pop var(--d2) var(--ease-spring) backwards;
 }
 .blur-in {
-  animation: am-blur-in 620ms var(--ease-out) both;
+  animation: am-blur-in 620ms var(--ease-out) backwards;
 }
 .text-in {
-  animation: am-text-in 520ms var(--ease-out) both;
+  animation: am-text-in 520ms var(--ease-out) backwards;
   animation-delay: calc(min(var(--i, 0), 20) * 60ms);
 }
 .press {
@@ -470,34 +471,28 @@ body {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  :is(.am, .am-layer) *,
-  :is(.am, .am-layer) *::before,
-  :is(.am, .am-layer) *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-    scroll-behavior: auto !important;
-  }
 }
+
+@layer components {
+
 
 /* Modal / sheet / popover */
 .overlay-backdrop {
-  animation: am-fade var(--d2) var(--ease-out) both;
+  animation: am-fade var(--d2) var(--ease-out) backwards;
 }
 [data-closing] .overlay-backdrop {
   opacity: 0;
   transition: opacity 200ms var(--ease-out);
 }
 .modal-pop {
-  animation: am-pop var(--d2) var(--ease-spring) both;
+  animation: am-pop var(--d2) var(--ease-spring) backwards;
 }
 .modal-sheet {
-  animation: am-sheet var(--d3) var(--ease-out) both;
+  animation: am-sheet var(--d3) var(--ease-out) backwards;
 }
 @media (min-width: 640px) {
   .modal-sheet {
-    animation: am-pop var(--d2) var(--ease-spring) both;
+    animation: am-pop var(--d2) var(--ease-spring) backwards;
   }
 }
 [data-closing] .modal-pop,
@@ -509,7 +504,7 @@ body {
     transform 180ms var(--ease-out);
 }
 .popover-panel {
-  animation: am-pop 200ms var(--ease-spring) both;
+  animation: am-pop 200ms var(--ease-spring) backwards;
 }
 .popover-panel[data-closing] {
   opacity: 0;
@@ -521,7 +516,7 @@ body {
 
 /* Toast */
 .toast {
-  animation: am-toast-in-top var(--d3) var(--ease-spring) both;
+  animation: am-toast-in-top var(--d3) var(--ease-spring) backwards;
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out);
@@ -540,13 +535,13 @@ body {
   transition: opacity 180ms var(--ease-out);
 }
 
-.app-shell {
-  --tabbar-h: calc(58px + var(--safe-b));
+:root {
+  --tabbar-h: 0px;
   --topbar-h: 56px;
 }
-@media (min-width: 768px) {
-  .app-shell {
-    --tabbar-h: 0px;
+@media (max-width: 767.98px) {
+  :root:has(.app-shell) {
+    --tabbar-h: calc(58px + var(--safe-b));
   }
 }
 
@@ -611,7 +606,7 @@ body {
   height: 70vmax;
   border-radius: 50%;
   filter: blur(80px);
-  opacity: 0.55;
+  opacity: 0.7;
   will-change: transform;
 }
 .aura-blob-a {
@@ -624,7 +619,7 @@ body {
   right: -24vmax;
   top: -10vmax;
   background: radial-gradient(circle at 60% 50%, #ff4fd8 0%, rgba(255, 79, 216, 0) 60%);
-  opacity: 0.42;
+  opacity: 0.52;
   animation: am-drift-b 46s linear infinite;
 }
 .aura-blob-c {
@@ -663,7 +658,7 @@ body {
   transform: translate3d(10px, -6px, 0) rotate(6deg);
 }
 .hero-in > * {
-  animation: am-text-in 900ms var(--ease-out) both;
+  animation: am-text-in 900ms var(--ease-out) backwards;
 }
 .hero-in > :nth-child(2) {
   animation-delay: 120ms;
@@ -673,4 +668,39 @@ body {
 }
 .hero-in > :nth-child(4) {
   animation-delay: 360ms;
+}
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.am, .am-layer) *,
+  :is(.am, .am-layer) *::before,
+  :is(.am, .am-layer) *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes am-dock {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.dock-in {
+  animation: am-dock var(--d3) var(--ease-out) backwards;
+}
+
+/* Toast nằm trên composer / thanh xuất khi có */
+:root {
+  --dock-h: 0px;
+}
+:root:has(.dock-in) {
+  --dock-h: 128px;
 }

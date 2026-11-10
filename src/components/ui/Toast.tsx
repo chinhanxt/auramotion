@@ -125,7 +125,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="am-layer pointer-events-none fixed inset-x-0 top-[calc(10px+var(--safe-t))] z-[90] flex flex-col items-center gap-2 px-3 sm:top-auto sm:right-5 sm:bottom-5 sm:left-auto sm:items-end sm:px-0"
+        className="am-layer pointer-events-none fixed inset-x-0 top-[calc(10px+var(--safe-t))] z-[90] flex flex-col items-center gap-2 px-3 sm:top-auto sm:right-5 sm:bottom-[calc(var(--dock-h)+20px)] sm:left-auto sm:items-end sm:px-0"
       >
         {list.map((t) => (
           <ToastCard key={t.id} toast={t} onClose={() => remove(t.id)} />

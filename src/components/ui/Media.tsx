@@ -33,6 +33,8 @@ export function useInView<T extends Element>(ref: React.RefObject<T | null>) {
   return v;
 }
 
+const POSITIONED = /(^|\s)(absolute|fixed|relative|sticky)(\s|$)/;
+
 // Ảnh hiện dần (blur → nét) khi tải xong.
 export function FadeImage({ src, alt, className, imgClassName, style }: { src: string; alt: string; className?: string; imgClassName?: string; style?: React.CSSProperties }) {
   const [loaded, setLoaded] = useState(false);
@@ -41,7 +43,7 @@ export function FadeImage({ src, alt, className, imgClassName, style }: { src: s
     if (ref.current?.complete && ref.current.naturalWidth > 0) setLoaded(true);
   }, []);
   return (
-    <span className={cx("relative block overflow-hidden", className)} style={style}>
+    <span className={cx("block overflow-hidden", !POSITIONED.test(className ?? "") && "relative", className)} style={style}>
       {!loaded && <span className="skel absolute inset-0" aria-hidden="true" />}
       <img
         ref={ref}
@@ -74,6 +76,11 @@ export function SmartVideo({
   const visible = useInView(ref);
   const [ready, setReady] = useState(false);
 
+  // Video có thể đã tải xong trước khi React gắn sự kiện (hydrate muộn).
+  useEffect(() => {
+    if ((ref.current?.readyState ?? 0) >= 2) setReady(true);
+  }, []);
+
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
@@ -87,7 +94,7 @@ export function SmartVideo({
   }, [visible, hovering, mode]);
 
   return (
-    <span className={cx("relative block overflow-hidden bg-s2", className)}>
+    <span className={cx("block overflow-hidden bg-s2", !POSITIONED.test(className ?? "") && "relative", className)}>
       {!ready && <span className="skel absolute inset-0" aria-hidden="true" />}
       <video
         ref={ref}
