@@ -22,6 +22,7 @@ export function fmtLeft(ms: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
+  if (h >= 24) return `${Math.floor(h / 24)} ngày ${h % 24}g`;
   if (h > 0) return `${h}g ${String(m).padStart(2, "0")}p`;
   return `${m}:${String(sec).padStart(2, "0")}`;
 }

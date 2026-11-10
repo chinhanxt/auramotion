@@ -262,7 +262,7 @@ function EngineModelField({ provider, kind, value, lists, onSave, size = "mini" 
           className={cx(size === "mini" ? "h-8 rounded-[9px] text-[12.5px]" : "h-9 rounded-m1 text-[13px]", "min-w-0 flex-1 bg-black/30 px-2.5 font-mono outline-none hairline")}
         />
       ) : (
-        <MiniSelect label="Model của engine" value={value} onChange={onSave} className="flex-1 font-mono" disabled={options.length === 0 && !value}>
+        <MiniSelect label="Model của engine" value={value} onChange={onSave} className="flex-1" disabled={options.length === 0 && !value}>
           {provider === "CODEX" && <option value="">Mặc định (config.toml)</option>}
           {provider !== "CODEX" && !value && <option value="">{options.length ? "Chọn model…" : "Đang tải danh sách…"}</option>}
           {options.map((m) => (
@@ -349,7 +349,7 @@ function VerifyCell({ m, since, onTest }: { m: Model; since?: number; onTest: ()
 
 // ───────── Một dòng model ─────────
 
-const GRID = "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.25fr)_88px_86px_minmax(250px,1fr)_36px]";
+const GRID = "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.3fr)_88px_86px_minmax(270px,0.9fr)_32px]";
 
 function ModelRow({
   m,
@@ -404,14 +404,17 @@ function ModelRow({
       {/* Engine: model thật + tài khoản Muse */}
       <div className="min-w-0 space-y-1.5 max-lg:pl-[102px] max-sm:pl-0">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="w-12 shrink-0 text-[11px] font-medium text-muted">{PROVIDER_SHORT[m.provider]}</span>
+          <span className="w-11 shrink-0 truncate text-[11px] font-medium text-muted">{PROVIDER_SHORT[m.provider]}</span>
           <div className="min-w-0 flex-1">
             <EngineModelField provider={m.provider} kind={m.kind} value={m.engineModel} lists={lists} onSave={(engineModel) => onPatch(m, { engineModel })} />
           </div>
         </div>
         {m.provider === "MUSE" && m.kind !== "ASSEMBLE" && (
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="w-12 shrink-0 text-[11px] font-medium text-muted">Tài khoản</span>
+            <span className="flex w-11 shrink-0 items-center gap-1 text-[11px] font-medium text-muted" data-tip="Tài khoản Muse">
+              <Icon name="user" size={12} />
+              TK
+            </span>
             <MiniSelect
               label="Tài khoản Muse"
               className="flex-1"
