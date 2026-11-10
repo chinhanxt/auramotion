@@ -5,7 +5,7 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Controls";
 import { MenuItem, Popover } from "@/components/ui/Overlay";
-import { formatCredit, planLabel, type CatalogModel, type CatalogSkill } from "@/lib/api-client";
+import { formatCredit, type CatalogSkill } from "@/lib/api-client";
 
 export const RATIO_LABEL: Record<string, string> = { "1:1": "Vuông", "9:16": "Dọc", "16:9": "Ngang", "4:5": "Dọc 4:5" };
 
@@ -116,53 +116,6 @@ export function AspectMenu({ ratios, value, onChange }: { ratios: string[]; valu
           </MenuItem>
         ))
       }
-    </Popover>
-  );
-}
-
-export function EngineMenu({ models, value, onChange, unit }: { models: CatalogModel[]; value: string; onChange: (m: CatalogModel) => void; unit: string }) {
-  const sel = models.find((m) => m.id === value);
-  if (models.length <= 1 && sel) {
-    return (
-      <span className="inline-flex h-9 items-center gap-1.5 px-1.5 text-[13px] text-muted" data-tip="Engine">
-        <Icon name="cpu" size={16} />
-        {sel.name}
-      </span>
-    );
-  }
-  return (
-    <Popover
-      side="top"
-      className="w-72"
-      trigger={({ toggle, ref, ...aria }) => (
-        <ToolButton ref={ref} onClick={toggle} {...aria} tip="Engine">
-          <Icon name="cpu" size={16} />
-          {sel?.name ?? "Engine"}
-          <Icon name="chevronDown" size={14} className="text-muted" />
-        </ToolButton>
-      )}
-    >
-      {(close) => (
-        <>
-          <p className="px-2.5 pt-1.5 pb-1 t-label">Engine</p>
-          {models.map((m) => (
-            <MenuItem
-              key={m.id}
-              active={m.id === value}
-              disabled={m.locked}
-              icon={<Icon name={m.locked ? "lock" : m.id === value ? "check" : "cpu"} size={16} />}
-              hint={m.locked ? planLabel(m.minPlanRank) : `${formatCredit(m.baseCost)}/${unit}`}
-              onClick={() => {
-                onChange(m);
-                close();
-              }}
-            >
-              {m.name}
-            </MenuItem>
-          ))}
-          {sel && (sel.provider === "AGY" || sel.provider === "CODEX") && <p className="px-2.5 pt-1 pb-1.5 text-xs text-muted">Mỗi ảnh mất 1–4 phút.</p>}
-        </>
-      )}
     </Popover>
   );
 }
