@@ -410,7 +410,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
             e.preventDefault();
             submit();
           }}
-          className="composer pointer-events-auto relative mx-auto max-w-[1040px] rounded-m4 glass-strong p-2.5 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-20px_rgba(0,0,0,.9)] sm:p-3"
+          className="composer pointer-events-auto relative mx-auto max-w-[1040px] rounded-m4 glass-strong px-3 pt-3 pb-2.5 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-20px_rgba(0,0,0,.9)] sm:px-4 sm:pt-3 sm:pb-3"
         >
           {videoBlocked && (
             <Notice tone="warn" className="mb-2.5">
@@ -429,18 +429,18 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
             <Notice tone="warn">Hiện chưa có model nào hoạt động.</Notice>
           ) : (
             <>
-              <div className="flex items-start gap-2.5">
+              <div className="flex items-start gap-3">
                 <RefSlot value={inputUrl} onChange={setInputUrl} onBusyChange={setUploading} label={text.ref} />
                 <AutoTextarea
                   value={prompt}
                   onChange={setPrompt}
                   placeholder={autoWrite ? text.autoPlaceholder : text.placeholder}
                   onSubmit={submit}
-                  className="min-h-14 py-1.5 pr-1"
+                  className="min-h-14 pt-1 pb-1 pr-0.5 sm:pt-1.5"
                   ariaLabel="Prompt"
                 />
               </div>
-              <div className="mt-2 flex items-center gap-1.5">
+              <div className="mt-2.5 flex items-center gap-1.5">
                 <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
                   <AiWriteControl
                     skills={skills}

@@ -74,11 +74,11 @@ export function StoryComposer({ initialIdea = "" }: { initialIdea?: string }) {
         e.preventDefault();
         submit();
       }}
-      className="relative mx-auto w-full max-w-[1040px] rounded-m4 bg-s1 p-3 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-30px_rgba(124,92,255,.35)] sm:p-4"
+      className="relative mx-auto w-full max-w-[1040px] rounded-m4 bg-s1 px-3 pt-3 pb-3 shadow-[0_0_0_1px_var(--color-line2),0_30px_80px_-30px_rgba(124,92,255,.35)] sm:px-4 sm:pt-3 sm:pb-4"
     >
-      <AutoTextarea value={idea} onChange={setIdea} onSubmit={submit} placeholder="Kể ý tưởng câu chuyện của bạn…" className="min-h-24 px-1.5 py-1 text-[17px]" ariaLabel="Ý tưởng" />
+      <AutoTextarea value={idea} onChange={setIdea} onSubmit={submit} placeholder="Kể ý tưởng câu chuyện của bạn…" className="min-h-24 px-0.5 pt-1 pb-1 text-[17px] sm:pt-1.5" ariaLabel="Ý tưởng" />
       {!idea && (
-        <div className="no-scrollbar mt-1 flex gap-1.5 overflow-x-auto px-1">
+        <div className="no-scrollbar mt-1 flex gap-1.5 overflow-x-auto">
           {IDEAS.map((s) => (
             <button key={s} type="button" onClick={() => setIdea(s)} className="press shrink-0 rounded-full bg-white/[.04] px-3 py-1.5 text-xs text-muted hover:bg-white/[.08] hover:text-fg">
               {s}
@@ -136,7 +136,7 @@ export function StoryComposer({ initialIdea = "" }: { initialIdea?: string }) {
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3 px-1">
+      <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3 px-0.5">
         <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
           <span className="text-sm whitespace-nowrap text-fg/80">Số cảnh</span>
           <Stepper value={shotCount} onChange={setShotCount} min={2} max={8} ariaLabel="Số cảnh" />
