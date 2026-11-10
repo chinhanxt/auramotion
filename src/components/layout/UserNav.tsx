@@ -11,17 +11,19 @@ const LINKS = [
   { href: "/library", label: "Thư viện" },
   { href: "/credits", label: "Credit" },
   { href: "/profile", label: "Hồ sơ" },
+  { href: "/pricing", label: "Bảng giá" },
 ];
 
-export function UserNav() {
+export function UserNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
+  const links = isAdmin ? [...LINKS, { href: "/admin", label: "Quản trị" }] : LINKS;
   return (
     <aside className="border-b border-neutral-200 bg-white md:sticky md:top-0 md:h-screen md:w-56 md:shrink-0 md:border-r md:border-b-0">
       <Link href="/studio/image" className="hidden px-5 py-4 text-lg font-semibold md:block">
         AuraMotion
       </Link>
       <nav className="flex gap-1 overflow-x-auto px-2 py-2 md:flex-col md:px-3">
-        {LINKS.map((l) => {
+        {links.map((l) => {
           const active = pathname === l.href || pathname.startsWith(`${l.href}/`);
           return (
             <Link

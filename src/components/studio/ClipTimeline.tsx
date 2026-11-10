@@ -21,9 +21,10 @@ export function clipError(c: TimelineClip): string | null {
   return null;
 }
 
+const btnClass = "rounded px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 disabled:opacity-30";
 const inputClass = "w-16 rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm outline-none focus:border-neutral-900";
 
-// Danh sách clip theo thứ tự ghép: kéo thả để đổi thứ tự, xóa, chỉnh số giây / đoạn cắt.
+// Danh sách clip theo thứ tự ghép: kéo thả hoặc nút lên / xuống để đổi thứ tự, xóa, chỉnh số giây / đoạn cắt.
 export function ClipTimeline({ clips, onChange }: { clips: TimelineClip[]; onChange: (clips: TimelineClip[]) => void }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
@@ -42,9 +43,9 @@ export function ClipTimeline({ clips, onChange }: { clips: TimelineClip[]; onCha
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-neutral-700">Timeline</span>
+        <span className="text-sm font-medium text-neutral-700">Thứ tự ghép</span>
         <span className="text-xs text-neutral-500">
-          {clips.length}/{MAX_CLIPS} clip · kéo thả để đổi thứ tự
+          {clips.length}/{MAX_CLIPS} clip · kéo thả hoặc ▲▼ để đổi thứ tự
         </span>
       </div>
       {clips.length === 0 && (
@@ -71,7 +72,7 @@ export function ClipTimeline({ clips, onChange }: { clips: TimelineClip[]; onCha
                 dragIndex === i ? "border-neutral-900 opacity-60" : "border-neutral-200"
               }`}
             >
-              <span className="w-5 text-center text-xs font-semibold text-neutral-500">{i + 1}</span>
+              <span className="w-5 shrink-0 text-center text-xs font-semibold text-neutral-500">{i + 1}</span>
               <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-neutral-100">
                 {c.kind === "image" ? (
                   <img src={c.url} alt="" className="h-full w-full object-cover" />
@@ -122,11 +123,31 @@ export function ClipTimeline({ clips, onChange }: { clips: TimelineClip[]; onCha
                 )}
                 {err && <p className="text-xs text-red-600">{err}</p>}
               </div>
+              <div className="flex shrink-0 flex-col">
+                <button
+                  type="button"
+                  disabled={i === 0}
+                  onClick={() => move(i, i - 1)}
+                  className={btnClass}
+                  aria-label={`Đưa clip ${i + 1} lên`}
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  disabled={i === clips.length - 1}
+                  onClick={() => move(i, i + 1)}
+                  className={btnClass}
+                  aria-label={`Đưa clip ${i + 1} xuống`}
+                >
+                  ▼
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => onChange(clips.filter((_, j) => j !== i))}
-                className="rounded-md px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 hover:text-red-600"
-                aria-label="Xóa clip"
+                className="shrink-0 rounded-md px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 hover:text-red-600"
+                aria-label={`Xóa clip ${i + 1}`}
               >
                 ✕
               </button>

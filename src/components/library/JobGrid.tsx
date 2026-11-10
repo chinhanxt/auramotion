@@ -57,10 +57,13 @@ export function JobGrid({ fixedKind, refreshKey = 0 }: { fixedKind?: GenKind; re
   }, [query, refreshKey]);
 
   // Poll các job đang chờ / đang chạy; job vừa xong thì làm mới số dư ở header.
+  // Request trước chưa xong thì bỏ qua lượt này.
   useEffect(() => {
+    let polling = false;
     const timer = setInterval(async () => {
       const active = itemsRef.current.filter((j) => ACTIVE_STATUSES.includes(j.status));
-      if (active.length === 0) return;
+      if (active.length === 0 || polling) return;
+      polling = true;
       try {
         const { items: fresh } = await api<Page>(`/api/jobs?ids=${active.map((j) => j.id).join(",")}`);
         const byId = new Map(fresh.map((j) => [j.id, j]));
@@ -68,6 +71,8 @@ export function JobGrid({ fixedKind, refreshKey = 0 }: { fixedKind?: GenKind; re
         if (fresh.some((f) => !ACTIVE_STATUSES.includes(f.status))) router.refresh();
       } catch {
         // lỗi mạng tạm thời: lần poll sau thử lại
+      } finally {
+        polling = false;
       }
     }, POLL_MS);
     return () => clearInterval(timer);

@@ -147,7 +147,7 @@ export function VoicePicker({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium text-neutral-700">Giọng đọc</span>
         <div className="flex rounded-md border border-neutral-300 bg-white p-0.5">
           <button

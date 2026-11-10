@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { MediaViewer } from "@/components/library/MediaViewer";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { STATUS_COLOR, STATUS_LABEL, formatCredit } from "@/lib/api-client";
+import { STATUS_COLOR, STATUS_LABEL, formatCredit, jobErrorText } from "@/lib/api-client";
 
 export const metadata = { title: "Chi tiết · AuraMotion" };
 
@@ -61,7 +61,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           </div>
           {job.status === "FAILED" && (
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              Tạo thất bại{job.error ? ` (${job.error})` : ""}. Credit đã được hoàn.
+              Tạo thất bại{job.error ? `: ${jobErrorText(job.error)}` : ""}. Credit đã được hoàn.
             </p>
           )}
           {job.inputUrl && (

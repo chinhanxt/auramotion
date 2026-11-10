@@ -3,11 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { JobGrid } from "@/components/library/JobGrid";
-import { ApiError, api, postJson, type Catalog, type JobItem } from "@/lib/api-client";
+import { ApiError, api, planLabel, postJson, type Catalog, type JobItem } from "@/lib/api-client";
 import { AspectRatioPicker } from "./AspectRatioPicker";
 import { ClipPicker, type PickedClip } from "./ClipPicker";
 import { ClipTimeline, MAX_CLIPS, clipError, type TimelineClip } from "./ClipTimeline";
-import { ErrorNotice } from "./GenerateForm";
+import { ErrorNotice, toApiError } from "./GenerateForm";
 import { GenerateButton } from "./GenerateButton";
 import { MusicPicker } from "./MusicPicker";
 import { ScriptEditor, scriptError, splitLines } from "./ScriptEditor";
@@ -87,6 +87,7 @@ export function AssembleForm({ fromJobId }: { fromJobId?: string }) {
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const [quoteError, setQuoteError] = useState<ApiError | null>(null);
   const [notice, setNotice] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -149,6 +150,7 @@ export function AssembleForm({ fromJobId }: { fromJobId?: string }) {
     const controller = new AbortController();
     setQuoting(true);
     setCost(null);
+    setQuoteError(null);
     const timer = setTimeout(async () => {
       try {
         const res = await postJson<{ cost: number }>(
@@ -166,7 +168,7 @@ export function AssembleForm({ fromJobId }: { fromJobId?: string }) {
         );
         setCost(res.cost);
       } catch (err) {
-        if ((err as Error).name !== "AbortError") setCost(null);
+        if ((err as Error).name !== "AbortError") setQuoteError(toApiError(err));
       } finally {
         if (!controller.signal.aborted) setQuoting(false);
       }
@@ -187,11 +189,12 @@ export function AssembleForm({ fromJobId }: { fromJobId?: string }) {
   }
 
   const needVoice = lines.length > 0 && !voice.preset && !voice.refUrl;
-  const blocker =
-    clips.length === 0
+  const blocker = model?.locked
+    ? `Ghép video cần gói ${planLabel(model.minPlanRank)}`
+    : clips.length === 0
       ? "Chọn ít nhất 1 clip"
       : clips.some((c) => clipError(c))
-        ? "Sửa thông số clip trong timeline"
+        ? "Sửa thông số clip trong thứ tự ghép"
         : linesError
           ? linesError
           : needVoice
@@ -224,7 +227,7 @@ export function AssembleForm({ fromJobId }: { fromJobId?: string }) {
       setRefreshKey((k) => k + 1);
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err : new ApiError("INTERNAL", (err as Error).message, 0));
+      setError(toApiError(err));
     } finally {
       setSubmitting(false);
     }
@@ -250,7 +253,7 @@ export function AssembleForm({ fromJobId }: { fromJobId?: string }) {
           <Toggle label="Giữ tiếng gốc của clip" checked={keepClipAudio} onChange={setKeepClipAudio} />
         </div>
 
-        {error && <ErrorNotice error={error} />}
+        {(error ?? quoteError) && <ErrorNotice error={(error ?? quoteError) as ApiError} minRank={model.minPlanRank} />}
         {notice && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{notice}</p>}
         {blocker && <p className="text-xs text-neutral-500">{blocker}</p>}
         <GenerateButton

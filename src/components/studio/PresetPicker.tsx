@@ -26,7 +26,7 @@ export function PresetPicker({
           Không dùng
         </button>
         {presets.map((p) => (
-          <button key={p.id} type="button" title={p.promptSuffix} onClick={() => onChange(p.id)} className={chip(value === p.id)}>
+          <button key={p.id} type="button" title={p.name} onClick={() => onChange(p.id)} className={chip(value === p.id)}>
             {p.name}
           </button>
         ))}

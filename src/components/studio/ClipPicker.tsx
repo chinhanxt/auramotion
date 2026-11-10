@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type JobItem } from "@/lib/api-client";
 
 export type PickedClip = { jobId: string; index: number; kind: "image" | "video"; url: string };
@@ -19,20 +19,24 @@ export function ClipPicker({ onAdd }: { onAdd: (clip: PickedClip) => void }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Bỏ kết quả của lần nạp cũ khi đã đổi tab.
+  const seq = useRef(0);
 
   async function load(cursor?: string) {
+    const id = ++seq.current;
     setLoading(true);
     setError("");
     try {
       const qs = new URLSearchParams({ kind, status: "SUCCEEDED" });
       if (cursor) qs.set("cursor", cursor);
       const page = await api<Page>(`/api/jobs?${qs}`);
+      if (id !== seq.current) return;
       setItems((list) => (cursor ? [...list, ...page.items] : page.items));
       setNextCursor(page.nextCursor);
     } catch (err) {
-      setError((err as Error).message);
+      if (id === seq.current) setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (id === seq.current) setLoading(false);
     }
   }
 
@@ -42,11 +46,13 @@ export function ClipPicker({ onAdd }: { onAdd: (clip: PickedClip) => void }) {
     // Nạp lại khi đổi tab.
   }, [kind]);
 
-  const tiles = items.flatMap((job) => job.resultUrls.map((url, index) => ({ job, url, index })));
+  const tiles = items.flatMap((job) =>
+    job.resultUrls.map((url, index) => ({ job, url, index, clipKind: job.kind === "IMAGE" ? ("image" as const) : ("video" as const) })),
+  );
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium text-neutral-700">Chọn clip</span>
         <div className="flex rounded-md border border-neutral-300 bg-white p-0.5">
           {TABS.map((t) => (
@@ -68,15 +74,16 @@ export function ClipPicker({ onAdd }: { onAdd: (clip: PickedClip) => void }) {
       )}
 
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-        {tiles.map(({ job, url, index }) => (
+        {tiles.map(({ job, url, index, clipKind }) => (
           <button
             key={url}
             type="button"
-            title="Thêm vào timeline"
-            onClick={() => onAdd({ jobId: job.id, index, kind, url })}
+            title="Thêm vào thứ tự ghép"
+            aria-label={`Thêm ${clipKind === "image" ? "ảnh" : "video"} vào thứ tự ghép`}
+            onClick={() => onAdd({ jobId: job.id, index, kind: clipKind, url })}
             className="group relative aspect-square overflow-hidden rounded-md border border-neutral-200 bg-neutral-100 hover:border-neutral-900"
           >
-            {kind === "image" ? (
+            {clipKind === "image" ? (
               <img src={url} alt={job.prompt} loading="lazy" className="h-full w-full object-cover" />
             ) : (
               <video src={url} muted playsInline preload="metadata" className="h-full w-full object-cover" />

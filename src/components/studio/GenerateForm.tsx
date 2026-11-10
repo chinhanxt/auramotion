@@ -49,7 +49,12 @@ function pick<T>(list: T[] | undefined, value: T | undefined, fallback: T): T {
   return value !== undefined && list.includes(value) ? value : list[0];
 }
 
-export function ErrorNotice({ error }: { error: ApiError }) {
+// minRank: gói thấp nhất dùng được (rank của engine); lỗi PLAN_* hiện đúng tên gói.
+export function toApiError(err: unknown): ApiError {
+  return err instanceof ApiError ? err : new ApiError("INTERNAL", (err as Error).message, 0);
+}
+
+export function ErrorNotice({ error, minRank = 1 }: { error: ApiError; minRank?: number }) {
   let body: React.ReactNode = error.message;
   if (error.code === "INSUFFICIENT_CREDIT") {
     body = (
@@ -65,7 +70,7 @@ export function ErrorNotice({ error }: { error: ApiError }) {
   } else if (error.code.startsWith("PLAN_")) {
     body = (
       <>
-        Cần gói Pro.{" "}
+        Cần gói {planLabel(minRank)}.{" "}
         <Link href="/pricing" className="font-medium underline">
           Xem bảng giá
         </Link>
@@ -93,6 +98,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
   const [submitting, setSubmitting] = useState(false);
   const [aiWriting, setAiWriting] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const [quoteError, setQuoteError] = useState<ApiError | null>(null);
   const [notice, setNotice] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -145,6 +151,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
     const controller = new AbortController();
     setQuoting(true);
     setCost(null);
+    setQuoteError(null);
     const timer = setTimeout(async () => {
       try {
         // Giá không phụ thuộc prompt; gửi prompt tạm khi ô còn trống để vẫn báo giá được.
@@ -155,7 +162,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
         const res = await postJson<{ cost: number }>("/api/jobs/quote", params, controller.signal);
         setCost(res.cost);
       } catch (err) {
-        if ((err as Error).name !== "AbortError") setCost(null);
+        if ((err as Error).name !== "AbortError") setQuoteError(toApiError(err));
       } finally {
         if (!controller.signal.aborted) setQuoting(false);
       }
@@ -185,7 +192,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
       });
       if (res.prompt) setPrompt(res.prompt);
     } catch (err) {
-      setError(err instanceof ApiError ? err : new ApiError("INTERNAL", (err as Error).message, 0));
+      setError(toApiError(err));
     } finally {
       setAiWriting(false);
     }
@@ -211,7 +218,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
       setRefreshKey((k) => k + 1);
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err : new ApiError("INTERNAL", (err as Error).message, 0));
+      setError(toApiError(err));
     } finally {
       setSubmitting(false);
     }
@@ -283,7 +290,7 @@ export function GenerateForm({ kind, fromJobId }: { kind: Kind; fromJobId?: stri
         <PresetPicker label={text.preset} presets={catalog.presets} value={presetId} onChange={setPresetId} />
         <ImageUpload label={text.upload} value={inputUrl} onChange={setInputUrl} onBusyChange={setUploading} />
 
-        {error && <ErrorNotice error={error} />}
+        {(error ?? quoteError) && <ErrorNotice error={(error ?? quoteError) as ApiError} minRank={model?.minPlanRank} />}
         {notice && <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{notice}</p>}
         <GenerateButton
           cost={cost}

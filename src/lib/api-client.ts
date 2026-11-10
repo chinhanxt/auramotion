@@ -56,6 +56,26 @@ export const STATUS_COLOR: Record<JobStatus, string> = {
   CANCELED: "bg-neutral-200 text-neutral-700",
 };
 
+// Mã lỗi job (cột `error`) → câu hiển thị; mã lạ thì hiện kèm mã để báo admin.
+const JOB_ERROR_TEXT: Record<string, string> = {
+  TIMEOUT: "quá thời gian xử lý",
+  CANCELED: "tác vụ đã bị hủy",
+  QUEUE_UNAVAILABLE: "hàng đợi đang lỗi",
+  BAD_INPUT: "file đầu vào không còn",
+  BAD_CLIP: "có clip không còn hoặc không hợp lệ",
+  BAD_PARAMS: "tham số không hợp lệ",
+  NO_RESULT: "engine không trả kết quả",
+  NO_IMAGE: "engine không trả ảnh",
+  NO_AUDIO: "không tạo được giọng đọc",
+  REFUSED: "nội dung bị từ chối, hãy đổi prompt",
+  QUOTA: "engine tạm hết lượt",
+  ASSEMBLE_FAILED: "ghép video lỗi",
+};
+
+export function jobErrorText(code: string): string {
+  return JOB_ERROR_TEXT[code] ?? `mã lỗi ${code}`;
+}
+
 const KIND_PATH: Record<JobItem["kind"], string> = { IMAGE: "image", VIDEO: "video", ASSEMBLE: "edit" };
 
 export function remakeHref(job: { id: string; kind: JobItem["kind"] }): string {

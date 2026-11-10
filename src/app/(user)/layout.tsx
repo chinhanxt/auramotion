@@ -16,7 +16,7 @@ export default async function UserLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 md:flex">
-      <UserNav />
+      <UserNav isAdmin={user.role === "ADMIN"} />
       <div className="min-w-0 flex-1">
         <header className="flex items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 py-3">
           <Link href="/studio/image" className="font-semibold md:hidden">
