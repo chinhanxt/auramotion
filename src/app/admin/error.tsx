@@ -1,12 +1,19 @@
 "use client";
 
-export default function AdminError({ reset }: { error: Error; reset: () => void }) {
+import { Button } from "@/components/ui/Button";
+import { Empty } from "@/components/ui/Bits";
+
+export default function AdminError({ error, reset }: { error: Error; reset: () => void }) {
   return (
-    <div className="space-y-3 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
-      <p>Có lỗi xảy ra khi tải trang, vui lòng thử lại.</p>
-      <button type="button" onClick={reset} className="rounded-md border border-red-300 px-3 py-1.5 font-medium hover:bg-red-100">
-        Thử lại
-      </button>
-    </div>
+    <Empty
+      icon="alert"
+      title="Không tải được trang"
+      hint={error.message?.slice(0, 200) || "Thử lại sau giây lát"}
+      action={
+        <Button variant="outline" size="sm" icon="refresh" onClick={reset}>
+          Thử lại
+        </Button>
+      }
+    />
   );
 }
