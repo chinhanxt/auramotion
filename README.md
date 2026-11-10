@@ -120,24 +120,35 @@ flock /tmp/auramotion-heavy.lock npx tsc --noEmit
 flock /tmp/auramotion-heavy.lock npm run build
 ```
 
-## Nghiệm thu thật (chinhan bấm, tốn lượt)
-Chạy `start-all.sh` với `MUSE2API_DRIVER=browser`, agy và codex thật. Ghi thời gian từng bước:
+## Vận hành nhanh (1 máy, bản build sẵn)
+```bash
+npm run build                      # nặng ~2,5 GB RAM, chạy một mình
+bash scripts/svc.sh start          # muse2api + app + worker chạy nền (pid ở data/*.pid, log ở data/logs/)
+bash scripts/svc.sh restart app    # sau mỗi lần build lại
+bash scripts/svc.sh status | stop
+```
+`scripts/muse2api.sh` chỉ quản lý muse2api (đọc `.env`, cổng theo `MUSE_API_URL`, CDP theo `MUSE2API_CDP_PORT`).
 
+### Tài khoản Muse: chat chính, chat phụ, chia việc
+- Mỗi request ảnh/video mở **1 thread mới ở 1 tab riêng** của tài khoản = *chat phụ*; số tab mỗi tài khoản = `MUSE2API_ACCOUNT_MAX_CONCURRENCY`. Lập kịch bản Story dùng *chat chính* `story:<id>` (giữ ngữ cảnh để hỏi lại khi AI trả thiếu cảnh).
+- AuraMotion giới hạn số chat phụ chạy cùng lúc theo loại (Admin → Muse → Slot: ảnh/video/chat, giãn cách gửi video, gửi tỷ lệ khung).
+- **Loại việc theo tài khoản** (Admin → Muse → Loại việc): vd tài khoản bị Muse chặn video theo vùng vẫn để *Ảnh + Chat*; video chỉ đi vào tài khoản cho phép. Cần muse2api có commit `fa9e13d` (`meta.kinds`, header `X-Muse-Account`).
+- **Ghim tài khoản cho 1 model**: Admin → Model → *Tài khoản Muse* (ghi `options.museAccount`). Seed tạo sẵn "MUSE Ảnh 2" nếu đặt `SEED_MUSE_IMAGE_ACCOUNT`. Model ghim có slot chat phụ riêng.
+
+## Nghiệm thu thật (10/11/2026, Muse thật gói Free, agy/codex thật)
 | Bước | Thời gian | Ghi chú |
 |---|---|---|
-| Đăng ký + đăng nhập | | |
-| AI viết prompt (agy) | | |
-| Ảnh MUSE | | |
-| Ảnh agy | | |
-| Ảnh codex (Pro) | | |
-| Video MUSE 5 s | | |
-| Mua Pro (webhook / admin xác nhận) | | |
-| Video MUSE 10 s | | |
-| Ghép video 3 câu (VieNeu) | | |
-| Admin xem số liệu | | |
+| AI viết prompt (agy → codex dự phòng) | agy 5,7 s · codex 14–17 s | gateway tự chuyển provider khi lỗi |
+| Ảnh MUSE (qua giao diện) | 29 s | "MUSE Ảnh 2" chạy đúng tài khoản ghim |
+| Video MUSE 5 s 9:16 (qua giao diện) | 58 s | 720×1280; Muse có lúc trả 10 s |
+| 3 video song song (3 chat phụ) | 61 s | gửi cách 15–20 s, file hợp lệ, không trùng |
+| Story 3 cảnh · Song song + tự ghép | 139 s | 1080×1920, 15 s |
+| Story 3 cảnh · Nối cảnh + tự ghép (qua giao diện) | 287 s | khung cuối cảnh trước = khung đầu cảnh sau, nhân vật giữ nguyên |
+| Lập kịch bản bằng chat chính Muse | 14–23 s | JSON hỏng được tự sửa / hỏi lại trong cùng thread |
 
-Lần nghiệm thu với muse2api mock + agy/codex giả + VieNeu thật (06/11): viết prompt ~1 s, ảnh MUSE/agy ~1,4 s, video 5 s/10 s ~5,6 s, ghép video 3 câu **53 s** (gần hết là VieNeu chạy CPU), ra 1080×1920.
+Chưa chạy thật: thanh toán qua webhook ngân hàng, ghép có lồng tiếng VieNeu trên bản v2, Codex Ảnh (cần gói Pro).
 
 ## Nhánh
 - `main` — bản ổn định, chỉ merge qua PR
 - `dev1`, `dev2` — nhánh phát triển
+- `v2` — bản v2 (giao diện mới, Story, AI Gateway, scheduler Muse, admin mới)
