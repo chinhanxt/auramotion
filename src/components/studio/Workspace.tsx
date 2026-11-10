@@ -451,6 +451,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
                     onToggle={onToggleWrite}
                     onWrite={onAiWrite}
                     pending={aiWriting}
+                    writer={catalog?.writer}
                     prewrite={prewrite}
                     onUsePrewrite={(text) => {
                       setPrompt(text);

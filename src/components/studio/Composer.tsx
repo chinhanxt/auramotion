@@ -5,7 +5,9 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Controls";
 import { MenuItem, Popover } from "@/components/ui/Overlay";
-import { formatCredit, type CatalogSkill } from "@/lib/api-client";
+import { VendorLogo } from "@/components/ui/VendorLogo";
+import { formatCredit, type CatalogSkill, type CatalogWriter } from "@/lib/api-client";
+import { providerLabel, vendorWriterName } from "@/lib/providers";
 
 export const RATIO_LABEL: Record<string, string> = { "1:1": "Vuông", "9:16": "Dọc", "16:9": "Ngang", "4:5": "Dọc 4:5" };
 
@@ -196,7 +198,7 @@ export function AiWriteControl({
   onToggle,
   onWrite,
   pending,
-  writer = "agy",
+  writer,
   prewrite,
   onUsePrewrite,
 }: {
@@ -207,11 +209,12 @@ export function AiWriteControl({
   onToggle: (v: boolean) => void;
   onWrite: () => void;
   pending: boolean;
-  writer?: string;
+  writer?: CatalogWriter;
   prewrite?: PrewriteView;
   onUsePrewrite?: (prompt: string) => void;
 }) {
   const skill = skills.find((s) => s.id === skillId);
+  const who = writer ? vendorWriterName(writer.vendor) : "AI";
   const pre = on && prewrite && prewrite.status !== "idle" ? prewrite : null;
   const ready = pre?.status === "ready" && Boolean(pre.prompt);
   return (
@@ -244,7 +247,10 @@ export function AiWriteControl({
             <span>AI đang viết</span>
           ) : on ? (
             <>
-              <span className="max-sm:hidden">{writer} viết</span>
+              <span className="inline-flex items-center gap-1 max-sm:hidden">
+                {writer && <VendorLogo vendor={writer.vendor} size={14} plain />}
+                {who} viết
+              </span>
               <span className="text-muted max-sm:hidden">·</span>
               <span className="min-w-0 truncate text-[#c9bdff]">{skill?.name ?? pre?.skillName ?? "Tự chọn"}</span>
             </>
@@ -258,14 +264,14 @@ export function AiWriteControl({
       {(close) => (
         <>
           <div className="px-1.5 pt-1 pb-1">
-            <Switch checked={on} onChange={onToggle} label="AI viết prompt" hint={on ? `Tạo: ${writer} viết rồi gửi engine` : "Tạo: gửi nguyên văn"} icon="sparkle" />
+            <Switch checked={on} onChange={onToggle} label="AI viết prompt" hint={on ? `Tạo: ${who} viết rồi gửi engine` : "Tạo: gửi nguyên văn"} icon="sparkle" />
           </div>
           {pre && (
             <div className="mx-1 mb-1 rounded-[10px] bg-black/30 p-2.5 hairline">
               <p className="flex items-center gap-1.5 text-[11.5px] font-medium">
                 <span className={cx("h-1.5 w-1.5 rounded-full", ready ? "bg-accent" : "animate-pulse bg-[#b7a6ff]")} />
                 <span className={ready ? "text-accent" : "text-[#c9bdff]"}>{ready ? "Sẵn sàng" : "Đang viết trước…"}</span>
-                {(pre.provider || pre.skillName) && <span className="min-w-0 truncate text-dim">· {[pre.provider, pre.skillName].filter(Boolean).join(" · ")}</span>}
+                {(pre.provider || pre.skillName) && <span className="min-w-0 truncate text-dim">· {[pre.provider ? providerLabel(pre.provider) : "", pre.skillName].filter(Boolean).join(" · ")}</span>}
               </p>
               {ready ? (
                 <p className="mt-1.5 max-h-28 overflow-y-auto text-[12px] leading-relaxed whitespace-pre-wrap text-fg/80">{pre.prompt}</p>
