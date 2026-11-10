@@ -7,6 +7,8 @@ export type MediaRequest = {
   durationSec?: number;
   inputPath?: string;
   inputUrl?: string;
+  // Muse video: không gửi `size`.
+  omitSize?: boolean;
 };
 
 export class EngineError extends Error {

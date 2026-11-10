@@ -2,6 +2,7 @@ import { Queue, Worker } from "bullmq";
 import { redis } from "@/lib/redis";
 import { cleanupExpiredResults, sweepStuckJobs } from "@/server/services/job";
 import { expireSubscriptions, runMonthlyGrants, sendRenewalReminders } from "@/server/services/plan";
+import { sweepStories } from "@/server/services/story";
 
 const CRON_QUEUE = "cron";
 const TZ = "Asia/Ho_Chi_Minh";
@@ -11,6 +12,7 @@ type Task = { name: string; run: (now: Date) => Promise<number> };
 const TASKS: Record<string, Task[]> = {
   "every-5-min": [
     { name: "sweepStuckJobs", run: sweepStuckJobs },
+    { name: "sweepStories", run: sweepStories },
     { name: "runMonthlyGrants", run: runMonthlyGrants },
     { name: "expireSubscriptions", run: expireSubscriptions },
   ],

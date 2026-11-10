@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import type { JobKind, ModelProvider, PlanCode, Prisma } from "@prisma/client";
 import { db } from "../src/lib/db";
 import { startFree } from "../src/server/services/plan";
+import { CAMERAS, LEGACY_PRESET_META, SKILLS, THEMES } from "./seed-data";
 
 const IMAGE_RATIOS = ["1:1", "9:16", "16:9", "4:5"];
 const VIDEO_RATIOS = ["9:16", "16:9", "1:1"];
@@ -71,6 +72,9 @@ const SETTINGS: Record<string, Prisma.InputJsonValue> = {
   voice_line_cost: 1,
   prompt_writer: { provider: "agy", model: "claude-sonnet-5-5-low" },
   music_tracks: MUSIC_TRACKS,
+  ai_gateway: { order: ["agy", "codex", "muse"], agyModel: "claude-sonnet-5-5-low", codexModel: "", timeoutSec: 120 },
+  muse_slots: { image: 2, video: 3, chat: 1, gapSec: 15, sendVideoAspect: true },
+  story: { planCost: 0.5, maxShots: 8, planner: "muse", assemble: { subtitles: false, keepClipAudio: true } },
 };
 
 // Upsert với update rỗng: chạy lại không ghi đè cấu hình Admin đã sửa.
@@ -83,6 +87,20 @@ export async function seed(): Promise<void> {
   }
   for (const p of PRESETS) {
     await db.preset.upsert({ where: { kind_name: { kind: p.kind, name: p.name } }, create: p, update: {} });
+  }
+  for (const [kind, list] of [["STYLE", THEMES], ["CAMERA", CAMERAS]] as const) {
+    for (const t of list) {
+      const data = { ...t, kind, featured: t.featured ?? false };
+      await db.preset.upsert({ where: { kind_name: { kind, name: t.name } }, create: data, update: {} });
+    }
+  }
+  // Preset cũ chưa có slug: bổ sung mô tả, bảng màu, bìa (không đè preset Admin đã sửa).
+  for (const [key, meta] of Object.entries(LEGACY_PRESET_META)) {
+    const [kind, name] = key.split(":") as ["STYLE" | "CAMERA", string];
+    await db.preset.updateMany({ where: { kind, name, slug: null }, data: meta });
+  }
+  for (const s of SKILLS) {
+    await db.promptSkill.upsert({ where: { slug: s.slug }, create: s, update: {} });
   }
   for (const [key, value] of Object.entries(SETTINGS)) {
     await db.setting.upsert({ where: { key }, create: { key, value }, update: {} });

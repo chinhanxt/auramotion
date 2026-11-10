@@ -4,12 +4,16 @@ import { AppError } from "@/lib/errors";
 import { handle, readJson } from "@/lib/http";
 import { writePrompt } from "@/server/engines/prompt-writer";
 import { EngineError } from "@/server/engines/types";
+import { getActivePlan } from "@/server/services/plan";
 
 const bodySchema = z.object({
   idea: z.string().trim().min(1, "Hãy nhập ý tưởng").max(2000, "Ý tưởng tối đa 2000 ký tự"),
   kind: z.enum(["image", "video", "script"], { message: "Loại không hợp lệ" }),
   aspect: z.enum(["1:1", "9:16", "16:9", "4:5"], { message: "Tỷ lệ khung không hợp lệ" }).optional(),
   durationSec: z.number().int().min(1).max(120).optional(),
+  skillId: z.string().min(1).max(100).optional(),
+  styleId: z.string().min(1).max(100).optional(),
+  cameraId: z.string().min(1).max(100).optional(),
 });
 
 // Mỗi user tối đa 1 yêu cầu viết prompt đang chạy (app chạy 1 tiến trình trên 1 máy).
@@ -23,7 +27,9 @@ export function POST(req: Request): Promise<Response> {
     if (busy.has(user.id)) throw new AppError("CONCURRENCY_LIMIT", "AI đang viết cho bạn, vui lòng chờ xong");
     busy.add(user.id);
     try {
-      return await writePrompt(input);
+      const { plan } = await getActivePlan(user.id);
+      // Trả thêm `provider` (agy | codex | muse) đã viết.
+      return await writePrompt({ ...input, planRank: plan.rank });
     } catch (err) {
       if (err instanceof EngineError) {
         console.error(`[ai/prompt] ${err.code}: ${err.message}`);

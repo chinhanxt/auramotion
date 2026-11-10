@@ -57,7 +57,7 @@ export const generationParamsSchema = z.discriminatedUnion("kind", [imageParams,
 export type GenerationParams = z.infer<typeof generationParamsSchema>;
 export type AssembleParams = Extract<GenerationParams, { kind: "assemble" }>;
 
-type ModelOptions = { aspectRatios?: string[]; counts?: number[]; durations?: number[] };
+type ModelOptions = { aspectRatios?: string[]; counts?: number[]; durations?: number[]; maxRefs?: number };
 
 const KIND = { image: "IMAGE", video: "VIDEO", assemble: "ASSEMBLE" } as const;
 
@@ -82,6 +82,7 @@ export function validateParams(
   if (!allowed(options.aspectRatios, ratio)) invalid("Tỷ lệ khung hình không hợp lệ");
 
   if (p.kind === "image" && !allowed(options.counts, p.imageCount ?? 1)) invalid("Số ảnh không hợp lệ");
+  if (p.kind !== "assemble" && p.inputUrl && options.maxRefs === 0) invalid("Engine này không nhận ảnh tham chiếu");
 
   if (p.kind === "video") {
     const duration = p.durationSec ?? 5;

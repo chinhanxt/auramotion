@@ -36,6 +36,8 @@ describe("writePrompt", () => {
     process.env.AGY_HOME = agyHome;
     process.env.FAKE_LOG = log;
     await setSetting("prompt_writer", { provider: "agy", model: "claude-sonnet-5-5-low" });
+    // Không gọi Muse thật / mock trong test này.
+    await setSetting("ai_gateway", { order: ["agy", "codex"], timeoutSec: 60 });
   });
 
   afterEach(async () => {
@@ -52,7 +54,7 @@ describe("writePrompt", () => {
 
   it("image prompt via agy", async () => {
     const out = await writePrompt({ idea: "chai nước hoa hổ phách", kind: "image", aspect: "9:16" });
-    expect(out).toEqual({ prompt: "fake prompt" });
+    expect(out).toEqual({ prompt: "fake prompt", provider: "agy" });
     const text = await readLog();
     expect(text).toContain("agent=writer");
     expect(text).toContain("agent_file=yes");
@@ -66,7 +68,7 @@ describe("writePrompt", () => {
     process.env.FAKE_FAIL = "1";
     // codex giả luôn trả lines nên dùng kind script để kiểm đường dự phòng.
     const out = await writePrompt({ idea: "trà sữa", kind: "script" });
-    expect(out).toEqual({ lines: ["Câu 1.", "Câu 2."] });
+    expect(out).toEqual({ lines: ["Câu 1.", "Câu 2."], provider: "codex" });
     const text = await readLog();
     expect(text).toContain("agent=writer");
     expect(text).toMatch(/codex exec --ephemeral --skip-git-repo-check -C \S+ -s read-only -c model_reasoning_effort="low" -o \S+\/last\.txt/);
@@ -75,7 +77,7 @@ describe("writePrompt", () => {
   it("script returns lines", async () => {
     await setSetting("prompt_writer", { provider: "codex" });
     const out = await writePrompt({ idea: "son môi đỏ, giảm 20% hôm nay", kind: "script" });
-    expect(out).toEqual({ lines: ["Câu 1.", "Câu 2."] });
+    expect(out).toEqual({ lines: ["Câu 1.", "Câu 2."], provider: "codex" });
     expect(await readLog()).not.toContain("agent=writer");
   });
 
@@ -83,7 +85,7 @@ describe("writePrompt", () => {
     process.env.FAKE_RESPONSE = JSON.stringify("Xin lỗi, tôi không hiểu yêu cầu");
     await expect(writePrompt({ idea: "xe đạp", kind: "image" })).rejects.toMatchObject({ code: "BAD_OUTPUT" });
     process.env.FAKE_RESPONSE = JSON.stringify('```json\n{"prompt":"a bicycle at dawn"}\n```');
-    expect(await writePrompt({ idea: "xe đạp", kind: "video", durationSec: 5 })).toEqual({ prompt: "a bicycle at dawn" });
+    expect(await writePrompt({ idea: "xe đạp", kind: "video", durationSec: 5 })).toEqual({ prompt: "a bicycle at dawn", provider: "agy" });
   });
 
   it("both engines fail throws PROMPT_WRITER", async () => {

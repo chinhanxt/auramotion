@@ -8,6 +8,7 @@ const listQuery = z.object({
   kind: z.enum(["image", "video", "assemble"]).optional(),
   status: z.enum(["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "CANCELED"]).optional(),
   cursor: z.string().min(1).optional(),
+  storyId: z.string().min(1).max(100).optional(),
   ids: z
     .string()
     .transform((s) => s.split(",").map((id) => id.trim()).filter(Boolean))

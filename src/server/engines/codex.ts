@@ -15,7 +15,11 @@ export function codexBin(): string {
 }
 
 // `--ephemeral`: codex không lưu phiên (rollout) vào CODEX_HOME. Câu trả lời cuối ghi vào <dir>/last.txt.
-export async function codexText(prompt: string, effort = "low"): Promise<string> {
+export async function codexText(
+  prompt: string,
+  effort = "low",
+  opts: { model?: string; signal?: AbortSignal } = {},
+): Promise<string> {
   const { result } = await runCli({
     bin: codexBin(),
     args: (dir) => [
@@ -28,12 +32,14 @@ export async function codexText(prompt: string, effort = "low"): Promise<string>
       "read-only",
       "-c",
       `model_reasoning_effort="${effort}"`,
+      ...(opts.model ? ["-m", opts.model] : []),
       "-o",
       path.join(dir, "last.txt"),
       "--",
       prompt,
     ],
     timeoutMs: TEXT_TIMEOUT_MS,
+    signal: opts.signal,
     collect: (dir) =>
       readFile(path.join(dir, "last.txt"), "utf8").catch(() => {
         throw new EngineError("CODEX_FAILED", "codex không trả câu trả lời");

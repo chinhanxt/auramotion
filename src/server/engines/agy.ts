@@ -79,7 +79,7 @@ export function parseAgyOutput(stdout: string): string {
   return typeof data.response === "string" ? data.response : "";
 }
 
-export async function agyText(prompt: string, model: string): Promise<string> {
+export async function agyText(prompt: string, model: string, signal?: AbortSignal): Promise<string> {
   const { stdout } = await runCli({
     bin: agyBin(),
     args: (dir) => [
@@ -97,6 +97,7 @@ export async function agyText(prompt: string, model: string): Promise<string> {
       "120s",
     ],
     timeoutMs: TEXT_TIMEOUT_MS,
+    signal,
     setup: (dir) => setupAgyWorkspace(dir, { writer: WRITER_AGENT }),
   });
   return parseAgyOutput(stdout);

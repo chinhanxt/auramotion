@@ -46,6 +46,13 @@ Nhánh nền: `v2` (từ `dev2` + gộp `rv-ui`). Mọi chữ hiển thị: **ti
 `JobItem` thêm `progress`, `storyId`, `shotIndex`, `params` (cần cho UI hiện aspect/duration).
 `CatalogSkill` = `{id,slug,name,kind,description,locked}`.
 
+Bổ sung (BE, 10/11):
+- `catalog?kind=video|story` có `videoUnavailable: boolean` (Muse đang chặn video theo vùng → cảnh báo trước khi trừ Credit); `kind=story` có thêm `story: {planCost, maxShots}`, presets gồm cả STYLE + CAMERA, skills STORY + SCRIPT.
+- Lỗi tạo job video khi bị chặn: HTTP 503 `MUSE_VIDEO_UNAVAILABLE`. Mã lỗi job mới: `REGION_BLOCKED`, `BAD_MEDIA`, `FRAME_FAILED`; mã lỗi story: `PLAN_FAILED`, `SHOT_FAILED`, `ASSEMBLE_FAILED`, `TIMEOUT` (câu tiếng Việt: `src/server/services/job-errors.ts`).
+- `JobItem.params.result = {width,height,durationSec?}` — kích thước / thời lượng thật đo bằng ffprobe (Muse có thể trả 10 s khi xin 5 s).
+- `POST /api/stories` nhận thêm `assemble?: {musicId?, subtitles?, keepClipAudio?}`. `POST /render`, `GET /:id`, `PATCH /:id` trả `{story}`; `retry`, `assemble` trả `{job}`.
+- `GET /api/jobs?storyId=` lọc job theo story. SSE `credit` gửi `{balance, held}`.
+
 ## 4. API admin (requireAdmin)
 | Path | Ghi chú |
 |---|---|
@@ -57,7 +64,8 @@ Nhánh nền: `v2` (từ `dev2` + gộp `rv-ui`). Mọi chữ hiển thị: **ti
 | `/api/admin/gateway` GET/PUT | setting `ai_gateway` `{order:["agy","codex","muse"], agyModel, codexModel, timeoutSec}` + health từng provider (độ trễ lần cuối, lỗi cuối) |
 | `/api/admin/queues` GET | đếm waiting/active/delayed/failed từng hàng đợi BullMQ + job đang chạy; `POST /api/admin/queues/:name/(pause\|resume)` |
 | `/api/admin/jobs/:id` PATCH `{featured}` | đánh dấu nổi bật cho Explore |
-| `/api/admin/settings` (đã có) | thêm khóa `muse_slots` `{image:2, video:2, chat:1, gapSec:20, sendVideoAspect:false}` , `story` `{planCost:0.5, maxShots:8}` |
+| `/api/admin/settings` (đã có) | thêm khóa `muse_slots` `{image:2, video:3, chat:1, gapSec:15, sendVideoAspect:true}` (đo thật 10/11), `story` `{planCost:0.5, maxShots:8, planner:"muse", assemble:{musicId?,subtitles,keepClipAudio}}`, `ai_gateway` |
+| `/api/admin/muse/video-block/clear` POST | gỡ cờ chặn video (Muse báo `REGION_BLOCKED`); `/api/admin/muse/status` có `videoBlocked: {at,message} \| null` |
 
 ## 5. Phân việc
 - **BE (backend)**: §2, §3, §4 phần server; AI Gateway `src/server/ai/gateway.ts`; Muse scheduler (Redis semaphore + giãn cách) trong worker; kiểm mp4/ảnh sau tải (ffprobe); tiến độ job từ `progress` của muse2api → DB + pub/sub; hàng đợi `story`; seed skill + theme; dọn việc backend trong `TODO.md`; test vitest.

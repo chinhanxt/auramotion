@@ -437,23 +437,51 @@ export function updatePlan(input: unknown) {
 
 // ---------- Preset ----------
 
+// Bìa: CSS gradient (không url(), không ; {}) hoặc ảnh /media/... / http(s).
+const GRADIENT = /^(repeating-)?(linear|radial|conic)-gradient\(/;
+const coverSchema = z
+  .string()
+  .trim()
+  .max(2000)
+  .refine((v) => (GRADIENT.test(v) && !/url\(|[;{}<>]/i.test(v)) || /^\/media\/[\w./-]+$/.test(v) || /^https?:\/\/\S+$/.test(v), {
+    message: "Bìa phải là CSS gradient hoặc URL ảnh",
+  });
+
 const presetFields = {
   kind: z.enum(["STYLE", "CAMERA"]),
   name: z.string().trim().min(1, { message: "Vui lòng nhập tên" }).max(100),
   promptSuffix: z.string().trim().min(1, { message: "Vui lòng nhập đoạn prompt" }).max(1000),
   thumbnailUrl: z.string().trim().max(2000).nullable().transform((v) => v || null),
   enabled: z.boolean(),
+  slug: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9-]{2,60}$/, { message: "Slug chỉ gồm chữ thường, số, dấu gạch ngang" })
+    .nullable(),
+  category: z.string().trim().max(60),
+  description: z.string().trim().max(500),
+  cover: coverSchema.nullable().transform((v) => v || null),
+  palette: z.array(z.string().regex(/^#[0-9a-fA-F]{6}$/, { message: "Màu phải dạng #rrggbb" })).max(5, { message: "Tối đa 5 màu" }),
+  sort: z.coerce.number().int(),
+  featured: z.boolean(),
 };
 
 export const presetCreateSchema = z.object({
   ...presetFields,
   thumbnailUrl: presetFields.thumbnailUrl.optional(),
   enabled: presetFields.enabled.default(true),
+  slug: presetFields.slug.optional(),
+  category: presetFields.category.default(""),
+  description: presetFields.description.default(""),
+  cover: presetFields.cover.optional(),
+  palette: presetFields.palette.default([]),
+  sort: presetFields.sort.default(0),
+  featured: presetFields.featured.default(false),
 });
 export const presetUpdateSchema = z.object({ id: z.string().min(1), ...presetFields }).partial().required({ id: true });
 
 export function listPresets() {
-  return db.preset.findMany({ orderBy: [{ kind: "asc" }, { name: "asc" }] });
+  return db.preset.findMany({ orderBy: [{ kind: "asc" }, { sort: "asc" }, { name: "asc" }] });
 }
 
 export function createPreset(input: unknown) {
@@ -538,6 +566,11 @@ export async function updateMusicTrack(input: unknown): Promise<MusicTrack> {
 export async function deleteMusicTrack(id: string): Promise<void> {
   const tracks = await getTracks();
   if (!tracks.some((t) => t.id === id)) throw new AppError("NOT_FOUND", "Không tìm thấy bài nhạc");
+  // Job ghép đang chờ / chạy dùng bài này sẽ lỗi nếu xóa: chặn lại.
+  const inUse = await db.job.count({
+    where: { kind: "ASSEMBLE", status: { in: ["PENDING", "RUNNING"] }, params: { path: ["musicId"], equals: id } },
+  });
+  if (inUse > 0) throw new AppError("CONFLICT", "Bài nhạc đang được dùng cho tác vụ ghép chưa xong");
   await setSetting(
     "music_tracks",
     tracks.filter((t) => t.id !== id),
@@ -611,6 +644,38 @@ export async function listPayments(input: z.input<typeof paymentListQuery>) {
 
 // ---------- Cài đặt ----------
 
+export const museSlotsSchema = z.object({
+  image: z.coerce.number().int().min(0).max(10),
+  video: z.coerce.number().int().min(0).max(10),
+  chat: z.coerce.number().int().min(0).max(5),
+  gapSec: z.coerce.number().min(0).max(600),
+  sendVideoAspect: z.boolean(),
+});
+
+export const storySettingSchema = z.object({
+  planCost: z.coerce.number().min(0, { message: "Phí lập kịch bản không được âm" }).max(1000),
+  maxShots: z.coerce.number().int().min(2).max(8),
+  planner: z.enum(["agy", "codex", "muse"]).default("muse"),
+  assemble: z
+    .object({
+      musicId: z.string().trim().min(1).max(100).optional(),
+      subtitles: z.boolean().optional(),
+      keepClipAudio: z.boolean().optional(),
+    })
+    .default({ subtitles: false, keepClipAudio: true }),
+});
+
+export const gatewaySettingSchema = z.object({
+  order: z
+    .array(z.enum(["agy", "codex", "muse"]))
+    .min(1, { message: "Cần ít nhất 1 provider" })
+    .refine((o) => new Set(o).size === o.length, { message: "Provider không được trùng" }),
+  agyModel: z.string().trim().max(200).optional(),
+  codexModel: z.string().trim().max(200).optional(),
+  museModel: z.string().trim().max(200).optional(),
+  timeoutSec: z.coerce.number().int().min(10).max(600),
+});
+
 export const settingsSchema = z
   .object({
     maintenance: z.boolean(),
@@ -628,12 +693,15 @@ export const settingsSchema = z
         model: z.string().trim().max(200),
       })
       .refine((w) => w.provider !== "agy" || w.model.length > 0, { message: "Cần nhập model cho agy", path: ["model"] }),
+    muse_slots: museSlotsSchema,
+    story: storySettingSchema,
+    ai_gateway: gatewaySettingSchema,
   })
   .partial();
 
 export type AdminSettings = Required<z.infer<typeof settingsSchema>>;
 
-const SETTING_KEYS = ["maintenance", "voice_line_cost", "credit_packs", "prompt_writer"] as const;
+const SETTING_KEYS = ["maintenance", "voice_line_cost", "credit_packs", "prompt_writer", "muse_slots", "story", "ai_gateway"] as const;
 
 export async function getAdminSettings(): Promise<AdminSettings> {
   const values = await Promise.all(SETTING_KEYS.map((k) => getSetting<unknown>(k).catch(() => null)));

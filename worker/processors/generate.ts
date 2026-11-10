@@ -1,6 +1,7 @@
-import type { Job as BullJob } from "bullmq";
+import { DelayedError, type Job as BullJob } from "bullmq";
 import { AppError } from "@/lib/errors";
 import type { QueueJobData } from "@/lib/queue";
+import { SlotBusyError } from "@/server/engines/muse-scheduler";
 import { EngineError } from "@/server/engines/types";
 import { failJob, processJob } from "@/server/services/job";
 
@@ -10,10 +11,15 @@ function errorCode(err: unknown): string {
 }
 
 // Lỗi tạm thời được ném lại để BullMQ thử tiếp; lần thử cuối thì đánh FAILED và hoàn Credit.
-export async function processGenerate(bullJob: BullJob<QueueJobData>): Promise<void> {
+// Muse hết slot / chưa đủ giãn cách: dời job lại (không tính lần thử, không giữ chỗ worker).
+export async function processGenerate(bullJob: BullJob<QueueJobData>, token?: string): Promise<void> {
   try {
     await processJob(bullJob.data.jobId);
   } catch (err) {
+    if (err instanceof SlotBusyError && token) {
+      await bullJob.moveToDelayed(Date.now() + err.waitMs, token);
+      throw new DelayedError();
+    }
     const attempts = bullJob.opts.attempts ?? 1;
     if (bullJob.attemptsMade + 1 >= attempts) await failJob(bullJob.data.jobId, errorCode(err));
     throw err;

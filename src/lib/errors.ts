@@ -11,6 +11,7 @@ export type ErrorCode =
   | "ACCOUNT_LOCKED"
   | "CONFLICT"
   | "ENGINE"
+  | "MUSE_VIDEO_UNAVAILABLE"
   | "INTERNAL";
 
 const DEFAULT_STATUS: Record<ErrorCode, number> = {
@@ -26,6 +27,7 @@ const DEFAULT_STATUS: Record<ErrorCode, number> = {
   ACCOUNT_LOCKED: 423,
   CONFLICT: 409,
   ENGINE: 502,
+  MUSE_VIDEO_UNAVAILABLE: 503,
   INTERNAL: 500,
 };
 

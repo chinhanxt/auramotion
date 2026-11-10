@@ -3,7 +3,7 @@ import { Prisma, type BillingPeriod, type Payment } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { grant } from "@/server/services/credit";
+import { grant, publishCredit } from "@/server/services/credit";
 import { activatePlan } from "@/server/services/plan";
 import { getSetting } from "@/server/services/settings";
 
@@ -11,7 +11,11 @@ export type OrderInput =
   | { type: "PLAN"; planCode: "pro" | "ultra"; period: BillingPeriod }
   | { type: "CREDIT"; credits: 100 | 500 | 1000 };
 
-export type PaymentWithQr = Payment & { qrUrl: string };
+export type PublicPayment = Pick<
+  Payment,
+  "id" | "type" | "planCode" | "period" | "creditAmount" | "amount" | "refCode" | "status" | "paidAt" | "createdAt"
+>;
+export type PaymentWithQr = PublicPayment & { qrUrl: string };
 
 const REF_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 // Lookahead để lấy cả các ứng viên chồng lấn, vd "NAMAM12345678" → "AMAM123456", "AM12345678".
@@ -36,8 +40,21 @@ function qrUrl(amount: number, refCode: string): string {
   return `https://img.vietqr.io/image/${bankId}-${account}-compact2.png?amount=${amount}&addInfo=${refCode}&accountName=${name}`;
 }
 
-function withQr(payment: Payment): PaymentWithQr {
-  return { ...payment, qrUrl: qrUrl(payment.amount, payment.refCode) };
+// Chỉ trả trường người dùng cần (bỏ providerTxnId, confirmedBy, userId).
+function withQr(p: Payment): PaymentWithQr {
+  return {
+    id: p.id,
+    type: p.type,
+    planCode: p.planCode,
+    period: p.period,
+    creditAmount: p.creditAmount,
+    amount: p.amount,
+    refCode: p.refCode,
+    status: p.status,
+    paidAt: p.paidAt,
+    createdAt: p.createdAt,
+    qrUrl: qrUrl(p.amount, p.refCode),
+  };
 }
 
 function isUniqueViolation(err: unknown): boolean {
@@ -84,7 +101,8 @@ export async function fulfillPayment(
   paymentId: string,
   opts: { providerTxnId?: string; confirmedBy?: string },
 ): Promise<boolean> {
-  return db.$transaction(async (tx) => {
+  let userId: string | null = null;
+  const done = await db.$transaction(async (tx) => {
     const now = new Date();
     const claimed = await tx.payment.updateMany({
       where: { id: paymentId, status: "PENDING" },
@@ -93,6 +111,7 @@ export async function fulfillPayment(
     if (claimed.count === 0) return false;
 
     const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    userId = payment.userId;
     if (payment.type === "PLAN") {
       if (payment.planCode !== "pro" && payment.planCode !== "ultra") throw new AppError("INTERNAL", "Đơn gói không hợp lệ");
       await activatePlan(payment.userId, payment.planCode, payment.period ?? "MONTH", now, tx);
@@ -106,6 +125,8 @@ export async function fulfillPayment(
     }
     return true;
   });
+  if (done && userId) await publishCredit(userId);
+  return done;
 }
 
 function verifySignature(rawBody: string, signature: string | null): void {

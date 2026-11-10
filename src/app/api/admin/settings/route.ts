@@ -9,7 +9,7 @@ export function GET(): Promise<Response> {
   });
 }
 
-// Body: một phần { maintenance, voice_line_cost, credit_packs, prompt_writer }.
+// Body: một phần { maintenance, voice_line_cost, credit_packs, prompt_writer, muse_slots, story, ai_gateway }.
 export function PATCH(req: Request): Promise<Response> {
   return handle(async () => {
     await requireAdmin();
