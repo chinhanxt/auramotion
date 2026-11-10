@@ -1,5 +1,7 @@
 import type { Prisma, PresetKind, SkillKind } from "@prisma/client";
 import { db } from "@/lib/db";
+import { providerVendor } from "@/lib/providers";
+import { getAiRoles } from "@/server/ai/roles";
 import { getVideoBlocked } from "@/server/engines/muse-block";
 import { getActivePlan } from "@/server/services/plan";
 import { getSetting } from "@/server/services/settings";
@@ -49,6 +51,9 @@ export async function getCatalog(userId: string, kind: CatalogKind) {
   const usesVideo = kind === "video" || kind === "story";
   const videoUnavailable = usesVideo && models.some((m) => m.provider === "MUSE") ? Boolean(await getVideoBlocked()) : false;
   const story = kind === "story" ? await getStorySetting() : undefined;
+  // Ai viết prompt (bước đầu chuỗi writer) → chip "<logo> Google viết" ở composer.
+  const step = kind === "image" || kind === "video" ? (await getAiRoles().catch(() => null))?.writer.chain[0] : undefined;
+  const writer = step ? { provider: step.provider, model: step.model ?? null, vendor: providerVendor(step.provider, step.model) } : undefined;
   return {
     // Nhóm theo hãng (Muse, Google, Anthropic, OpenAI, local) rồi theo sort. Chỉ lộ verified.ok.
     models: sortByVendor(models).map(({ verified, source: _source, ...m }) => ({
@@ -63,6 +68,7 @@ export async function getCatalog(userId: string, kind: CatalogKind) {
     ...(music ? { music } : {}),
     ...(usesVideo ? { videoUnavailable } : {}),
     ...(story ? { story: { planCost: story.planCost, maxShots: story.maxShots } } : {}),
+    ...(writer ? { writer } : {}),
   };
 }
 

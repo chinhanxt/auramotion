@@ -69,7 +69,7 @@ export async function getStats(range: StatsRange, now: Date = new Date()): Promi
     db.user.count({ where: { createdAt: window } }),
     db.job.findMany({
       where: { status: "SUCCEEDED", createdAt: window },
-      select: { kind: true, createdAt: true, startedAt: true, finishedAt: true, modelId: true, model: { select: { name: true } } },
+      select: { kind: true, createdAt: true, startedAt: true, finishedAt: true, modelId: true, model: { select: { name: true, displayName: true } } },
     }),
     db.payment.findMany({ where: { status: "SUCCEEDED", paidAt: window }, select: { amount: true, paidAt: true } }),
     // Credit đã tiêu = phần đã giữ của các job đã bị trừ (charge) trong khoảng.
@@ -79,7 +79,7 @@ export async function getStats(range: StatsRange, now: Date = new Date()): Promi
         job: {
           select: {
             modelId: true,
-            model: { select: { name: true } },
+            model: { select: { name: true, displayName: true } },
             transactions: { where: { type: "hold" }, select: { amount: true } },
           },
         },
@@ -106,7 +106,7 @@ export async function getStats(range: StatsRange, now: Date = new Date()): Promi
       else row.assembles++;
     }
     if (job.startedAt && job.finishedAt) {
-      const entry = durations.get(job.modelId) ?? { name: job.model.name, total: 0, count: 0 };
+      const entry = durations.get(job.modelId) ?? { name: job.model.displayName || job.model.name, total: 0, count: 0 };
       entry.total += (job.finishedAt.getTime() - job.startedAt.getTime()) / 1000;
       entry.count++;
       durations.set(job.modelId, entry);
@@ -121,7 +121,7 @@ export async function getStats(range: StatsRange, now: Date = new Date()): Promi
   for (const { job } of charges) {
     if (!job) continue;
     const held = job.transactions.reduce((sum, t) => sum.minus(t.amount), new Prisma.Decimal(0));
-    const entry = spent.get(job.modelId) ?? { name: job.model.name, credits: new Prisma.Decimal(0) };
+    const entry = spent.get(job.modelId) ?? { name: job.model.displayName || job.model.name, credits: new Prisma.Decimal(0) };
     entry.credits = entry.credits.plus(held);
     spent.set(job.modelId, entry);
   }
@@ -202,7 +202,7 @@ export async function getUserDetail(userId: string) {
       where: { userId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 50,
-      include: { model: { select: { name: true } } },
+      include: { model: { select: { name: true, displayName: true } } },
     }),
   ]);
   return {
@@ -633,7 +633,7 @@ export async function listAdminJobs(input: z.input<typeof jobListQuery>) {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { user: { select: { id: true, email: true } }, model: { select: { id: true, name: true } } },
+      include: { user: { select: { id: true, email: true } }, model: { select: { id: true, name: true, displayName: true } } },
     }),
   ]);
   return { items, total, page, pageSize };
@@ -642,7 +642,7 @@ export async function listAdminJobs(input: z.input<typeof jobListQuery>) {
 export async function getAdminJob(id: string) {
   const job = await db.job.findUnique({
     where: { id },
-    include: { user: { select: { id: true, email: true } }, model: { select: { id: true, name: true, provider: true } } },
+    include: { user: { select: { id: true, email: true } }, model: { select: { id: true, name: true, displayName: true, provider: true } } },
   });
   if (!job) throw new AppError("NOT_FOUND", "Không tìm thấy tác vụ");
   return { job };
@@ -732,7 +732,7 @@ export const settingsSchema = z
         provider: z.enum(["agy", "codex"]),
         model: z.string().trim().max(200),
       })
-      .refine((w) => w.provider !== "agy" || w.model.length > 0, { message: "Cần nhập model cho agy", path: ["model"] }),
+      .refine((w) => w.provider !== "agy" || w.model.length > 0, { message: "Cần nhập model cho Google", path: ["model"] }),
     muse_slots: museSlotsSchema,
     story: storySettingSchema,
     ai_gateway: gatewaySettingSchema,

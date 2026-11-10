@@ -12,7 +12,7 @@ import { storagePath } from "@/lib/storage";
 import { MuseScheduler } from "@/server/engines/muse-scheduler";
 import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
 import { syncModels, verifyModel } from "@/server/services/model-catalog";
-import { effortBadge, prettyModelName, sortByVendor, vendorOf } from "@/server/services/model-naming";
+import { effortBadge, legacyModelName, shortModelName, sortByVendor, vendorOf } from "@/server/services/model-naming";
 import { seed } from "../../prisma/seed";
 import { resetDb } from "../helpers/db";
 
@@ -55,16 +55,18 @@ const okEngine = (seen: MediaRequest[] = []): FileEngine => ({
 });
 
 describe("model naming", () => {
-  it("tên đẹp + hãng + nhãn effort", () => {
-    expect(prettyModelName("gemini-3.8-flash-low")).toBe("Gemini 3.8 Flash");
-    expect(prettyModelName("gemini-4-argon-low")).toBe("Gemini 4 Argon");
-    expect(prettyModelName("claude-sonnet-5-5-low")).toBe("Claude Sonnet 5.5");
-    expect(prettyModelName("claude-opus-5-5-high")).toBe("Claude Opus 5.5");
-    expect(prettyModelName("gpt-6.1-sol")).toBe("GPT-6.1 Sol");
-    expect(prettyModelName("gpt-5.5")).toBe("GPT-5.5");
-    expect(prettyModelName("gpt-6-chat-thinking")).toBe("GPT-6 Chat Thinking");
-    expect(prettyModelName("gpt-daybreak-mini")).toBe("GPT Daybreak Mini");
-    expect(prettyModelName("muse-image")).toBe("Muse Image");
+  it("tên cũ (nhận dòng chưa đổi tên) + tên ngắn + hãng + nhãn effort", () => {
+    expect(shortModelName("gemini-3.8-flash-low")).toBe("Flash 3.8");
+    expect(shortModelName("gpt-6.1-sol")).toBe("Sol 6.1");
+    expect(legacyModelName("gemini-3.8-flash-low")).toBe("Gemini 3.8 Flash");
+    expect(legacyModelName("gemini-4-argon-low")).toBe("Gemini 4 Argon");
+    expect(legacyModelName("claude-sonnet-5-5-low")).toBe("Claude Sonnet 5.5");
+    expect(legacyModelName("claude-opus-5-5-high")).toBe("Claude Opus 5.5");
+    expect(legacyModelName("gpt-6.1-sol")).toBe("GPT-6.1 Sol");
+    expect(legacyModelName("gpt-5.5")).toBe("GPT-5.5");
+    expect(legacyModelName("gpt-6-chat-thinking")).toBe("GPT-6 Chat Thinking");
+    expect(legacyModelName("gpt-daybreak-mini")).toBe("GPT Daybreak Mini");
+    expect(legacyModelName("muse-image")).toBe("Muse Image");
     expect(effortBadge("gemini-3.8-flash-low")).toBe("Nhanh");
     expect(effortBadge("gemini-3.8-flash-medium")).toBe("Cân bằng");
     expect(effortBadge("claude-opus-5-5-high")).toBe("Kỹ");
@@ -124,11 +126,11 @@ describe("model catalog: sync + verify", () => {
     expect(r.created).toBe(3);
     expect(await db.aiModel.count()).toBe(before + 3);
     const high = await db.aiModel.findUniqueOrThrow({ where: { name: "agy:gemini-3.8-flash-high:IMAGE" } });
-    expect(high).toMatchObject({ enabled: false, source: "synced", vendor: "google", displayName: "Gemini 3.8 Flash", badge: "Kỹ", provider: "AGY", kind: "IMAGE", minPlanRank: 0 });
+    expect(high).toMatchObject({ enabled: false, source: "synced", vendor: "google", displayName: "Flash 3.8", badge: "Kỹ", provider: "AGY", kind: "IMAGE", minPlanRank: 0 });
     const opus = await db.aiModel.findUniqueOrThrow({ where: { name: "agy:claude-opus-5-5-medium:IMAGE" } });
-    expect(opus).toMatchObject({ vendor: "anthropic", displayName: "Claude Opus 5.5", badge: "Cân bằng" });
+    expect(opus).toMatchObject({ vendor: "anthropic", displayName: "Opus", badge: "Cân bằng" });
     const day = await db.aiModel.findUniqueOrThrow({ where: { name: "codex:gpt-daybreak-mini:IMAGE" } });
-    expect(day).toMatchObject({ vendor: "openai", displayName: "GPT Daybreak Mini", minPlanRank: 1, enabled: false, description: "Chỉ có ở profile codex: acc5" });
+    expect(day).toMatchObject({ vendor: "openai", displayName: "Daybreak Mini", minPlanRank: 1, enabled: false, description: "Chỉ có ở profile OpenAI: acc5" });
     expect(day.baseCost.toNumber()).toBe(2);
     expect(await db.aiModel.findFirst({ where: { engineModel: "gpt-reserve" } })).toBeNull();
     expect(await db.aiModel.count({ where: { provider: "CODEX", engineModel: "gpt-6.1-sol" } })).toBe(1);

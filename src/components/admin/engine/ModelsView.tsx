@@ -13,7 +13,9 @@ import { ConfirmDialog, Popover } from "@/components/ui/Overlay";
 import { Segmented } from "@/components/ui/Segmented";
 import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
-import { VendorLogo } from "@/components/ui/VendorLogo";
+import { ProviderLogo, VendorLogo } from "@/components/ui/VendorLogo";
+import { shortModelName } from "@/lib/model-names";
+import { providerLabel } from "@/lib/providers";
 import { ModelBadge } from "@/components/studio/ModelPicker";
 import {
   ApiError,
@@ -47,11 +49,11 @@ type Lists = Record<Provider, LiveModel[]>;
 
 const PROVIDERS: { value: Provider; label: string }[] = [
   { value: "MUSE", label: "Muse" },
-  { value: "AGY", label: "agy" },
-  { value: "CODEX", label: "Codex" },
+  { value: "AGY", label: providerLabel("agy") },
+  { value: "CODEX", label: providerLabel("codex") },
   { value: "LOCAL", label: "Ghép (máy chủ)" },
 ];
-const PROVIDER_SHORT: Record<Provider, string> = { MUSE: "Muse", AGY: "agy", CODEX: "Codex", LOCAL: "máy chủ" };
+const PROVIDER_SHORT: Record<Provider, string> = { MUSE: providerLabel("muse"), AGY: providerLabel("agy"), CODEX: providerLabel("codex"), LOCAL: "máy chủ" };
 
 const DEFAULT_OPTIONS: Record<Kind, Record<string, unknown>> = {
   IMAGE: { aspectRatios: ["1:1", "9:16", "16:9"], counts: [1, 2, 4], maxRefs: 1 },
@@ -387,7 +389,7 @@ function ModelRow({
         <VendorLogo vendor={vendorOf(m)} size={34} className={cx("transition-[filter,opacity] duration-300", !m.enabled && "opacity-45 grayscale")} />
         <div className={cx("min-w-0 flex-1 transition-opacity duration-300", !m.enabled && "opacity-60")}>
           <div className="flex min-w-0 items-center gap-1.5">
-            <InlineText value={m.displayName ?? ""} placeholder={m.name} label="tên hiển thị" onSave={(displayName) => onPatch(m, { displayName })} className="h-6 text-[14px] font-semibold" />
+            <InlineText value={m.displayName ?? ""} placeholder={shortModelName(m.engineModel) || m.name} label="tên hiển thị" onSave={(displayName) => onPatch(m, { displayName })} className="h-6 text-[14px] font-semibold" />
             <BadgePicker value={m.badge ?? ""} onChange={(badge) => onPatch(m, { badge })} />
           </div>
           <InlineText value={m.description ?? ""} placeholder="Thêm mô tả ngắn…" label="mô tả" maxLength={160} onSave={(description) => onPatch(m, { description })} className="h-5 text-[12px] text-muted" />
@@ -395,7 +397,7 @@ function ModelRow({
             <Icon name={KIND_ICON[m.kind]} size={11} />
             {KIND_LABEL[m.kind]}
             {optionSummary(m) && <span className="truncate">· {optionSummary(m)}</span>}
-            {m.source === "synced" && <span className="rounded-[5px] bg-white/[.05] px-1 font-medium text-muted">đồng bộ</span>}
+            {m.source === "synced" && <span className="shrink-0 rounded-[5px] bg-white/[.05] px-1 font-medium whitespace-nowrap text-muted">đồng bộ</span>}
           </p>
         </div>
         <IconButton icon="more" label="Sửa đầy đủ" size="sm" className="self-start lg:hidden" onClick={() => onOpen(m)} />
@@ -404,14 +406,17 @@ function ModelRow({
       {/* Engine: model thật + tài khoản Muse */}
       <div className="min-w-0 space-y-1.5 max-lg:pl-[102px] max-sm:pl-0">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="w-11 shrink-0 truncate text-[11px] font-medium text-muted">{PROVIDER_SHORT[m.provider]}</span>
+          <span className="flex w-[62px] shrink-0 items-center gap-1 text-[11px] font-medium text-muted" data-tip="Chạy qua">
+            {m.provider !== "LOCAL" && <ProviderLogo provider={m.provider} size={12} plain />}
+            <span className="truncate">{PROVIDER_SHORT[m.provider]}</span>
+          </span>
           <div className="min-w-0 flex-1">
             <EngineModelField provider={m.provider} kind={m.kind} value={m.engineModel} lists={lists} onSave={(engineModel) => onPatch(m, { engineModel })} />
           </div>
         </div>
         {m.provider === "MUSE" && m.kind !== "ASSEMBLE" && (
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="flex w-11 shrink-0 items-center gap-1 text-[11px] font-medium text-muted" data-tip="Tài khoản Muse">
+            <span className="flex w-[62px] shrink-0 items-center gap-1 text-[11px] font-medium text-muted" data-tip="Tài khoản Muse">
               <Icon name="user" size={12} />
               TK
             </span>
@@ -597,7 +602,7 @@ function ModelEditor({
       open={open}
       onClose={onClose}
       title={d.id ? d.displayName || d.name || "Model" : "Thêm model"}
-      subtitle={d.id ? <Mono>{d.name}</Mono> : undefined}
+      subtitle={d.id ? <Mono>{d.engineModel}</Mono> : undefined}
       footer={
         <div className="flex items-center justify-between gap-2">
           {d.id ? (
@@ -621,9 +626,9 @@ function ModelEditor({
       <div className="space-y-4 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldRow label="Tên hiển thị" hint="Người dùng thấy tên này">
-            <TextInput value={d.displayName} onChange={(e) => set("displayName", e.target.value)} placeholder="Gemini 3.8 Flash" data-autofocus />
+            <TextInput value={d.displayName} onChange={(e) => set("displayName", e.target.value)} placeholder={shortModelName(d.engineModel) || "Flash 3.8"} data-autofocus />
           </FieldRow>
-          <FieldRow label="Khóa nội bộ" hint="Duy nhất, vd agy:gemini-3.8-flash:IMAGE">
+          <FieldRow label="Khóa nội bộ" hint="Duy nhất, vd gemini-3.8-flash-anh">
             <TextInput className="font-mono" value={d.name} onChange={(e) => set("name", e.target.value)} />
           </FieldRow>
           <FieldRow label="Hãng">
@@ -637,7 +642,14 @@ function ModelEditor({
             </Select>
           </FieldRow>
           <FieldRow label="Nhãn">
-            <Segmented block size="sm" value={d.badge} onChange={(v) => set("badge", v)} options={["", ...MODEL_BADGES].map((b) => ({ value: b, label: b || "—" }))} />
+            <Select inputSize="sm" value={d.badge} onChange={(e) => set("badge", e.target.value)} aria-label="Nhãn">
+              {(MODEL_BADGES as readonly string[]).includes(d.badge) || !d.badge ? null : <option value={d.badge}>{d.badge}</option>}
+              {["", ...MODEL_BADGES].map((b) => (
+                <option key={b || "_"} value={b}>
+                  {b || "Không nhãn"}
+                </option>
+              ))}
+            </Select>
           </FieldRow>
         </div>
         <FieldRow label="Mô tả ngắn">

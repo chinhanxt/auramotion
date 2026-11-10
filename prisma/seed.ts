@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import type { JobKind, ModelProvider, PlanCode, Prisma } from "@prisma/client";
 import { db } from "../src/lib/db";
 import { startFree } from "../src/server/services/plan";
+import { KNOWN_MODEL_IDS, effortBadge, legacyModelName, shortModelName } from "../src/server/services/model-naming";
 import { CAMERAS, LEGACY_PRESET_META, SKILLS, THEMES } from "./seed-data";
 import { SKILL_LIBRARY, SKILL_META } from "./skill-library";
 
@@ -46,10 +47,10 @@ const MODELS: SeedModel[] = [
   { name: "MUSE Ảnh", provider: "MUSE", engineModel: "muse-image", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1 }, sort: 1, vendor: "muse", displayName: "Muse Image" },
   // Ghim tài khoản Muse riêng cho ảnh (SEED_MUSE_IMAGE_ACCOUNT = id trong muse2api). Bỏ trống thì không tạo.
   ...(process.env.SEED_MUSE_IMAGE_ACCOUNT
-    ? [{ name: "MUSE Ảnh 2", provider: "MUSE" as const, engineModel: "muse-image", kind: "IMAGE" as const, minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1, museAccount: process.env.SEED_MUSE_IMAGE_ACCOUNT }, sort: 2, vendor: "muse", displayName: "Muse Image · TK2" }]
+    ? [{ name: "MUSE Ảnh 2", provider: "MUSE" as const, engineModel: "muse-image", kind: "IMAGE" as const, minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1, museAccount: process.env.SEED_MUSE_IMAGE_ACCOUNT }, sort: 2, vendor: "muse", displayName: "Muse Image" }]
     : []),
-  { name: "Gemini Ảnh", provider: "AGY", engineModel: "gemini-3.8-flash-medium", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: IMAGE_OPTIONS, sort: 2, vendor: "google", displayName: "Gemini 3.8 Flash · Medium" },
-  { name: "Codex Ảnh", provider: "CODEX", engineModel: "gpt-6.1-sol", kind: "IMAGE", minPlanRank: 1, baseCost: 2, options: IMAGE_OPTIONS, sort: 3, vendor: "openai", displayName: "GPT-6.1 Sol" },
+  { name: "Gemini Ảnh", provider: "AGY", engineModel: "gemini-3.8-flash-medium", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: IMAGE_OPTIONS, sort: 2, vendor: "google", displayName: "Flash 3.8", badge: "Cân bằng" },
+  { name: "Codex Ảnh", provider: "CODEX", engineModel: "gpt-6.1-sol", kind: "IMAGE", minPlanRank: 1, baseCost: 2, options: IMAGE_OPTIONS, sort: 3, vendor: "openai", displayName: "Sol 6.1" },
   { name: "MUSE Video", provider: "MUSE", engineModel: "muse-video", kind: "VIDEO", minPlanRank: 0, baseCost: 3, options: { aspectRatios: VIDEO_RATIOS, durations: [5, 10], maxRefs: 1 }, sort: 4, vendor: "muse", displayName: "Muse Video" },
   { name: "Ghép video", provider: "LOCAL", engineModel: "assemble", kind: "ASSEMBLE", minPlanRank: 0, baseCost: 2, options: { aspectRatios: VIDEO_RATIOS }, sort: 5, vendor: "local", displayName: "Ghép video" },
 ];
@@ -82,18 +83,18 @@ const tested = (
 });
 
 export const TESTED_MODELS: SeedModel[] = [
-  tested("AGY", "gemini-3.8-flash-low", "google", "Gemini 3.8 Flash", "Nhanh", 24, 1),
-  tested("AGY", "gemini-4-argon-low", "google", "Gemini 4 Argon", "Mới", 33, 3),
-  tested("AGY", "claude-sonnet-5-5-low", "anthropic", "Claude Sonnet 5.5", "", 21, 1),
-  tested("AGY", "claude-opus-5-5-low", "anthropic", "Claude Opus 5.5", "Đẹp", 20, 2),
-  tested("CODEX", "gpt-6-luna", "openai", "GPT-6 Luna", "", 42, 1),
-  tested("CODEX", "gpt-6.1-sol", "openai", "GPT-6.1 Sol", "Pro", 44, 3),
-  tested("CODEX", "gpt-6-astra", "openai", "GPT-6 Astra", "", 30, 2),
-  tested("CODEX", "gpt-6-sol", "openai", "GPT-6 Sol", "", 29, 4),
-  tested("CODEX", "gpt-6.1-terra", "openai", "GPT-6.1 Terra", "", 32, 5),
-  tested("CODEX", "gpt-5.6-sol", "openai", "GPT-5.6 Sol", "", 37, 6),
-  tested("CODEX", "gpt-5.6-terra", "openai", "GPT-5.6 Terra", "", 33, 7),
-  tested("CODEX", "gpt-5.6-luna", "openai", "GPT-5.6 Luna", "", 29, 8),
+  tested("AGY", "gemini-3.8-flash-low", "google", "Flash 3.8", "Nhanh", 24, 1),
+  tested("AGY", "gemini-4-argon-low", "google", "Argon", "Mới", 33, 3),
+  tested("AGY", "claude-sonnet-5-5-low", "anthropic", "Sonnet", "Nhanh", 21, 1),
+  tested("AGY", "claude-opus-5-5-low", "anthropic", "Opus", "Đẹp", 20, 2),
+  tested("CODEX", "gpt-6-luna", "openai", "Luna 6", "", 42, 1),
+  tested("CODEX", "gpt-6.1-sol", "openai", "Sol 6.1", "Cao cấp", 44, 3),
+  tested("CODEX", "gpt-6-astra", "openai", "Astra", "", 30, 2),
+  tested("CODEX", "gpt-6-sol", "openai", "Sol 6", "", 29, 4),
+  tested("CODEX", "gpt-6.1-terra", "openai", "Terra 6.1", "", 32, 5),
+  tested("CODEX", "gpt-5.6-sol", "openai", "Sol 5.6", "", 37, 6),
+  tested("CODEX", "gpt-5.6-terra", "openai", "Terra 5.6", "", 33, 7),
+  tested("CODEX", "gpt-5.6-luna", "openai", "Luna 5.6", "", 29, 8),
 ];
 
 async function seedTestedModels(): Promise<void> {
@@ -117,6 +118,33 @@ async function seedTestedModels(): Promise<void> {
       },
     });
   }
+}
+
+// Tên seed cũ (trước tên ngắn) theo khóa dòng — cùng tên tự sinh cũ thì coi như Admin chưa đổi.
+const LEGACY_SEED_NAMES: Record<string, string> = { "Gemini Ảnh": "Gemini 3.8 Flash · Medium", "MUSE Ảnh 2": "Muse Image · TK2" };
+
+// Một lần, chạy lại vô hại: đổi displayName sang tên ngắn CHỈ cho dòng còn tên tự sinh cũ (không đè tên Admin đã sửa);
+// badge "Pro" (trùng tên gói) → "Cao cấp"; dòng agy chưa có badge thì điền effort (Nhanh / Cân bằng / Kỹ);
+// mô tả đồng bộ cũ "profile codex" → "profile OpenAI".
+export async function shortenModelNames(): Promise<number> {
+  const rows = await db.aiModel.findMany({ select: { id: true, name: true, provider: true, engineModel: true, displayName: true, badge: true, description: true } });
+  const known = [...KNOWN_MODEL_IDS, ...rows.filter((r) => r.provider !== "LOCAL").map((r) => r.engineModel)];
+  let changed = 0;
+  for (const r of rows) {
+    if (r.provider === "LOCAL") continue;
+    const next = shortModelName(r.engineModel, known);
+    const old = new Set([legacyModelName(r.engineModel), LEGACY_SEED_NAMES[r.name]].filter(Boolean));
+    const data: Prisma.AiModelUpdateInput = {};
+    if (next && r.displayName !== next && (!r.displayName || old.has(r.displayName))) data.displayName = next;
+    if (r.description.startsWith("Chỉ có ở profile codex:")) data.description = r.description.replace("profile codex:", "profile OpenAI:");
+    if (r.badge === "Pro") data.badge = "Cao cấp";
+    else if (!r.badge && r.provider === "AGY" && effortBadge(r.engineModel)) data.badge = effortBadge(r.engineModel);
+    if (Object.keys(data).length) {
+      await db.aiModel.update({ where: { id: r.id }, data });
+      changed++;
+    }
+  }
+  return changed;
 }
 
 const PRESETS: Prisma.PresetCreateInput[] = [
@@ -164,6 +192,7 @@ export async function seed(): Promise<void> {
     await db.aiModel.upsert({ where: { name: m.name }, create: m, update: {} });
   }
   await seedTestedModels();
+  await shortenModelNames();
   for (const p of PRESETS) {
     await db.preset.upsert({ where: { kind_name: { kind: p.kind, name: p.name } }, create: p, update: {} });
   }

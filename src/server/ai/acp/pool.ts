@@ -114,7 +114,7 @@ export class AgentPool {
 
   pick(): AcpAgent {
     const live = this.alive();
-    if (!live.length) throw new EngineError("ACP_UNAVAILABLE", "Chưa có tiến trình agy ACP nào sẵn sàng", true);
+    if (!live.length) throw new EngineError("ACP_UNAVAILABLE", "Chưa có tiến trình Google ACP nào sẵn sàng", true);
     const fresh = live.filter((a) => !this.draining.has(a));
     const pool = fresh.length ? fresh : live; // tiến trình sắp nghỉ chỉ dùng khi không còn cái nào khác
     const load = (a: AcpAgent) => a.activePrompts + (this.pending.get(a) ?? 0) + a.sessionCount / 1000;

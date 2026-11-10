@@ -9,6 +9,7 @@ export type CatalogModel = {
   id: string;
   name: string;
   provider: "MUSE" | "AGY" | "CODEX" | "LOCAL";
+  engineModel?: string;
   kind: "IMAGE" | "VIDEO" | "ASSEMBLE";
   minPlanRank: number;
   baseCost: string;
@@ -28,7 +29,7 @@ export type CatalogModel = {
 export type ModelVendor = "muse" | "google" | "anthropic" | "openai" | "local";
 export const VENDOR_ORDER: string[] = ["muse", "google", "anthropic", "openai", "local"];
 export const VENDOR_LABEL: Record<string, string> = { muse: "Muse", google: "Google", anthropic: "Anthropic", openai: "OpenAI", local: "Máy chủ" };
-export const MODEL_BADGES = ["Nhanh", "Đẹp", "Mới", "Pro"] as const;
+export const MODEL_BADGES = ["Nhanh", "Cân bằng", "Kỹ", "Đẹp", "Mới", "Cao cấp"] as const;
 
 // `{ ok, testedAt, ms, error?, sampleUrl? }` — test vẽ thật bằng đúng model.
 export type ModelVerified = { ok: boolean; testedAt?: string | number | null; ms?: number | null; error?: string | null; sampleUrl?: string | null };
@@ -137,11 +138,15 @@ export type Catalog = {
   skills?: CatalogSkill[];
   // Tài khoản Muse bị chặn tạo video (khu vực): khóa nút tạo video / quay story.
   videoUnavailable?: boolean;
+  // Bước đầu chuỗi AI viết prompt: hãng theo model (Claude qua agy → anthropic).
+  writer?: CatalogWriter;
 };
+
+export type CatalogWriter = { provider: string; model?: string | null; vendor: string };
 
 // AI Gateway viết prompt cho job (autoWrite): ai viết, skill nào, mất bao lâu.
 export type WriterProvider = "agy" | "codex" | "muse";
-export type WrittenInfo = { provider: WriterProvider; skillSlug: string; skillName: string; ms: number };
+export type WrittenInfo = { provider: WriterProvider; model?: string; skillSlug: string; skillName: string; ms: number };
 export type JobStage = "writing" | "rendering";
 // Phần params liên quan AI viết: `idea` = ý tưởng gốc, `prompt` của job = prompt đã viết (hoặc ý tưởng khi chưa viết).
 // `skillName` chỉ là gợi ý phía trình duyệt khi vừa gửi (skill đã chọn) để ô hiện tên trong lúc viết.
@@ -329,8 +334,6 @@ export function isWriting(job: Pick<JobItem, "status" | "params" | "stage">): bo
   const p = writeParams(job);
   return Boolean(p.autoWrite && !p.written);
 }
-
-export const WRITER_LABEL: Record<WriterProvider, string> = { agy: "agy", codex: "Codex", muse: "Muse" };
 
 export type ExploreItem = { id: string; kind: JobItem["kind"]; prompt: string; resultUrls: string[]; presetName?: string | null };
 export type ThemeItem = CatalogPreset;

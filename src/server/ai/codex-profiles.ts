@@ -23,7 +23,7 @@ const URL_WAIT_MS = 30_000;
 const MODELS_TTL_MS = 10 * 60_000;
 
 export function assertProfile(name: string): string {
-  if (!CODEX_PROFILE_NAME_RE.test(name)) throw new AppError("VALIDATION", "Tên profile codex không hợp lệ");
+  if (!CODEX_PROFILE_NAME_RE.test(name)) throw new AppError("VALIDATION", "Tên profile OpenAI không hợp lệ");
   return name;
 }
 
@@ -251,7 +251,7 @@ export async function startCodexLogin(profile: string, opts: { bin?: string } = 
       if (settled) return;
       settled = true;
       proc.kill("SIGTERM");
-      reject(new EngineError("CODEX_LOGIN", "codex không in link đăng nhập"));
+      reject(new EngineError("CODEX_LOGIN", "OpenAI không in link đăng nhập"));
     }, URL_WAIT_MS);
     const onData = (chunk: Buffer) => {
       output = (output + chunk.toString("utf8")).slice(-8000);
@@ -268,7 +268,7 @@ export async function startCodexLogin(profile: string, opts: { bin?: string } = 
       if (settled) return;
       settled = true;
       clearTimeout(urlTimer);
-      reject(new EngineError("CODEX_LOGIN", `Không chạy được codex: ${err.message}`));
+      reject(new EngineError("CODEX_LOGIN", `Không chạy được OpenAI: ${err.message}`));
     });
     proc.on("exit", (code) => {
       clearTimeout(timer);
@@ -276,12 +276,12 @@ export async function startCodexLogin(profile: string, opts: { bin?: string } = 
       if (!settled) {
         settled = true;
         clearTimeout(urlTimer);
-        reject(new EngineError("CODEX_LOGIN", `codex login thoát mã ${code} trước khi in link`));
+        reject(new EngineError("CODEX_LOGIN", `OpenAI login thoát mã ${code} trước khi in link`));
         return;
       }
       const ok = code === 0;
       const last = output.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").trim().split("\n").pop()?.slice(0, 200) ?? "";
-      void saveLogin(loginId, { status: ok ? "done" : "error", profile, ...(ok ? {} : { message: last || `codex thoát mã ${code}` }) });
+      void saveLogin(loginId, { status: ok ? "done" : "error", profile, ...(ok ? {} : { message: last || `OpenAI thoát mã ${code}` }) });
     });
   });
 }

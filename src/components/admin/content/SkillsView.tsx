@@ -371,8 +371,8 @@ function TestPanel({ id }: { id: string }) {
         />
         <Select inputSize="sm" className="sm:w-32" value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="Provider">
           <option value="">Tự động</option>
-          <option value="agy">agy</option>
-          <option value="codex">Codex</option>
+          <option value="agy">Google</option>
+          <option value="codex">OpenAI</option>
           <option value="muse">Muse</option>
         </Select>
         <Button variant="primary" size="sm" icon="sparkle" className="h-9" loading={busy} disabled={!idea.trim()} onClick={test}>

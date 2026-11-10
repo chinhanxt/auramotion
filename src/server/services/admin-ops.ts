@@ -189,7 +189,7 @@ export async function getOpsSnapshot(now: Date = new Date()) {
       where: { status: "FAILED" },
       orderBy: [{ finishedAt: "desc" }, { createdAt: "desc" }],
       take: 6,
-      select: { id: true, kind: true, prompt: true, error: true, createdAt: true, finishedAt: true, user: { select: { email: true } }, model: { select: { name: true } } },
+      select: { id: true, kind: true, prompt: true, error: true, createdAt: true, finishedAt: true, user: { select: { email: true } }, model: { select: { name: true, displayName: true } } },
     }),
   ]);
   const count = (s: string) => byStatus.find((r) => r.status === s)?._count._all ?? 0;
@@ -233,7 +233,7 @@ export async function getQueuesAdmin() {
         progress: true,
         startedAt: true,
         museTaskId: true,
-        model: { select: { name: true, provider: true } },
+        model: { select: { name: true, displayName: true, provider: true } },
         user: { select: { email: true } },
       },
     }),

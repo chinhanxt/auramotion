@@ -55,19 +55,19 @@ describe("GET /api/catalog", () => {
     // Nhóm theo hãng (muse → google → anthropic → openai) rồi theo sort.
     expect(body.models.map((m) => `${m.vendor}:${m.displayName}`)).toEqual([
       "muse:Muse Image",
-      "google:Gemini 3.8 Flash",
-      "google:Gemini 3.8 Flash · Medium",
-      "google:Gemini 4 Argon",
-      "anthropic:Claude Sonnet 5.5",
-      "anthropic:Claude Opus 5.5",
-      "openai:GPT-6 Luna",
-      "openai:GPT-6 Astra",
-      "openai:GPT-6.1 Sol",
-      "openai:GPT-6 Sol",
-      "openai:GPT-6.1 Terra",
-      "openai:GPT-5.6 Sol",
-      "openai:GPT-5.6 Terra",
-      "openai:GPT-5.6 Luna",
+      "google:Flash 3.8",
+      "google:Flash 3.8",
+      "google:Argon",
+      "anthropic:Sonnet",
+      "anthropic:Opus",
+      "openai:Luna 6",
+      "openai:Astra",
+      "openai:Sol 6.1",
+      "openai:Sol 6",
+      "openai:Terra 6.1",
+      "openai:Sol 5.6",
+      "openai:Terra 5.6",
+      "openai:Luna 5.6",
     ]);
     // Chỉ lộ verified.ok (không testedAt / lỗi / ảnh mẫu), không lộ source.
     expect(byName["agy:gemini-3.8-flash-low:IMAGE"]).toMatchObject({ badge: "Nhanh", etaSec: 24, verified: { ok: true } });

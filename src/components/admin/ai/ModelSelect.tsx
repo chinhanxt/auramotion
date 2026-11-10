@@ -7,6 +7,9 @@ import { Icon } from "@/components/ui/Icon";
 import { Popover } from "@/components/ui/Overlay";
 import { Segmented } from "@/components/ui/Segmented";
 import { Select } from "@/components/ui/Select";
+import { VendorLogo } from "@/components/ui/VendorLogo";
+import { KNOWN_MODEL_IDS, effortBadge, shortModelName } from "@/lib/model-names";
+import { vendorOfModel } from "@/lib/providers";
 import type { AiModel } from "./types";
 
 function ProfileTags({ list, all }: { list?: string[]; all: number }) {
@@ -53,15 +56,16 @@ export function ModelSelect({
   const input = useRef<HTMLInputElement>(null);
   const allProfiles = useMemo(() => [...new Set(models.flatMap((m) => m.profiles ?? []))], [models]);
   const anyHidden = models.some((m) => m.hidden);
+  const known = useMemo(() => [...KNOWN_MODEL_IDS, ...models.map((m) => m.id)], [models]);
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
     return models.filter(
       (m) =>
         (showHidden || !m.hidden || m.id === value) &&
         (!pf || !m.profiles || m.profiles.includes(pf)) &&
-        (!s || m.id.toLowerCase().includes(s) || m.name?.toLowerCase().includes(s)),
+        (!s || m.id.toLowerCase().includes(s) || m.name?.toLowerCase().includes(s) || shortModelName(m.id, known).toLowerCase().includes(s)),
     );
-  }, [models, q, showHidden, pf, value]);
+  }, [models, q, showHidden, pf, value, known]);
   useEffect(() => setHi(0), [q, pf, showHidden]);
   const sel = models.find((m) => m.id === value);
   const custom = q.trim() && !models.some((m) => m.id === q.trim()) ? q.trim() : null;
@@ -88,7 +92,7 @@ export function ModelSelect({
             className,
           )}
         >
-          <span className={cx("min-w-0 flex-1 truncate font-mono text-[12.5px]", !value && "font-sans text-dim")}>{value ? (sel?.id ?? value) : placeholder}</span>
+          {value ? <ModelName id={sel?.id ?? value} known={known} /> : <span className="min-w-0 flex-1 truncate text-dim">{placeholder}</span>}
           <Icon name="chevronDown" size={15} className="shrink-0 text-muted" />
         </button>
       )}
@@ -156,11 +160,11 @@ export function ModelSelect({
               {list.map((m, i) => (
                 <Row key={m.id} active={m.id === value} hot={i === hi} onClick={() => pick(m.id)} onHover={() => setHi(i)}>
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className={cx("min-w-0 flex-1 truncate font-mono text-[12.5px]", m.hidden && "text-muted")}>{m.id}</span>
+                    <ModelName id={m.id} known={known} className={cx(m.hidden && "opacity-60")} />
                     {m.hidden && <Icon name="eye" size={12} className="shrink-0 text-dim" />}
                     <ProfileTags list={m.profiles} all={allProfiles.length} />
                   </span>
-                  {m.name && m.name !== m.id && <span className="block truncate text-[11.5px] text-muted">{m.name}</span>}
+                  <span className="block truncate pl-[22px] font-mono text-[11px] text-dim">{m.id}</span>
                 </Row>
               ))}
               {custom && (
@@ -175,6 +179,19 @@ export function ModelSelect({
         );
       }}
     </Popover>
+  );
+}
+
+// Logo hãng + tên ngắn + nhãn effort (id gốc ở tooltip).
+export function ModelName({ id, known, className }: { id: string; known?: readonly string[]; className?: string }) {
+  const vendor = vendorOfModel(id);
+  const badge = effortBadge(id);
+  return (
+    <span className={cx("flex min-w-0 flex-1 items-center gap-1.5", className)} title={id}>
+      {vendor && <VendorLogo vendor={vendor} size={16} />}
+      <span className="min-w-0 truncate text-[13px] font-medium">{shortModelName(id, known) || id}</span>
+      {badge && <span className="shrink-0 rounded-full bg-white/[.07] px-1.5 text-[10.5px] font-semibold text-fg/75">{badge}</span>}
+    </span>
   );
 }
 

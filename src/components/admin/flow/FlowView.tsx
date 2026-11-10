@@ -25,6 +25,8 @@ import { Icon } from "@/components/ui/Icon";
 import { Segmented } from "@/components/ui/Segmented";
 import { Select } from "@/components/ui/Select";
 import { api, isNotFound, jobErrorText, toTrace, traceStages, type JobTrace } from "@/lib/api-client";
+import { shortModelName } from "@/lib/model-names";
+import { aiLabel, providerLabel } from "@/lib/providers";
 import { demoAi } from "../ai/demo";
 import type { AiData } from "../ai/types";
 import { LiveDot } from "../engine/live";
@@ -352,7 +354,7 @@ function JobChips({ job, trace }: { job: FlowJob; trace: JobTrace }) {
       {w && (
         <Badge tone="aura">
           <Icon name="sparkle" size={11} />
-          {[w.provider, w.model].filter(Boolean).join(" · ")}
+          {aiLabel(w.provider, w.model)}
           {w.skill ? ` · ${w.skill}` : ""}
         </Badge>
       )}
@@ -366,7 +368,7 @@ function JobChips({ job, trace }: { job: FlowJob; trace: JobTrace }) {
       {e && (
         <Badge>
           <Icon name="cpu" size={11} />
-          {[e.provider, e.model, e.account].filter(Boolean).join(" · ")}
+          {[aiLabel(e.provider, e.model), e.account].filter(Boolean).join(" · ")}
         </Badge>
       )}
       {trace.error && <Badge tone="danger">{jobErrorText(trace.error)}</Badge>}
@@ -652,8 +654,10 @@ export function FlowView({ demo = false }: { demo?: boolean }) {
                 <h3 className="t-label">AI</h3>
                 <KV
                   items={[
-                    ["Provider", openAi.provider],
-                    ...(openAi.model ? ([["Model", <span key="m" className="font-mono text-[12.5px]">{openAi.model}</span>]] as [React.ReactNode, React.ReactNode][]) : []),
+                    ["Provider", providerLabel(openAi.provider)],
+                    ...(openAi.model
+                      ? ([["Model", <span key="m" title={openAi.model}>{shortModelName(openAi.model)}</span>]] as [React.ReactNode, React.ReactNode][])
+                      : []),
                     ...(openAi.account ? ([["Tài khoản", openAi.account]] as [React.ReactNode, React.ReactNode][]) : []),
                   ]}
                 />

@@ -6,24 +6,58 @@ import { Icon } from "@/components/ui/Icon";
 import { Modal, Popover } from "@/components/ui/Overlay";
 import { VendorLogo } from "@/components/ui/VendorLogo";
 import { VENDOR_LABEL, etaLabel, formatCredit, groupByVendor, modelLabel, planLabel, vendorOf, type CatalogModel } from "@/lib/api-client";
+import { EFFORT_RANK, effortOf } from "@/lib/model-names";
 
 // Bộ chọn model cho người dùng: tên model thật, nhóm theo hãng (Muse, Google, Anthropic, OpenAI…).
 // Máy tính: popover; điện thoại: bottom sheet. Chọn bằng chuột hoặc ↑ ↓ Enter.
 
 const BADGE_CLS: Record<string, string> = {
   nhanh: "bg-accent/[.14] text-accent",
+  "cân bằng": "bg-[#38c8ff]/[.15] text-[#8fdcff]",
+  kỹ: "bg-[#b7a6ff]/[.18] text-[#cdc2ff]",
   đẹp: "bg-aura2/[.16] text-[#ff9be8]",
   mới: "bg-[#4f8cff]/[.18] text-[#9cc0ff]",
-  pro: "bg-[#f5c84b]/[.15] text-[#f5c84b]",
+  "cao cấp": "bg-[#f5c84b]/[.15] text-[#f5c84b]",
 };
 
-export function ModelBadge({ label, className }: { label?: string | null; className?: string }) {
+// `strong`: nhãn là thứ phân biệt các model cùng tên (Flash 3.8 · Nhanh / Cân bằng / Kỹ) → to + đậm hơn.
+export function ModelBadge({ label, strong, className }: { label?: string | null; strong?: boolean; className?: string }) {
   if (!label?.trim()) return null;
   return (
-    <span className={cx("inline-flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-[10.5px] font-semibold tracking-[0.01em]", BADGE_CLS[label.trim().toLowerCase()] ?? "bg-white/[.08] text-fg/80", className)}>
+    <span
+      className={cx(
+        "inline-flex shrink-0 items-center rounded-full tracking-[0.01em]",
+        strong ? "h-5 px-2 text-[11.5px] font-bold" : "h-[18px] px-1.5 text-[10.5px] font-semibold",
+        BADGE_CLS[label.trim().toLowerCase()] ?? "bg-white/[.08] text-fg/80",
+        className,
+      )}
+    >
       {label.trim()}
     </span>
   );
+}
+
+const BADGE_RANK: Record<string, number> = { nhanh: 0, "cân bằng": 1, kỹ: 2 };
+const effortRank = (m: CatalogModel) => {
+  const e = effortOf(m.engineModel);
+  return e ? EFFORT_RANK[e] : (BADGE_RANK[(m.badge ?? "").trim().toLowerCase()] ?? 9);
+};
+
+// Các model cùng tên hiển thị đứng liền nhau (theo vị trí model đầu tiên), trong cụm xếp Nhanh → Cân bằng → Kỹ.
+export function clusterSameName(list: CatalogModel[]): CatalogModel[] {
+  const groups = new Map<string, CatalogModel[]>();
+  for (const m of list) {
+    const k = modelLabel(m).toLowerCase();
+    groups.set(k, [...(groups.get(k) ?? []), m]);
+  }
+  return [...groups.values()].flatMap((g) => (g.length > 1 ? [...g].sort((a, b) => effortRank(a) - effortRank(b)) : g));
+}
+
+// Tên hiển thị trùng với model khác trong danh sách → badge là thứ phân biệt.
+function sharedNames(models: CatalogModel[]): Set<string> {
+  const seen = new Map<string, number>();
+  for (const m of models) seen.set(modelLabel(m).toLowerCase(), (seen.get(modelLabel(m).toLowerCase()) ?? 0) + 1);
+  return new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k));
 }
 
 const vendorName = (v: string) => VENDOR_LABEL[v] ?? (v === "other" ? "Khác" : v.charAt(0).toUpperCase() + v.slice(1));
@@ -48,7 +82,11 @@ export function ModelList({ models, value, onPick, unit, autoFocus = true, class
   const [q, setQ] = useState("");
   const uid = useId();
   const search = models.length > 8;
-  const groups = useMemo(() => groupByVendor(q.trim() ? models.filter((m) => matches(m, q.trim().toLowerCase())) : models), [models, q]);
+  const groups = useMemo(
+    () => groupByVendor(q.trim() ? models.filter((m) => matches(m, q.trim().toLowerCase())) : models).map(([v, l]) => [v, clusterSameName(l)] as [string, CatalogModel[]]),
+    [models, q],
+  );
+  const shared = useMemo(() => sharedNames(models), [models]);
   const flat = useMemo(() => groups.flatMap(([, l]) => l), [groups]);
   const [active, setActive] = useState(() => Math.max(0, flat.findIndex((m) => m.id === value)));
   const input = useRef<HTMLInputElement>(null);
@@ -145,7 +183,7 @@ export function ModelList({ models, value, onPick, unit, autoFocus = true, class
                   <span className={cx("min-w-0 flex-1", m.locked && "opacity-60")}>
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span className="truncate text-[14px] font-semibold text-fg">{modelLabel(m)}</span>
-                      <ModelBadge label={m.badge} />
+                      <ModelBadge label={m.badge} strong={shared.has(modelLabel(m).toLowerCase())} />
                     </span>
                     {m.description?.trim() && <span className="mt-0.5 block truncate text-[12px] text-muted">{m.description}</span>}
                   </span>
@@ -189,11 +227,12 @@ export function ModelList({ models, value, onPick, unit, autoFocus = true, class
   );
 }
 
-function ChipFace({ m, interactive }: { m?: CatalogModel; interactive: boolean }) {
+function ChipFace({ m, interactive, badge }: { m?: CatalogModel; interactive: boolean; badge?: boolean }) {
   return (
     <>
       {m ? <VendorLogo vendor={vendorOf(m)} size={20} /> : <Icon name="cpu" size={16} />}
       <span className="max-w-40 min-w-0 truncate max-md:max-w-none">{m ? modelLabel(m) : "Model"}</span>
+      {badge && m?.badge && <ModelBadge label={m.badge} />}
       {interactive && <Icon name="chevronDown" size={14} className="shrink-0 text-muted" />}
     </>
   );
@@ -204,6 +243,8 @@ const CHIP = "press inline-flex h-9 min-w-0 items-center gap-1.5 rounded-[11px] 
 export function ModelPicker({ models, value, onChange, unit }: { models: CatalogModel[]; value: string; onChange: (m: CatalogModel) => void; unit: string }) {
   const sel = models.find((m) => m.id === value);
   const mobile = useMobile();
+  // Model đang chọn trùng tên với model khác → hiện nhãn trên chip để phân biệt.
+  const badge = useMemo(() => Boolean(sel && sharedNames(models).has(modelLabel(sel).toLowerCase())), [models, sel]);
   const [open, setOpen] = useState(false);
   const pick = (m: CatalogModel) => {
     onChange(m);
@@ -213,7 +254,7 @@ export function ModelPicker({ models, value, onChange, unit }: { models: Catalog
   if (models.length <= 1 && sel) {
     return (
       <span className="inline-flex h-9 shrink-0 items-center gap-1.5 px-1 text-[13px] font-medium text-fg/85" data-tip="Model">
-        <ChipFace m={sel} interactive={false} />
+        <ChipFace m={sel} interactive={false} badge={badge} />
       </span>
     );
   }
@@ -224,7 +265,7 @@ export function ModelPicker({ models, value, onChange, unit }: { models: Catalog
     return (
       <>
         <button type="button" className={chipCls} onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label={`Model: ${sel ? modelLabel(sel) : "chưa chọn"}`}>
-          <ChipFace m={sel} interactive />
+          <ChipFace m={sel} interactive badge={badge} />
         </button>
         <Modal open={open} onClose={() => setOpen(false)} title="Chọn model" size="sm">
           <ModelList models={models} value={value} onPick={pick} unit={unit} autoFocus={false} className="max-h-[68dvh]" />
@@ -241,7 +282,7 @@ export function ModelPicker({ models, value, onChange, unit }: { models: Catalog
       className="w-[400px] max-w-[calc(100vw-16px)]"
       trigger={({ toggle, ref, ...aria }) => (
         <button ref={ref} type="button" onClick={toggle} {...aria} data-tip="Model" className={chipCls}>
-          <ChipFace m={sel} interactive />
+          <ChipFace m={sel} interactive badge={badge} />
         </button>
       )}
     >

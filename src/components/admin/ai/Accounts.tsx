@@ -155,7 +155,7 @@ export function AgyAccounts({ agy, call, refresh, loading }: { agy?: AgyInfo; ca
 
   return (
     <Panel
-      title="Tài khoản agy"
+      title="Tài khoản Google"
       icon="users"
       pad={false}
       actions={
@@ -185,7 +185,7 @@ export function AgyAccounts({ agy, call, refresh, loading }: { agy?: AgyInfo; ca
               )}
             </span>
           }
-          hint="Hết quota → tự đổi sang tài khoản khác, không rơi xuống Codex"
+          hint="Hết quota → tự đổi sang tài khoản khác, không rơi xuống OpenAI"
         />
       </div>
       {accounts.length === 0 ? (
@@ -290,7 +290,7 @@ function AddAgyModal({ open, onClose, call, onDone }: { open: boolean; onClose: 
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Thêm tài khoản agy" size="sm">
+    <Modal open={open} onClose={onClose} title="Thêm tài khoản Google" size="sm">
       <ol className="space-y-5">
         <li className="flex gap-3">
           <StepDot n={1} on={!link} done={Boolean(link)} />
@@ -346,7 +346,7 @@ export function CodexProfiles({
 
   return (
     <Panel
-      title="Profile Codex"
+      title="Tài khoản OpenAI"
       icon="cpu"
       pad={false}
       actions={
@@ -414,7 +414,7 @@ export function CodexProfiles({
       <CodexLoginModal profile={login} onClose={() => setLogin(null)} call={call} onDone={refresh} />
       <ConfirmDialog
         open={Boolean(out)}
-        title="Đăng xuất Codex?"
+        title="Đăng xuất OpenAI?"
         body={out ? `Profile ${out}` : undefined}
         danger
         confirmLabel="Đăng xuất"
@@ -461,7 +461,7 @@ function CodexLoginModal({ profile, onClose, call, onDone }: { profile: string |
         const s = await call<{ status: "waiting" | "done" | "error"; message?: string }>(`/api/admin/ai/codex/login/${encodeURIComponent(dev.loginId)}`);
         if (token !== alive.current) return;
         if (s.status === "done") {
-          toast.success("Đã đăng nhập Codex", { body: name });
+          toast.success("Đã đăng nhập OpenAI", { body: name });
           onDone();
           onClose();
           return;
@@ -485,7 +485,7 @@ function CodexLoginModal({ profile, onClose, call, onDone }: { profile: string |
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Đăng nhập Codex" size="sm">
+    <Modal open={open} onClose={onClose} title="Đăng nhập OpenAI" size="sm">
       {!dev ? (
         <div className="space-y-3">
           <label className="block space-y-1.5">

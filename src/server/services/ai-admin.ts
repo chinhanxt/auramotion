@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { providerLabel } from "@/lib/providers";
 import { ALL_QUEUE_NAMES, anyQueue } from "@/lib/queue";
 import { acpModels, acpStatus, getAcpPool } from "@/server/ai/acp/runtime";
 import { getAgyAccounts, type AgyAccount } from "@/server/ai/agy/accounts";
@@ -137,10 +138,10 @@ export async function putAiRoles(input: unknown): Promise<{ roles: AiRoles }> {
 // ---------- Chạy thử ----------
 
 export const aiTestSchema = z.object({
-  provider: z.enum(AI_PROVIDERS, { message: "Provider chỉ gồm agy, codex, muse" }),
+  provider: z.enum(AI_PROVIDERS, { message: "Provider chỉ gồm Google, OpenAI, Muse" }),
   model: z.string().trim().max(200).optional(),
   effort: z.string().trim().regex(/^[a-z]{0,12}$/).optional(),
-  profile: z.string().trim().regex(CODEX_PROFILE_NAME_RE, { message: "Tên profile codex không hợp lệ" }).optional(),
+  profile: z.string().trim().regex(CODEX_PROFILE_NAME_RE, { message: "Tên profile OpenAI không hợp lệ" }).optional(),
   skillId: z.string().min(1).max(100).optional(),
   kind: z.enum(["image", "video", "script"]).default("image"),
   idea: z.string().trim().min(1, { message: "Hãy nhập ý tưởng" }).max(2000),
@@ -209,8 +210,8 @@ export function jobStage(job: { status: string; queuedAt: Date | null; museTaskI
 const EXEC_TITLE: Record<string, string> = {
   "MUSE:IMAGE": "Muse · Ảnh",
   "MUSE:VIDEO": "Muse · Video",
-  "AGY:IMAGE": "agy · Ảnh",
-  "CODEX:IMAGE": "codex · Ảnh",
+  "AGY:IMAGE": "Google · Ảnh",
+  "CODEX:IMAGE": "OpenAI · Ảnh",
   "LOCAL:ASSEMBLE": "Ghép video",
 };
 
@@ -289,7 +290,7 @@ export async function getFlow() {
         id,
         kind: "writer",
         title: `${TITLE[prefix]} #${i + 1}`,
-        subtitle: `${step.provider} · theo chuỗi ${CHAIN[prefix]}`,
+        subtitle: `${providerLabel(step.provider)} · theo chuỗi ${CHAIN[prefix]}`,
         ai: { provider: step.provider, ...(profile ? { account: profile } : {}) },
         stats: { role: prefix, step: i + 1 },
       });
@@ -320,8 +321,8 @@ export async function getFlow() {
     nodes.push({
       id,
       kind: "executor",
-      title: EXEC_TITLE[`${grp.provider}:${grp.kind}`] ?? `${provider} · ${grp.kind.toLowerCase()}`,
-      subtitle: grp.provider === "LOCAL" ? `${grp.models.length} model đang bật` : `${provider} · model người dùng chọn · ${grp.models.length} model đang bật`,
+      title: EXEC_TITLE[`${grp.provider}:${grp.kind}`] ?? `${providerLabel(provider)} · ${grp.kind.toLowerCase()}`,
+      subtitle: grp.provider === "LOCAL" ? `${grp.models.length} model đang bật` : `${providerLabel(provider)} · model người dùng chọn · ${grp.models.length} model đang bật`,
       ai: { provider },
       stats: { models: grp.models.length, vendors, activeJobs: active.filter((j) => ids.has(j.modelId)).length },
     });
@@ -393,7 +394,7 @@ export async function listFlowJobs(limitRaw: unknown) {
       error: true,
       createdAt: true,
       params: true,
-      model: { select: { name: true, provider: true, engineModel: true } },
+      model: { select: { name: true, displayName: true, provider: true, engineModel: true } },
       user: { select: { email: true } },
     },
   });
@@ -409,7 +410,7 @@ export async function listFlowJobs(limitRaw: unknown) {
 export async function getJobTrace(jobId: string, userId?: string) {
   const job = await db.job.findUnique({
     where: { id: jobId },
-    select: { id: true, userId: true, kind: true, status: true, error: true, deletedAt: true, params: true, model: { select: { name: true, provider: true, engineModel: true } } },
+    select: { id: true, userId: true, kind: true, status: true, error: true, deletedAt: true, params: true, model: { select: { name: true, displayName: true, provider: true, engineModel: true } } },
   });
   if (!job || (userId && (job.userId !== userId || job.deletedAt))) throw new AppError("NOT_FOUND", "Không tìm thấy tác vụ");
   return {

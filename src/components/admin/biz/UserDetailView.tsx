@@ -201,7 +201,7 @@ export function UserDetailView({ data, self }: { data: Data; self: boolean }) {
               </span>
             ),
           },
-          { key: "model", label: "Model", cell: (j) => j.model.name },
+          { key: "model", label: "Model", cell: (j) => j.model.displayName || j.model.name },
           { key: "prompt", label: "Prompt", mobile: "title", cell: (j) => <span className="line-clamp-2 max-w-md">{j.prompt || "—"}</span> },
           { key: "cost", label: "Credit", align: "right", cell: (j) => <span className="tabular-nums">{formatCredit(j.cost)}</span> },
           {

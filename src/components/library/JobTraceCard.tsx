@@ -3,13 +3,24 @@
 import { useEffect, useState } from "react";
 import { cx } from "@/components/ui/cx";
 import { Icon, type IconName } from "@/components/ui/Icon";
-import { WRITER_LABEL, api, isNotFound, toTrace, type JobTrace } from "@/lib/api-client";
+import { ProviderLogo } from "@/components/ui/VendorLogo";
+import { api, isNotFound, toTrace, type JobTrace } from "@/lib/api-client";
+import { aiLabel } from "@/lib/providers";
 
 type StepState = "done" | "current" | "pending" | "failed";
 type Step = { key: string; icon: IconName; title: string; detail?: React.ReactNode; ms?: number; badge?: string; state: StepState };
 
 const sec = (ms?: number) => (ms === undefined ? "" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`);
-const label = (p?: string) => (p ? (WRITER_LABEL[p as keyof typeof WRITER_LABEL] ?? p) : "");
+// Logo hãng (theo model) + "Google · Flash 3.8 · Nhanh".
+function AiTag({ ai }: { ai?: { provider: string; model?: string | null } }) {
+  if (!ai?.provider) return null;
+  return (
+    <span className="inline-flex max-w-full items-center gap-1.5 align-middle" title={ai.model ?? undefined}>
+      <ProviderLogo provider={ai.provider} model={ai.model} size={14} plain />
+      <span className="min-w-0 truncate">{aiLabel(ai.provider, ai.model)}</span>
+    </span>
+  );
+}
 
 function steps(t: JobTrace): Step[] {
   const failed = Boolean(t.failedAt && !t.doneAt);
@@ -41,7 +52,7 @@ function steps(t: JobTrace): Step[] {
       key: "write",
       icon: "sparkle",
       title: "AI viết",
-      detail: [label(t.writer?.provider), t.writer?.model].filter(Boolean).join(" · ") || undefined,
+      detail: t.writer?.provider ? <AiTag ai={t.writer} /> : undefined,
       ms: t.writeEnd !== undefined && t.writeStart !== undefined ? Math.max(0, t.writeEnd - t.writeStart - rms) : undefined,
       badge: t.writer?.cache ? "cache" : undefined,
       state: st(!writing, writing),
@@ -55,7 +66,7 @@ function steps(t: JobTrace): Step[] {
     key: "engine",
     icon: "cpu",
     title: engineStart === undefined && !writing && !engineDone ? "Chờ engine" : "Engine",
-    detail: [label(t.engine?.provider), t.engine?.model].filter(Boolean).join(" · ") || undefined,
+    detail: t.engine?.provider ? <AiTag ai={t.engine} /> : undefined,
     ms: engineDone && engineStart !== undefined ? t.doneAt! - engineStart : undefined,
     state: st(engineDone, !writing),
   });

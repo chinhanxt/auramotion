@@ -80,7 +80,7 @@ export function QueuesView({ slots }: { slots: MuseSlots }) {
             <Icon name={KIND_ICON[j.kind]} size={16} />
           </span>
           <span className="min-w-0">
-            <span className="block truncate font-medium">{j.model.name}</span>
+            <span className="block truncate font-medium">{j.model.displayName || j.model.name}</span>
             <span className="block truncate text-xs text-muted">
               {KIND_LABEL[j.kind]}
               {j.storyId && (

@@ -8,13 +8,13 @@ import { Icon } from "@/components/ui/Icon";
 import { Segmented } from "@/components/ui/Segmented";
 import { api } from "@/lib/api-client";
 import { LiveDot, providerState } from "../engine/live";
-import { PROVIDER_LABEL } from "../format";
+import { providerLabel } from "../format";
 import { jsonInit, useAction, usePoll } from "../hooks";
 import { Dot, PageHeader, SaveBar } from "../kit";
 import { AgyAccounts, CodexProfiles, type Call } from "./Accounts";
 import { Countdown, HealthLine } from "./bits";
 import { demoAi, demoTest } from "./demo";
-import { Monogram } from "./Monogram";
+import { ProviderLogo } from "@/components/ui/VendorLogo";
 import { RolesPanel, type ModelLists } from "./Roles";
 import { TestBench, makeTestFn } from "./TestBench";
 import { codexModels, normalizeRoles, toTime, type AiData, type AiProvider, type AiRoles } from "./types";
@@ -73,14 +73,14 @@ function ProviderCard({
     <section className="reveal relative min-w-0 overflow-hidden rounded-m3 bg-s1 p-4 hairline" style={{ "--i": i } as React.CSSProperties}>
       <span
         className={cx("pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full opacity-[.16] blur-3xl transition-opacity duration-700", st === "danger" && "opacity-[.08]")}
-        style={{ background: p === "agy" ? "#5c7cff" : p === "codex" ? "#19c39c" : "#ff4fd8" }}
+        style={{ background: p === "agy" ? "#9B72CB" : p === "codex" ? "#8e8e99" : "#0082FB" }}
         aria-hidden="true"
       />
       <div className="relative flex items-start gap-3">
-        <Monogram provider={p} size={38} />
+        <ProviderLogo provider={p} size={38} />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 text-[15px] font-semibold">
-            {PROVIDER_LABEL[p]}
+            {providerLabel(p, { chat: true })}
             {version && <span className="font-mono text-[11px] font-normal text-dim">v{version}</span>}
           </p>
           <p className="mt-0.5 text-xs text-muted">
@@ -100,7 +100,7 @@ function ProviderCard({
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
               size="sm"
-              ariaLabel="Kênh gọi agy"
+              ariaLabel="Kênh gọi Google"
               value={roles.agy?.transport ?? "acp"}
               onChange={(transport) => setRoles({ ...roles, agy: { ...roles.agy, transport } })}
               options={[
