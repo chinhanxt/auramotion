@@ -4,6 +4,7 @@ import { memo, useMemo, useState } from "react";
 import { Chip } from "@/components/ui/Controls";
 import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
+import { FadeImage, SmartVideo } from "@/components/ui/Media";
 import { Modal } from "@/components/ui/Overlay";
 import type { CatalogPreset } from "@/lib/api-client";
 
@@ -24,24 +25,40 @@ function hash(s: string) {
 }
 
 const isCss = (v: string) => /^(linear|radial|conic|repeating)-gradient\(/.test(v.trim());
+const isVideo = (v: string) => /\.(mp4|webm)(\?|#|$)/i.test(v);
 
-// Bìa preset: gradient CSS / ảnh từ `cover`, rồi thumbnailUrl, cuối cùng gradient sinh từ palette / tên.
-export function coverStyle(p: Pick<CatalogPreset, "name" | "cover" | "thumbnailUrl" | "palette">): { background?: string; image?: string } {
-  if (p.cover && isCss(p.cover)) return { background: p.cover };
-  if (p.cover) return { image: p.cover };
-  if (p.thumbnailUrl) return { image: p.thumbnailUrl };
+type CoverSource = Pick<CatalogPreset, "name" | "cover" | "thumbnailUrl" | "palette">;
+
+// Bìa preset: `cover` là CSS gradient → dùng thẳng; là URL ảnh / video (.mp4/.webm) → phủ lên gradient palette
+// (gradient làm nền khi đang tải hoặc file lỗi); không có gì → gradient sinh từ palette / tên.
+export function coverStyle(p: CoverSource): { background: string; image?: string; video?: string } {
+  const cover = p.cover?.trim();
+  if (cover && isCss(cover)) return { background: cover };
   const pal = p.palette && p.palette.length >= 2 ? p.palette : FALLBACK[hash(p.name) % FALLBACK.length];
   const a = hash(p.name) % 360;
-  return {
-    background: `radial-gradient(120% 90% at 20% 15%, color-mix(in srgb, ${pal[0]} 80%, transparent) 0%, transparent 55%), radial-gradient(90% 90% at 85% 90%, color-mix(in srgb, ${pal[1]} 72%, transparent) 0%, transparent 60%), linear-gradient(${a}deg, #111116, #1d1d25)`,
-  };
+  const background = `radial-gradient(120% 90% at 20% 15%, color-mix(in srgb, ${pal[0]} 80%, transparent) 0%, transparent 55%), radial-gradient(90% 90% at 85% 90%, color-mix(in srgb, ${pal[1]} 72%, transparent) 0%, transparent 60%), linear-gradient(${a}deg, #111116, #1d1d25)`;
+  const url = cover || p.thumbnailUrl?.trim();
+  if (!url) return { background };
+  return isVideo(url) ? { background, video: url } : { background, image: url };
 }
 
-export const PresetCover = memo(function PresetCover({ preset, className, children }: { preset: Pick<CatalogPreset, "name" | "cover" | "thumbnailUrl" | "palette">; className?: string; children?: React.ReactNode }) {
+// Lớp media của bìa: video lặp tắt tiếng chỉ phát khi trong màn hình, ảnh hiện dần; lỗi thì ẩn để lộ nền.
+export function CoverMedia({ image, video }: { image?: string; video?: string }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const src = video ?? image;
+  if (!src || failed === src) return null;
+  return video ? (
+    <SmartVideo key={video} src={video} mode="inview" preload="none" plain className="absolute inset-0" onError={() => setFailed(video)} />
+  ) : (
+    <FadeImage key={src} src={src} alt="" skeleton={false} className="absolute inset-0" onError={() => setFailed(src)} />
+  );
+}
+
+export const PresetCover = memo(function PresetCover({ preset, className, children }: { preset: CoverSource; className?: string; children?: React.ReactNode }) {
   const c = coverStyle(preset);
   return (
-    <span className={cx("relative block overflow-hidden bg-s3", className)} style={c.background ? { background: c.background } : undefined}>
-      {c.image && <img src={c.image} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />}
+    <span className={cx("relative block overflow-hidden bg-s3", className)} style={{ background: c.background }}>
+      <CoverMedia image={c.image} video={c.video} />
       <span className="grain absolute inset-0" />
       {children}
     </span>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { jsonInit, useAction } from "@/components/admin/hooks";
+import { CoverMedia } from "@/components/studio/PresetGallery";
 import { CodeArea, FieldRow, NumberInput, PageHeader, TextInput } from "@/components/admin/kit";
 import { AuraBar, Badge, Empty } from "@/components/ui/Bits";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -40,11 +41,19 @@ const KIND_LABEL: Record<PresetKind, string> = { STYLE: "Theme", CAMERA: "Camera
 
 const isGradient = (v: string) => /^(repeating-)?(linear|radial|conic)-gradient\(/.test(v.trim());
 
-// Nền bìa: gradient → background; URL → ảnh; không có → gradient trung tính.
+// Bìa là video (.mp4/.webm): nền trung tính, video phủ lên qua <CoverMedia>.
+function coverVideo(p: Pick<Preset, "cover" | "thumbnailUrl">): string | undefined {
+  const c = p.cover?.trim();
+  const url = c && !isGradient(c) ? c : p.thumbnailUrl?.trim();
+  return url && /\.(mp4|webm)(\?|#|$)/i.test(url) ? url : undefined;
+}
+
+// Nền bìa: gradient → background; URL ảnh → ảnh; video / không có → gradient trung tính.
 export function coverStyle(p: Pick<Preset, "cover" | "thumbnailUrl">): React.CSSProperties {
   const c = p.cover?.trim();
   if (c && isGradient(c)) return { background: c };
   const url = c || p.thumbnailUrl;
+  if (url && coverVideo(p)) return { background: FALLBACK };
   if (url) return { backgroundImage: `url("${url.replace(/"/g, "")}")`, backgroundSize: "cover", backgroundPosition: "center" };
   return { background: FALLBACK };
 }
@@ -194,6 +203,7 @@ export function PresetsView({ initial }: { initial: Preset[] }) {
                 style={{ "--i": i } as React.CSSProperties}
               >
                 <div className="relative aspect-[4/5]" style={coverStyle(p)}>
+                  <CoverMedia video={coverVideo(p)} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
                   <div className="absolute top-2 left-2 flex gap-1">
                     <Badge tone="neutral" className="!bg-black/55 !text-white/90 backdrop-blur">
@@ -327,6 +337,7 @@ function PresetEditor({
           <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
             <div className="space-y-2">
               <div className="relative aspect-[4/5] overflow-hidden rounded-m3 hairline" style={coverStyle(d)}>
+                <CoverMedia video={coverVideo(d)} />
                 {coverBusy && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 p-4 backdrop-blur-[2px]">
                     <Icon name="sparkle" size={20} className="animate-pulse text-accent" />
@@ -375,7 +386,9 @@ function PresetEditor({
           </FieldRow>
           <FieldRow label="Bìa" hint="CSS gradient hoặc URL ảnh">
             <div className="flex gap-2">
-              <span className="h-9 w-9 shrink-0 rounded-m1 hairline" style={coverStyle({ cover: d.cover, thumbnailUrl: null })} />
+              <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-m1 hairline" style={coverStyle({ cover: d.cover, thumbnailUrl: null })}>
+                <CoverMedia video={coverVideo({ cover: d.cover, thumbnailUrl: null })} />
+              </span>
               <TextInput
                 className="font-mono"
                 value={d.cover ?? ""}
