@@ -332,7 +332,7 @@ export function StoryView({ id }: { id: string }) {
         <div className="order-last flex w-full flex-wrap items-center gap-2 sm:order-none sm:w-auto">
           {ready && (
             <Button variant="primary" size="lg" icon="video" loading={busy === "render"} disabled={blocked} onClick={() => action("render")}>
-              Quay tất cả{total !== null && <span className="rounded-[8px] bg-black/10 px-1.5 py-0.5 text-[13px]">⚡ {formatCredit(total)}</span>}
+              Quay tất cả{total !== null && <span className="inline-flex items-center gap-0.5 rounded-[8px] bg-black/10 px-1.5 py-0.5 text-[13px]"><Icon name="bolt" size={13} />{formatCredit(total)}</span>}
             </Button>
           )}
           {canAssemble && (
@@ -357,10 +357,22 @@ export function StoryView({ id }: { id: string }) {
       )}
 
       {(finalUrl || story.status === "ASSEMBLING") && (
-        <section className="mb-6 overflow-hidden rounded-m4 bg-black hairline">
+        <section className="relative mb-6 overflow-hidden rounded-m4 bg-black hairline">
+          {/* Nền: chính khung đầu của video, phóng to + làm mờ để lấp hai bên khung dọc */}
+          {finalUrl && (
+            <video
+              aria-hidden
+              tabIndex={-1}
+              src={`${finalUrl}#t=0.5`}
+              muted
+              playsInline
+              preload="metadata"
+              className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-2xl"
+            />
+          )}
           <div className="relative mx-auto max-h-[70vh]" style={{ aspectRatio: ratioCss(story.aspect), maxWidth: `min(100%, calc(70vh * ${story.aspect.split(":").map(Number).reduce((w, h) => w / h)}))` }}>
             {finalUrl ? (
-              <video src={finalUrl} controls playsInline preload="metadata" className="blur-in h-full w-full" />
+              <video src={`${finalUrl}#t=0.1`} controls playsInline preload="metadata" className="blur-in relative h-full w-full shadow-[0_0_80px_rgba(0,0,0,.6)]" />
             ) : (
               <div className="skel skel-aura absolute inset-0 flex items-end p-5">
                 <div className="relative w-full space-y-2">
