@@ -1,39 +1,61 @@
 import Link from "next/link";
+import { AuraField } from "@/components/landing/AuraField";
+import { Logo } from "@/components/layout/Logo";
+import { buttonClass as btn } from "@/components/ui/Button";
+import { Field, FormMessage, inputClass } from "@/components/ui/Field";
 
-export const inputClass =
-  "w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900";
-export const buttonClass =
-  "w-full rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50";
+export { inputClass, Field };
+export const buttonClass = `${btn({ variant: "primary", size: "lg", block: true })} mt-2`;
+export const Message = FormMessage;
 
-export function AuthShell({ title, children, footer }: { title: string; children: React.ReactNode; footer?: React.ReactNode }) {
+export function AuthShell({ title, children, footer, subtitle }: { title: string; children: React.ReactNode; footer?: React.ReactNode; subtitle?: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
-      <div className="w-full max-w-sm space-y-6 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="space-y-1 text-center">
-          <Link href="/" className="text-sm font-semibold tracking-wide text-neutral-500">
-            AuraMotion
-          </Link>
-          <h1 className="text-xl font-semibold text-neutral-900">{title}</h1>
+    <main className="am grid lg:grid-cols-[1.1fr_1fr]">
+      <section className="relative hidden overflow-hidden lg:block" aria-hidden="true">
+        <AuraField />
+        <div className="relative flex h-full min-h-dvh flex-col justify-between p-10 xl:p-14">
+          <Logo />
+          <div className="max-w-xl">
+            <p className="t-display text-[clamp(2.6rem,0.8rem+3.6vw,5.2rem)]">
+              Ý tưởng thành
+              <br />
+              <span className="aura-text whitespace-nowrap">chuyển động.</span>
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {["Ảnh", "Video", "Story", "Ghép"].map((t) => (
+              <span key={t} className="glass rounded-full px-3.5 py-1.5 text-xs font-medium text-fg/80 hairline">
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
-        {children}
-        {footer && <div className="text-center text-sm text-neutral-600">{footer}</div>}
-      </div>
+      </section>
+
+      <section className="relative flex min-h-dvh flex-col px-5 py-6 sm:px-10">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-64 opacity-50 lg:hidden" style={{ background: "radial-gradient(60% 80% at 50% 0%, rgba(124,92,255,.35), transparent 70%)" }} />
+        <div className="relative lg:hidden">
+          <Logo />
+        </div>
+        <div className="relative mx-auto flex w-full max-w-[400px] flex-1 flex-col justify-center py-10">
+          <div className="page-enter space-y-7">
+            <div className="space-y-2">
+              <h1 className="t-h1">{title}</h1>
+              {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
+            </div>
+            {children}
+            {footer && <div className="text-sm text-muted">{footer}</div>}
+          </div>
+        </div>
+        <p className="relative text-center text-xs text-dim">
+          <Link href="/pricing" className="hover:text-muted">
+            Bảng giá
+          </Link>
+          <span className="mx-2">·</span>© AuraMotion
+        </p>
+      </section>
     </main>
   );
-}
-
-export function Field({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <label className="block space-y-1 text-sm">
-      <span className="font-medium text-neutral-700">{label}</span>
-      <input className={inputClass} {...props} />
-    </label>
-  );
-}
-
-export function Message({ kind, children }: { kind: "error" | "success"; children: React.ReactNode }) {
-  const color = kind === "error" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700";
-  return <p className={`rounded-md px-3 py-2 text-sm ${color}`}>{children}</p>;
 }
 
 export function safeCallbackUrl(value: string | string[] | undefined, fallback = "/studio/image"): string {
@@ -52,3 +74,5 @@ export async function readError(res: Response): Promise<string> {
   const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
   return body?.error?.message ?? "Có lỗi xảy ra, vui lòng thử lại";
 }
+
+export const authLink = "font-semibold text-fg hover:text-accent";

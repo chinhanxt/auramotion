@@ -2,12 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useCreditBalance } from "@/components/realtime/Events";
+import { Badge, Empty, Notice } from "@/components/ui/Bits";
+import { Button, LinkButton } from "@/components/ui/Button";
+import { cx } from "@/components/ui/cx";
+import { Icon } from "@/components/ui/Icon";
+import { Segmented } from "@/components/ui/Segmented";
 import { api, formatCredit } from "@/lib/api-client";
 import { CreditPacks } from "./CreditPacks";
 import {
   JOB_KIND_LABEL,
-  PAYMENT_STATUS_COLOR,
   PAYMENT_STATUS_LABEL,
+  PAYMENT_STATUS_TONE,
   TXN_LABEL,
   formatDate,
   formatVnd,
@@ -36,27 +42,6 @@ type CreditsData = {
   payments: PaymentSummary[];
 };
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-neutral-500">{hint}</p>}
-    </div>
-  );
-}
-
-function Amount({ value }: { value: string }) {
-  const n = Number(value);
-  if (n === 0) return <span className="text-neutral-400">—</span>;
-  return (
-    <span className={n > 0 ? "text-green-700" : "text-neutral-900"}>
-      {n > 0 ? "+" : "−"}
-      {formatCredit(Math.abs(n))}
-    </span>
-  );
-}
-
 function txnDetail(t: Transaction): string {
   if (t.type === "charge") return "Xác nhận trừ khoản đã giữ";
   if (t.note) return t.note;
@@ -64,10 +49,43 @@ function txnDetail(t: Transaction): string {
   return "";
 }
 
+function Amount({ value }: { value: string }) {
+  const n = Number(value);
+  if (n === 0) return <span className="text-dim">—</span>;
+  return (
+    <span className={n > 0 ? "text-ok" : "text-fg"}>
+      {n > 0 ? "+" : "−"}
+      {formatCredit(Math.abs(n))}
+    </span>
+  );
+}
+
+export function CreditsSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
+        <div className="skel h-56 rounded-m4" />
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="skel h-[104px] rounded-m3" />
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="skel h-48 rounded-m3" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function CreditsView({ packs }: { packs: CreditPack[] }) {
+  const live = useCreditBalance();
   const [data, setData] = useState<CreditsData | null>(null);
   const [error, setError] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
+  const [tab, setTab] = useState<"txn" | "pay">("txn");
 
   useEffect(() => {
     api<CreditsData>("/api/credits")
@@ -80,13 +98,7 @@ export function CreditsView({ packs }: { packs: CreditPack[] }) {
     setLoadingMore(true);
     try {
       const page = await api<CreditsData>(`/api/credits?cursor=${encodeURIComponent(data.nextCursor)}`);
-      setData((d) =>
-        d && {
-          ...d,
-          transactions: [...d.transactions, ...page.transactions.filter((t) => !d.transactions.some((x) => x.id === t.id))],
-          nextCursor: page.nextCursor,
-        },
-      );
+      setData((d) => d && { ...d, transactions: [...d.transactions, ...page.transactions.filter((t) => !d.transactions.some((x) => x.id === t.id))], nextCursor: page.nextCursor });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -94,134 +106,146 @@ export function CreditsView({ packs }: { packs: CreditPack[] }) {
     }
   }
 
-  if (!data) {
-    return error ? (
-      <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-    ) : (
-      <p className="text-sm text-neutral-500">Đang tải...</p>
-    );
-  }
-
+  if (!data) return error ? <Notice tone="danger">{error}</Notice> : <CreditsSkeleton />;
   const { balance, plan, subscription } = data;
+  const available = live.balance ?? Number(balance.available);
 
   return (
-    <div className="space-y-8">
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Khả dụng" value={formatCredit(balance.available)} hint="Credit có thể dùng ngay" />
-        <Stat label="Đang giữ" value={formatCredit(balance.held)} hint="Cho tác vụ đang chạy" />
-        <Stat label="Credit gói" value={formatCredit(balance.plan)} hint="Hết hạn khi sang kỳ mới" />
-        <Stat label="Credit mua" value={formatCredit(balance.purchased)} hint="Không hết hạn" />
+    <div className="space-y-10">
+      <section className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
+        <div className="grain relative overflow-hidden rounded-m4 bg-s1 p-6 hairline sm:p-8">
+          <div className="pointer-events-none absolute -top-24 -right-16 h-72 w-72 rounded-full opacity-35 blur-3xl" style={{ background: "var(--aura)" }} />
+          <p className="t-label relative">Khả dụng</p>
+          <p className="relative mt-2 flex items-center gap-3 text-[clamp(2.75rem,2rem+3vw,4.5rem)] leading-none font-extrabold tracking-[-0.05em] tabular-nums">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-ink">
+              <Icon name="bolt" size={22} strokeWidth={2} />
+            </span>
+            {formatCredit(available)}
+          </p>
+          <div className="relative mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <span className="flex items-center gap-2">
+              <Badge tone="aura">{plan.name}</Badge>
+              <span className="text-muted">{subscription.endAt ? `đến ${formatDate(subscription.endAt, false)}` : "không giới hạn"}</span>
+            </span>
+            <span className="text-muted">
+              +{formatCredit(plan.monthlyCredits)} vào {formatDate(subscription.nextGrantAt, false)}
+            </span>
+          </div>
+          <div className="relative mt-6 flex flex-wrap gap-2">
+            <LinkButton href="/pricing" variant="primary" icon="sparkle">
+              {plan.code === "free" ? "Nâng cấp" : "Gia hạn / đổi gói"}
+            </LinkButton>
+            <a href="#packs" className="press inline-flex h-10 items-center rounded-m1 px-4 text-sm font-medium text-fg/80 hover:bg-white/[.06]">
+              Mua Credit lẻ
+            </a>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "Đang giữ", value: balance.held, hint: "tác vụ đang chạy" },
+            { label: "Credit gói", value: balance.plan, hint: "hết hạn theo kỳ" },
+            { label: "Credit mua", value: balance.purchased, hint: "không hết hạn" },
+            { label: "Mỗi tháng", value: plan.monthlyCredits, hint: `gói ${plan.name}` },
+          ].map((s, i) => (
+            <div key={s.label} className="reveal rounded-m3 bg-s1 p-4 hairline" style={{ "--i": i } as React.CSSProperties}>
+              <p className="text-xs text-muted">{s.label}</p>
+              <p className="mt-1.5 text-2xl font-bold tracking-tight tabular-nums">{formatCredit(s.value)}</p>
+              <p className="mt-0.5 text-xs text-dim">{s.hint}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1 text-sm">
-          <p>
-            Gói hiện tại: <span className="font-semibold">{plan.name}</span>
-            {subscription.endAt && <span className="text-neutral-500"> ({subscription.period === "YEAR" ? "theo năm" : "theo tháng"})</span>}
-          </p>
-          <p className="text-neutral-600">
-            {subscription.endAt ? `Hết hạn: ${formatDate(subscription.endAt, false)}` : "Không giới hạn thời gian"}
-            {" · "}
-            Cấp lại {formatCredit(plan.monthlyCredits)} Credit gói vào {formatDate(subscription.nextGrantAt, false)}
-          </p>
-        </div>
-        <Link
-          href="/pricing"
-          className="shrink-0 rounded-md bg-neutral-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-neutral-800"
-        >
-          {plan.code === "free" ? "Nâng cấp gói" : "Gia hạn / đổi gói"}
-        </Link>
-      </section>
-
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-base font-semibold">Mua thêm Credit</h2>
-          <p className="text-sm text-neutral-600">Thanh toán bằng QR chuyển khoản, Credit được cộng ngay khi nhận tiền.</p>
-        </div>
+      <section id="packs" className="scroll-mt-20 space-y-4">
+        <h2 className="t-h2">Mua thêm Credit</h2>
         <CreditPacks packs={packs} returnTo="/credits" />
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold">Lịch sử giao dịch</h2>
-        {data.transactions.length === 0 ? (
-          <p className="text-sm text-neutral-500">Chưa có giao dịch.</p>
-        ) : (
-          <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200 bg-white">
-            {data.transactions.map((t) => {
-              const detail = txnDetail(t);
-              return (
-                <li key={t.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="font-medium">
-                      {TXN_LABEL[t.type] ?? t.type}
-                      <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-normal text-neutral-600">
-                        {t.bucket === "PLAN" ? "Gói" : "Mua"}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="t-h2">Lịch sử</h2>
+          <Segmented
+            size="sm"
+            ariaLabel="Loại lịch sử"
+            options={[
+              { value: "txn" as const, label: "Giao dịch" },
+              { value: "pay" as const, label: `Thanh toán${data.payments.some((p) => p.status === "PENDING") ? " •" : ""}` },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+        </div>
+        {tab === "txn" ? (
+          data.transactions.length === 0 ? (
+            <Empty icon="coin" title="Chưa có giao dịch" className="py-10" />
+          ) : (
+            <div className="overflow-hidden rounded-m3 bg-s1 hairline">
+              <ul className="divide-y divide-line">
+                {data.transactions.map((t) => {
+                  const detail = txnDetail(t);
+                  return (
+                    <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm sm:px-5">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="flex items-center gap-2 font-medium">
+                          {TXN_LABEL[t.type] ?? t.type}
+                          <span className="rounded-md bg-white/[.06] px-1.5 py-0.5 text-[11px] font-normal text-muted">{t.bucket === "PLAN" ? "Gói" : "Mua"}</span>
+                        </p>
+                        <p className="truncate text-xs text-muted">
+                          {formatDate(t.createdAt)}
+                          {detail && ` · ${detail}`}
+                          {t.jobId && (
+                            <>
+                              {" · "}
+                              <Link href={`/library/${t.jobId}`} className="text-fg/80 underline-offset-2 hover:underline">
+                                Xem
+                              </Link>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-semibold tabular-nums">
+                        <Amount value={t.amount} />
                       </span>
-                    </p>
-                    <p className="truncate text-xs text-neutral-500">
-                      {formatDate(t.createdAt)}
-                      {detail && ` · ${detail}`}
-                      {t.jobId && (
-                        <>
-                          {" · "}
-                          <Link href={`/library/${t.jobId}`} className="underline hover:text-neutral-800">
-                            Xem tác vụ
-                          </Link>
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  <span className="shrink-0 font-medium tabular-nums">
-                    <Amount value={t.amount} />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {data.nextCursor && (
-          <button
-            type="button"
-            onClick={loadMore}
-            disabled={loadingMore}
-            className="w-full rounded-md border border-neutral-300 bg-white py-2 text-sm hover:bg-neutral-100 disabled:opacity-50"
-          >
-            {loadingMore ? "Đang tải..." : "Xem thêm"}
-          </button>
-        )}
-        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold">Lịch sử thanh toán</h2>
-        {data.payments.length === 0 ? (
-          <p className="text-sm text-neutral-500">Chưa có đơn thanh toán.</p>
+                    </li>
+                  );
+                })}
+              </ul>
+              {data.nextCursor && (
+                <div className="border-t border-line p-2">
+                  <Button variant="ghost" block loading={loadingMore} onClick={loadMore}>
+                    Xem thêm
+                  </Button>
+                </div>
+              )}
+            </div>
+          )
+        ) : data.payments.length === 0 ? (
+          <Empty icon="qr" title="Chưa có đơn thanh toán" className="py-10" />
         ) : (
-          <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200 bg-white">
+          <ul className="divide-y divide-line overflow-hidden rounded-m3 bg-s1 hairline">
             {data.payments.map((p) => (
-              <li key={p.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
+              <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm sm:px-5">
                 <div className="min-w-0 space-y-0.5">
                   <p className="font-medium">{paymentTitle(p)}</p>
-                  <p className="text-xs text-neutral-500">
-                    {formatDate(p.createdAt)} · Mã {p.refCode}
+                  <p className="text-xs text-muted">
+                    {formatDate(p.createdAt)} · {p.refCode}
                   </p>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className="font-medium tabular-nums">{formatVnd(p.amount)}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="font-semibold tabular-nums">{formatVnd(p.amount)}</span>
                   {p.status === "PENDING" ? (
-                    <Link href={`/credits/pay/${p.id}`} className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLOR.PENDING}`}>
+                    <Link href={`/credits/pay/${p.id}`} className={cx("press rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-ink")}>
                       Thanh toán
                     </Link>
                   ) : (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLOR[p.status]}`}>
-                      {PAYMENT_STATUS_LABEL[p.status]}
-                    </span>
+                    <Badge tone={PAYMENT_STATUS_TONE[p.status]}>{PAYMENT_STATUS_LABEL[p.status]}</Badge>
                   )}
                 </div>
               </li>
             ))}
           </ul>
         )}
+        {error && <Notice tone="danger">{error}</Notice>}
       </section>
     </div>
   );

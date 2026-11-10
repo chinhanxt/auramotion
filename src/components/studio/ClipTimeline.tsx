@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { IconButton } from "@/components/ui/Button";
+import { Slider } from "@/components/ui/Controls";
+import { cx } from "@/components/ui/cx";
+import { Icon } from "@/components/ui/Icon";
 import type { PickedClip } from "./ClipPicker";
 
 export type TimelineClip = PickedClip & {
@@ -21,140 +25,203 @@ export function clipError(c: TimelineClip): string | null {
   return null;
 }
 
-const btnClass = "rounded px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 disabled:opacity-30";
-const inputClass = "w-16 rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm outline-none focus:border-neutral-900";
+// Độ dài hiển thị trên timeline (video chưa biết độ dài thì coi 5 giây).
+export function clipSeconds(c: TimelineClip): number {
+  if (c.kind === "image") return c.duration;
+  return Math.max(0.5, (c.out ?? Math.max(c.in + 5, 5)) - c.in);
+}
 
-// Danh sách clip theo thứ tự ghép: kéo thả hoặc nút lên / xuống để đổi thứ tự, xóa, chỉnh số giây / đoạn cắt.
-export function ClipTimeline({ clips, onChange }: { clips: TimelineClip[]; onChange: (clips: TimelineClip[]) => void }) {
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
+export function moveItem<T>(list: T[], from: number, to: number): T[] {
+  if (from === to || to < 0 || to >= list.length) return list;
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
 
-  function update(i: number, patch: Partial<TimelineClip>) {
-    onChange(clips.map((c, j) => (j === i ? { ...c, ...patch } : c)));
-  }
+// Dải clip theo thứ tự ghép: kéo thả (chuột) hoặc nút ◀ ▶ (cảm ứng); thả clip từ kho vào để thêm.
+export function ClipStrip({
+  clips,
+  selected,
+  onSelect,
+  onChange,
+  onDropNew,
+  onAddClick,
+}: {
+  clips: TimelineClip[];
+  selected: string | null;
+  onSelect: (key: string) => void;
+  onChange: (clips: TimelineClip[]) => void;
+  onDropNew: (clip: PickedClip, at: number) => void;
+  onAddClick: () => void;
+}) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+  const total = clips.reduce((s, c) => s + clipSeconds(c), 0);
 
-  function move(from: number, to: number) {
-    if (from === to) return;
-    const next = [...clips];
-    const [item] = next.splice(from, 1);
-    next.splice(to, 0, item);
-    onChange(next);
+  function drop(e: React.DragEvent, at: number) {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData("application/x-am-clip");
+    if (raw) {
+      try {
+        onDropNew(JSON.parse(raw) as PickedClip, at);
+      } catch {
+        // dữ liệu kéo lạ
+      }
+    } else if (drag !== null) {
+      onChange(moveItem(clips, drag, Math.min(at, clips.length - 1)));
+    }
+    setDrag(null);
+    setOver(null);
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-neutral-700">Thứ tự ghép</span>
-        <span className="text-xs text-neutral-500">
-          {clips.length}/{MAX_CLIPS} clip · kéo thả hoặc ▲▼ để đổi thứ tự
+    <div className="rounded-m3 bg-s1 p-3 hairline">
+      <div className="mb-2.5 flex items-center justify-between gap-3 px-1">
+        <span className="t-label">Timeline</span>
+        <span className="text-xs text-muted tabular-nums">
+          {clips.length}/{MAX_CLIPS} clip · ~{Math.round(total)}s
         </span>
       </div>
-      {clips.length === 0 && (
-        <p className="rounded-md border border-dashed border-neutral-300 px-3 py-4 text-center text-sm text-neutral-500">
-          Bấm vào ảnh / video bên dưới để thêm clip
-        </p>
-      )}
-      <ol className="space-y-2">
+      <div
+        className="no-scrollbar flex min-h-[104px] items-stretch gap-1.5 overflow-x-auto pb-1"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => drop(e, clips.length)}
+      >
         {clips.map((c, i) => {
           const err = clipError(c);
+          const sec = clipSeconds(c);
+          const active = c.key === selected;
           return (
-            <li
+            <div
               key={c.key}
               draggable
-              onDragStart={() => setDragIndex(i)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragIndex !== null) move(dragIndex, i);
-                setDragIndex(null);
+              onDragStart={(e) => {
+                setDrag(i);
+                e.dataTransfer.effectAllowed = "move";
               }}
-              onDragEnd={() => setDragIndex(null)}
-              className={`flex cursor-grab items-center gap-3 rounded-md border bg-white p-2 ${
-                dragIndex === i ? "border-neutral-900 opacity-60" : "border-neutral-200"
-              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOver(i);
+              }}
+              onDragLeave={() => setOver((v) => (v === i ? null : v))}
+              onDrop={(e) => {
+                e.stopPropagation();
+                drop(e, i);
+              }}
+              onDragEnd={() => {
+                setDrag(null);
+                setOver(null);
+              }}
+              onClick={() => onSelect(c.key)}
+              role="button"
+              tabIndex={0}
+              aria-pressed={active}
+              aria-label={`Clip ${i + 1}`}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft" && e.altKey) onChange(moveItem(clips, i, i - 1));
+                else if (e.key === "ArrowRight" && e.altKey) onChange(moveItem(clips, i, i + 1));
+                else if (e.key === "Enter" || e.key === " ") onSelect(c.key);
+              }}
+              className={cx(
+                "reveal group relative shrink-0 cursor-grab overflow-hidden rounded-[12px] bg-s3 transition-[box-shadow,opacity,transform] duration-[260ms] active:cursor-grabbing",
+                active ? "shadow-[0_0_0_2px_var(--color-accent)]" : err ? "shadow-[0_0_0_1.5px_var(--color-danger)]" : "shadow-[inset_0_0_0_1px_var(--color-line2)]",
+                drag === i && "opacity-40",
+                over === i && drag !== i && "translate-x-1.5",
+              )}
+              style={{ width: `clamp(76px, ${sec * 22}px, 220px)`, "--i": i } as React.CSSProperties}
             >
-              <span className="w-5 shrink-0 text-center text-xs font-semibold text-neutral-500">{i + 1}</span>
-              <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-neutral-100">
-                {c.kind === "image" ? (
-                  <img src={c.url} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <video src={c.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1 space-y-1">
-                {c.kind === "image" ? (
-                  <label className="flex items-center gap-2 text-sm text-neutral-700">
-                    Ảnh ·
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      step={0.5}
-                      value={c.duration}
-                      onChange={(e) => update(i, { duration: Number(e.target.value) })}
-                      className={inputClass}
-                    />
-                    giây
-                  </label>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-700">
-                    Video · từ
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={c.in}
-                      onChange={(e) => update(i, { in: Number(e.target.value) })}
-                      className={inputClass}
-                      aria-label="Bắt đầu (giây)"
-                    />
-                    đến
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={c.out ?? ""}
-                      placeholder="hết"
-                      onChange={(e) => update(i, { out: e.target.value === "" ? null : Number(e.target.value) })}
-                      className={inputClass}
-                      aria-label="Kết thúc (giây)"
-                    />
-                    giây
-                  </div>
-                )}
-                {err && <p className="text-xs text-red-600">{err}</p>}
-              </div>
-              <div className="flex shrink-0 flex-col">
-                <button
-                  type="button"
-                  disabled={i === 0}
-                  onClick={() => move(i, i - 1)}
-                  className={btnClass}
-                  aria-label={`Đưa clip ${i + 1} lên`}
-                >
-                  ▲
-                </button>
-                <button
-                  type="button"
-                  disabled={i === clips.length - 1}
-                  onClick={() => move(i, i + 1)}
-                  className={btnClass}
-                  aria-label={`Đưa clip ${i + 1} xuống`}
-                >
-                  ▼
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => onChange(clips.filter((_, j) => j !== i))}
-                className="shrink-0 rounded-md px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 hover:text-red-600"
-                aria-label={`Xóa clip ${i + 1}`}
-              >
-                ✕
-              </button>
-            </li>
+              {c.kind === "image" ? (
+                <img src={c.url} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+              ) : (
+                <video src={`${c.url}#t=0.5`} muted playsInline preload="metadata" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+              )}
+              <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+              <span className="absolute top-1.5 left-2 text-[11px] font-bold text-white tabular-nums">{i + 1}</span>
+              <span className="absolute right-2 bottom-1.5 flex items-center gap-1 text-[11px] font-medium text-white/90 tabular-nums">
+                <Icon name={c.kind === "image" ? "image" : "video"} size={11} />
+                {sec % 1 ? sec.toFixed(1) : sec}s
+              </span>
+            </div>
           );
         })}
-      </ol>
+        <button
+          type="button"
+          onClick={onAddClick}
+          disabled={clips.length >= MAX_CLIPS}
+          className="press flex w-[76px] shrink-0 flex-col items-center justify-center gap-1 rounded-[12px] border border-dashed border-white/15 text-xs text-muted hover:border-white/30 hover:text-fg disabled:opacity-30"
+        >
+          <Icon name="plus" size={20} />
+          Thêm
+        </button>
+        {clips.length === 0 && <p className="self-center px-3 text-sm text-muted">Chọn hoặc kéo clip từ kho vào đây</p>}
+      </div>
+    </div>
+  );
+}
+
+// Bảng chỉnh clip đang chọn.
+export function ClipInspector({
+  clip,
+  index,
+  count,
+  onPatch,
+  onMove,
+  onRemove,
+}: {
+  clip: TimelineClip;
+  index: number;
+  count: number;
+  onPatch: (patch: Partial<TimelineClip>) => void;
+  onMove: (to: number) => void;
+  onRemove: () => void;
+}) {
+  const err = clipError(clip);
+  const num = "h-10 w-20 rounded-m1 bg-white/[.04] px-3 text-sm tabular-nums shadow-[inset_0_0_0_1px_var(--color-line2)] outline-none focus:shadow-[inset_0_0_0_1px_var(--color-accent)]";
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">
+          Clip {index + 1} <span className="font-normal text-muted">· {clip.kind === "image" ? "Ảnh" : "Video"}</span>
+        </p>
+        <div className="flex gap-1">
+          <IconButton icon="chevronLeft" label="Đưa lên trước" size="sm" variant="subtle" disabled={index === 0} onClick={() => onMove(index - 1)} />
+          <IconButton icon="chevronRight" label="Đưa ra sau" size="sm" variant="subtle" disabled={index === count - 1} onClick={() => onMove(index + 1)} />
+          <IconButton icon="trash" label="Bỏ clip" size="sm" variant="danger" onClick={onRemove} />
+        </div>
+      </div>
+      {clip.kind === "image" ? (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-fg/80">Hiển thị</span>
+            <span className="font-semibold tabular-nums">{clip.duration}s</span>
+          </div>
+          <Slider value={clip.duration} onChange={(v) => onPatch({ duration: v })} min={1} max={10} step={0.5} ariaLabel="Số giây hiển thị ảnh" />
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="space-y-1.5">
+            <span className="block text-xs text-muted">Từ giây</span>
+            <input type="number" min={0} step={0.5} value={clip.in} onChange={(e) => onPatch({ in: Number(e.target.value) })} className={num} aria-label="Bắt đầu (giây)" />
+          </label>
+          <label className="space-y-1.5">
+            <span className="block text-xs text-muted">Đến giây</span>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={clip.out ?? ""}
+              placeholder="hết"
+              onChange={(e) => onPatch({ out: e.target.value === "" ? null : Number(e.target.value) })}
+              className={num}
+              aria-label="Kết thúc (giây)"
+            />
+          </label>
+        </div>
+      )}
+      {err && <p className="text-xs text-danger">{err}</p>}
+      <p className="text-xs text-dim">Alt + ←/→ để đổi thứ tự bằng bàn phím.</p>
     </div>
   );
 }

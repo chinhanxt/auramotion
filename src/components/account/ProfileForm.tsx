@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Field, Message } from "@/components/auth/AuthShell";
+import { Avatar } from "@/components/ui/Bits";
+import { buttonClass as btn } from "@/components/ui/Button";
 import { api, postJson } from "@/lib/api-client";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const buttonClass =
-  "rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50";
+const buttonClass = btn({ variant: "primary" });
+const ghostClass = btn({ variant: "outline", size: "sm" });
 
 export type ProfileUser = { name: string; email: string; avatarUrl: string | null; hasPassword: boolean; googleLinked: boolean };
 
@@ -71,16 +73,10 @@ function AvatarSection({ name, initialUrl }: { name: string; initialUrl: string 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-4">
-        {url ? (
-          <img src={url} alt="Ảnh đại diện" className="h-20 w-20 shrink-0 rounded-full border border-neutral-200 object-cover" />
-        ) : (
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-2xl font-semibold text-neutral-600">
-            {name.trim().charAt(0).toUpperCase() || "?"}
-          </div>
-        )}
+        <Avatar name={name} url={url} size={80} className="ring-1 ring-white/10" />
         <div className="flex flex-wrap gap-2">
           <label
-            className={`cursor-pointer rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 ${busy ? "pointer-events-none opacity-50" : ""}`}
+            className={`${ghostClass} cursor-pointer ${busy ? "pointer-events-none opacity-50" : ""}`}
           >
             {busy ? "Đang lưu..." : "Đổi ảnh"}
             <input
@@ -97,7 +93,7 @@ function AvatarSection({ name, initialUrl }: { name: string; initialUrl: string 
               type="button"
               onClick={remove}
               disabled={busy}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-50"
+              className={btn({ variant: "ghost", size: "sm" })}
             >
               Xóa ảnh
             </button>
@@ -174,7 +170,7 @@ function PasswordForm({ initialHasPassword }: { initialHasPassword: boolean }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {!hasPassword && (
-        <p className="text-sm text-neutral-600">Tài khoản đăng nhập bằng Google, chưa có mật khẩu. Đặt mật khẩu để đăng nhập bằng email.</p>
+        <p className="text-sm text-muted">Tài khoản đăng nhập bằng Google, chưa có mật khẩu. Đặt mật khẩu để đăng nhập bằng email.</p>
       )}
       {hasPassword && (
         <Field
@@ -214,15 +210,17 @@ function PasswordForm({ initialHasPassword }: { initialHasPassword: boolean }) {
 
 export function ProfileForm({ user }: { user: ProfileUser }) {
   return (
-    <div className="space-y-6">
-      <section className="space-y-4 rounded-lg border border-neutral-200 bg-white p-4 sm:p-6">
-        <h2 className="text-base font-semibold">Thông tin cá nhân</h2>
+    <div className="grid gap-4 lg:grid-cols-2">
+      <section className="space-y-6 rounded-m4 bg-s1 p-5 hairline sm:p-7">
+        <div className="space-y-1">
+          <h2 className="text-lg font-bold tracking-tight">Thông tin</h2>
+          {user.googleLinked && <p className="text-xs text-muted">Đã liên kết Google</p>}
+        </div>
         <AvatarSection name={user.name} initialUrl={user.avatarUrl} />
         <NameForm initialName={user.name} email={user.email} />
-        {user.googleLinked && <p className="text-xs text-neutral-500">Đã liên kết tài khoản Google.</p>}
       </section>
-      <section className="space-y-4 rounded-lg border border-neutral-200 bg-white p-4 sm:p-6">
-        <h2 className="text-base font-semibold">{user.hasPassword ? "Đổi mật khẩu" : "Đặt mật khẩu"}</h2>
+      <section className="space-y-6 self-start rounded-m4 bg-s1 p-5 hairline sm:p-7">
+        <h2 className="text-lg font-bold tracking-tight">{user.hasPassword ? "Đổi mật khẩu" : "Đặt mật khẩu"}</h2>
         <PasswordForm initialHasPassword={user.hasPassword} />
       </section>
     </div>

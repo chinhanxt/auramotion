@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AuthShell, safeCallbackUrl } from "@/components/auth/AuthShell";
+import { AuthShell, authLink, safeCallbackUrl } from "@/components/auth/AuthShell";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { googleEnabled } from "@/lib/auth";
 
@@ -16,11 +16,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const errorCode = Array.isArray(params.error) ? params.error[0] : params.error;
   return (
     <AuthShell
-      title="Đăng nhập"
+      title="Chào mừng trở lại"
       footer={
         <>
           Chưa có tài khoản?{" "}
-          <Link href="/register" className="font-medium text-neutral-900 hover:underline">
+          <Link href="/register" className={authLink}>
             Đăng ký
           </Link>
         </>

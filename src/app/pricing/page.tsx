@@ -1,7 +1,10 @@
-import Link from "next/link";
 import { CreditPacks } from "@/components/billing/CreditPacks";
 import type { CreditPack, PlanCode } from "@/components/billing/labels";
 import { PricingPlans, type PricingPlan } from "@/components/billing/PricingPlans";
+import { AuraField } from "@/components/landing/AuraField";
+import { Footer } from "@/components/layout/Footer";
+import { PublicHeader } from "@/components/layout/PublicHeader";
+import { PublicShell } from "@/components/layout/PublicShell";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getActivePlan } from "@/server/services/plan";
@@ -37,49 +40,30 @@ export default async function PricingPage() {
   const currentCode: PlanCode | null = active?.plan.code ?? null;
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <header className="flex items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 py-3">
-        <Link href="/" className="font-semibold">
-          AuraMotion
-        </Link>
-        <nav className="flex items-center gap-2 text-sm">
-          {userId ? (
-            <Link href="/studio/image" className="rounded-md bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-800">
-              Vào Studio
-            </Link>
-          ) : (
-            <>
-              <Link href="/login?callbackUrl=/pricing" className="rounded-md px-3 py-1.5 text-neutral-700 hover:bg-neutral-100">
-                Đăng nhập
-              </Link>
-              <Link href="/register" className="rounded-md bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-800">
-                Đăng ký
-              </Link>
-            </>
-          )}
-        </nav>
-      </header>
-
-      <main className="mx-auto max-w-5xl space-y-10 px-4 py-8 md:py-12">
-        <section className="space-y-6">
-          <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-semibold md:text-3xl">Bảng giá</h1>
-            <p className="text-sm text-neutral-600">Chọn gói phù hợp. Thanh toán bằng QR chuyển khoản, kích hoạt tự động.</p>
+    <PublicShell>
+      <PublicHeader loggedIn={Boolean(userId)} />
+      <main className="relative overflow-hidden px-3 pb-20 sm:px-6 lg:px-10">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px]" aria-hidden="true">
+          <AuraField intensity={0.55} />
+        </div>
+        <section className="relative mx-auto max-w-[1280px] space-y-10 pt-14 sm:pt-20">
+          <div className="space-y-3 text-center">
+            <h1 className="t-display text-[clamp(2.4rem,1.2rem+4vw,4.6rem)]">Bảng giá</h1>
+            <p className="text-sm text-muted">QR chuyển khoản · kích hoạt tự động</p>
           </div>
           <PricingPlans plans={items} currentCode={currentCode} />
-          <p className="text-center text-xs text-neutral-500">
-            Credit gói cấp lại mỗi tháng và không cộng dồn sang tháng sau. Hết hạn gói, tài khoản tự về gói Free.
-          </p>
+          <p className="text-center text-xs text-dim">Credit gói cấp lại mỗi tháng, không cộng dồn. Hết hạn gói, tài khoản về Free.</p>
         </section>
 
-        <section className="space-y-4">
+        <section className="relative mx-auto mt-20 max-w-[1280px] space-y-5">
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Mua thêm Credit</h2>
-            <p className="text-sm text-neutral-600">Credit mua lẻ không hết hạn, dùng sau khi hết Credit gói.</p>
+            <h2 className="t-h2">Credit lẻ</h2>
+            <p className="text-sm text-muted">Không hết hạn, dùng sau khi hết Credit gói.</p>
           </div>
           <CreditPacks packs={packs} returnTo="/pricing" />
         </section>
       </main>
-    </div>
+      <Footer />
+    </PublicShell>
   );
 }

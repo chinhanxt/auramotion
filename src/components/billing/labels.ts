@@ -62,3 +62,9 @@ export function paymentTitle(p: Pick<PaymentSummary, "type" | "planCode" | "peri
   }
   return `${formatCredit(p.creditAmount ?? 0)} Credit`;
 }
+
+export const PAYMENT_STATUS_TONE: Record<PaymentStatus, "warn" | "ok" | "neutral"> = {
+  PENDING: "warn",
+  SUCCEEDED: "ok",
+  CANCELED: "neutral",
+};

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AuthShell } from "@/components/auth/AuthShell";
+import { AuthShell, authLink } from "@/components/auth/AuthShell";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 
 export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string | string[] }> }) {
@@ -8,7 +8,7 @@ export default async function ResetPasswordPage({ searchParams }: { searchParams
     <AuthShell
       title="Đặt lại mật khẩu"
       footer={
-        <Link href="/login" className="font-medium text-neutral-900 hover:underline">
+        <Link href="/login" className={authLink}>
           Quay lại đăng nhập
         </Link>
       }

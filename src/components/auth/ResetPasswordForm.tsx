@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Spinner } from "@/components/ui/Button";
 import { buttonClass, Field, Message, readError } from "./AuthShell";
 
 export function ResetPasswordForm({ token }: { token: string }) {
@@ -52,7 +53,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
         <Field label="Mật khẩu mới (tối thiểu 8 ký tự)" name="password" type="password" minLength={8} autoComplete="new-password" required />
         <Field label="Nhập lại mật khẩu mới" name="confirm" type="password" minLength={8} autoComplete="new-password" required />
         <button type="submit" className={buttonClass} disabled={pending}>
-          {pending ? "Đang lưu..." : "Đặt lại mật khẩu"}
+          {pending && <Spinner />}
+          {pending ? "Đang lưu" : "Đặt lại mật khẩu"}
         </button>
       </form>
     </div>

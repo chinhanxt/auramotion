@@ -1,13 +1,8 @@
-import { AssembleForm } from "@/components/studio/AssembleForm";
+import { EditLoader } from "@/components/studio/EditLoader";
 
-export const metadata = { title: "Ghép video · AuraMotion" };
+export const metadata = { title: "Ghép · AuraMotion" };
 
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { from } = await searchParams;
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Ghép video</h1>
-      <AssembleForm fromJobId={typeof from === "string" ? from : undefined} />
-    </div>
-  );
+  return <EditLoader fromJobId={typeof from === "string" ? from : undefined} />;
 }

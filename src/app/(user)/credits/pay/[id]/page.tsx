@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { PaymentDetail } from "@/components/billing/PaymentView";
 import { PaymentView } from "@/components/billing/PaymentView";
+import { Icon } from "@/components/ui/Icon";
 import { requireUser } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { getPayment } from "@/server/services/payment";
@@ -38,11 +39,11 @@ export default async function PayPage({ params }: { params: Promise<{ id: string
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Thanh toán QR</h1>
-        <Link href="/credits" className="text-sm text-neutral-600 hover:underline">
-          ← Trang Credit
+    <div className="mx-auto max-w-[1100px] px-3 pt-3 pb-16 sm:px-5 lg:px-6">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <h1 className="t-h2">Thanh toán</h1>
+        <Link href="/credits" className="press inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-fg">
+          <Icon name="arrowLeft" size={16} /> Credit
         </Link>
       </div>
       <PaymentView initial={initial} bank={bank} />

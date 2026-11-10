@@ -1,26 +1,706 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ───────── AuraMotion design tokens ─────────
+   Màu tối chỉ áp cho vùng `.am` (app người dùng, landing, auth); /admin giữ giao diện sáng riêng. */
+@theme {
+  --color-bg: #070708;
+  --color-s1: #0d0d10;
+  --color-s2: #131317;
+  --color-s3: #1a1a20;
+  --color-s4: #22222a;
+  --color-line: rgba(255, 255, 255, 0.07);
+  --color-line2: rgba(255, 255, 255, 0.12);
+  --color-fg: #f5f5f7;
+  --color-muted: #8b8b96;
+  --color-dim: #5c5c66;
+  --color-accent: #d4ff3a;
+  --color-accent-ink: #0a0b04;
+  --color-aura1: #7c5cff;
+  --color-aura2: #ff4fd8;
+  --color-aura3: #ffb36b;
+  --color-danger: #ff5c6c;
+  --color-ok: #4ade80;
+  --color-warn: #ffc65c;
+
+  --radius-m1: 10px;
+  --radius-m2: 14px;
+  --radius-m3: 20px;
+  --radius-m4: 28px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --animate-shimmer: am-shimmer 1.6s linear infinite;
+  --animate-rise: am-rise 420ms var(--ease-out) backwards;
+  --animate-fade: am-fade 260ms var(--ease-out) both;
+  --animate-spin-slow: spin 0.9s linear infinite;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-bvp), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --d1: 160ms;
+  --d2: 260ms;
+  --d3: 420ms;
+  --aura: linear-gradient(110deg, #7c5cff 0%, #ff4fd8 55%, #ffb36b 100%);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+html {
+  background: #070708;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Vùng tối của app */
+.am-layer {
+  color-scheme: dark;
+  color: var(--color-fg);
+}
+.am {
+  color-scheme: dark;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  min-height: 100dvh;
+}
+:is(.am, .am-layer) ::selection {
+  background: rgba(212, 255, 58, 0.85);
+  color: #000;
+}
+:is(.am, .am-layer) :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+:is(.am, .am-layer) input::placeholder,
+:is(.am, .am-layer) textarea::placeholder {
+  color: var(--color-dim);
+}
+:is(.am, .am-layer) ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+:is(.am, .am-layer) ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+:is(.am, .am-layer) ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+:is(.am, .am-layer) ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+/* ───────── Type ───────── */
+.t-display {
+  font-size: clamp(2.4rem, 1.2rem + 5.2vw, 6.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  font-weight: 800;
+}
+.t-h1 {
+  font-size: clamp(1.75rem, 1.2rem + 2.2vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  font-weight: 750;
+}
+.t-h2 {
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.9rem);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+.t-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+.aura-text {
+  background: var(--aura);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ───────── Surfaces ───────── */
+.glass {
+  background: rgba(16, 16, 20, 0.72);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+}
+.glass-strong {
+  background: rgba(19, 19, 23, 0.86);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+}
+.hairline {
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--grain);
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+.aura-ring {
+  position: relative;
+}
+.aura-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--aura);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ───────── Motion ───────── */
+@keyframes am-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes am-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes am-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes am-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes am-sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes am-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes am-toast-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes am-blur-in {
+  from {
+    opacity: 0;
+    filter: blur(14px);
+    transform: scale(1.02);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+@keyframes am-text-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+/* Trường màu aura: trôi chậm, không phóng to / thu nhỏ lặp. */
+@keyframes am-drift-a {
+  0% {
+    transform: translate3d(-8%, -4%, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(6%, 4%, 0) rotate(160deg);
+  }
+  100% {
+    transform: translate3d(-8%, -4%, 0) rotate(360deg);
+  }
+}
+@keyframes am-drift-b {
+  0% {
+    transform: translate3d(6%, 6%, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(-6%, -2%, 0) rotate(-180deg);
+  }
+  100% {
+    transform: translate3d(6%, 6%, 0) rotate(-360deg);
+  }
+}
+@keyframes am-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes am-progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.page-enter {
+  animation: am-rise var(--d3) var(--ease-out) backwards;
+}
+.reveal {
+  animation: am-rise var(--d3) var(--ease-out) backwards;
+  animation-delay: calc(min(var(--i, 0), 12) * 40ms);
+}
+.pop-in {
+  animation: am-pop var(--d2) var(--ease-spring) backwards;
+}
+.blur-in {
+  animation: am-blur-in 620ms var(--ease-out) backwards;
+}
+.text-in {
+  animation: am-text-in 520ms var(--ease-out) backwards;
+  animation-delay: calc(min(var(--i, 0), 20) * 60ms);
+}
+.press {
+  transition:
+    transform var(--d1) var(--ease-out),
+    background-color var(--d1) var(--ease-out),
+    opacity var(--d1) var(--ease-out),
+    box-shadow var(--d2) var(--ease-out),
+    color var(--d1) var(--ease-out);
+}
+.press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.lift {
+  transition:
+    transform var(--d2) var(--ease-out),
+    box-shadow var(--d2) var(--ease-out);
+}
+@media (hover: hover) {
+  .lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.8);
+  }
+}
+
+/* Skeleton: tia sáng quét ngang */
+.skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-s2);
+}
+.skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.055), transparent);
+  animation: am-shimmer 1.6s linear infinite;
+}
+.skel-aura::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background:
+    radial-gradient(40% 40% at 30% 30%, rgba(124, 92, 255, 0.22), transparent 70%),
+    radial-gradient(40% 40% at 70% 70%, rgba(255, 79, 216, 0.16), transparent 70%);
+  animation: am-drift-a 14s linear infinite;
+}
+
+/* Thanh tiến độ aura */
+.aura-bar {
+  position: relative;
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.aura-bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--aura);
+  transform-origin: left;
+  transition: transform 600ms var(--ease-out);
+}
+.aura-bar[data-indeterminate] > i {
+  width: 40%;
+  animation: am-progress-sweep 1.4s var(--ease-out) infinite;
+}
+
+/* Lưới masonry bằng CSS columns */
+.masonry {
+  column-gap: 10px;
+  columns: 2;
+}
+@media (min-width: 640px) {
+  .masonry {
+    columns: 3;
+  }
+}
+@media (min-width: 1024px) {
+  .masonry {
+    columns: 4;
+    column-gap: 12px;
+  }
+}
+@media (min-width: 1600px) {
+  .masonry {
+    columns: 5;
+  }
+}
+@media (min-width: 2200px) {
+  .masonry {
+    columns: 6;
+  }
+}
+.masonry > * {
+  break-inside: avoid;
+  margin-bottom: 10px;
+}
+@media (min-width: 1024px) {
+  .masonry > * {
+    margin-bottom: 12px;
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tooltip CSS thuần: data-tip trên phần tử */
+[data-tip] {
+  position: relative;
+}
+@media (hover: hover) {
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translate(-50%, 4px);
+    padding: 5px 9px;
+    border-radius: 8px;
+    background: #22222a;
+    color: #f5f5f7;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.5);
+    transition:
+      opacity var(--d1) var(--ease-out),
+      transform var(--d1) var(--ease-out);
+    z-index: 60;
+  }
+  [data-tip]:hover::after,
+  [data-tip]:focus-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 280ms;
+  }
+  [data-tip-side="bottom"]::after {
+    bottom: auto;
+    top: calc(100% + 8px);
+  }
+}
+
+}
+
+@layer components {
+
+
+/* Modal / sheet / popover */
+.overlay-backdrop {
+  animation: am-fade var(--d2) var(--ease-out) backwards;
+}
+[data-closing] .overlay-backdrop {
+  opacity: 0;
+  transition: opacity 200ms var(--ease-out);
+}
+.modal-pop {
+  animation: am-pop var(--d2) var(--ease-spring) backwards;
+}
+.modal-sheet {
+  animation: am-sheet var(--d3) var(--ease-out) backwards;
+}
+@media (min-width: 640px) {
+  .modal-sheet {
+    animation: am-pop var(--d2) var(--ease-spring) backwards;
+  }
+}
+[data-closing] .modal-pop,
+[data-closing] .modal-sheet {
+  opacity: 0;
+  transform: scale(0.97) translateY(6px);
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 180ms var(--ease-out);
+}
+.popover-panel {
+  animation: am-pop 200ms var(--ease-spring) backwards;
+}
+.popover-panel[data-closing] {
+  opacity: 0;
+  transform: scale(0.97);
+  transition:
+    opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+}
+
+/* Toast */
+.toast {
+  animation: am-toast-in-top var(--d3) var(--ease-spring) backwards;
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+}
+@media (min-width: 640px) {
+  .toast {
+    animation-name: am-toast-in;
+  }
+}
+.toast-leave {
+  opacity: 0 !important;
+  transform: translateX(24px) scale(0.97) !important;
+}
+.lightbox-out {
+  opacity: 0;
+  transition: opacity 180ms var(--ease-out);
+}
+
+:root {
+  --tabbar-h: 0px;
+  --topbar-h: 56px;
+}
+@media (max-width: 767.98px) {
+  :root:has(.app-shell) {
+    --tabbar-h: calc(58px + var(--safe-b));
+  }
+}
+
+/* Hàng "justified": ô giữ tỷ lệ, lấp kín chiều ngang */
+.justified {
+  --row-h: 150px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .justified {
+    --row-h: 210px;
+    gap: 10px;
+  }
+}
+@media (min-width: 1024px) {
+  .justified {
+    --row-h: 260px;
+  }
+}
+@media (min-width: 1600px) {
+  .justified {
+    --row-h: 300px;
+  }
+}
+@media (min-width: 2200px) {
+  .justified {
+    --row-h: 340px;
+  }
+}
+.justified-fill {
+  flex: 1000000 1 0px;
+}
+
+/* Chỉ báo đang phát nhạc */
+@keyframes am-eq {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.eq-bar {
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transform-origin: bottom;
+  animation: am-eq 0.9s ease-in-out infinite;
+}
+
+/* Trường màu aura (landing / auth) */
+.aura-field {
+  background: #070708;
+}
+.aura-blob {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.7;
+  will-change: transform;
+}
+.aura-blob-a {
+  left: -18vmax;
+  top: -26vmax;
+  background: radial-gradient(circle at 40% 40%, #7c5cff 0%, rgba(124, 92, 255, 0) 62%);
+  animation: am-drift-a 38s linear infinite;
+}
+.aura-blob-b {
+  right: -24vmax;
+  top: -10vmax;
+  background: radial-gradient(circle at 60% 50%, #ff4fd8 0%, rgba(255, 79, 216, 0) 60%);
+  opacity: 0.52;
+  animation: am-drift-b 46s linear infinite;
+}
+.aura-blob-c {
+  left: 10vmax;
+  bottom: -40vmax;
+  background: radial-gradient(circle at 50% 40%, #ffb36b 0%, rgba(255, 179, 107, 0) 58%);
+  opacity: 0.32;
+  animation: am-drift-a 54s linear infinite reverse;
+}
+
+.marquee-track {
+  animation: am-marquee 70s linear infinite;
+}
+.marquee:hover .marquee-track,
+.marquee:focus-within .marquee-track {
+  animation-play-state: paused;
+}
+
+/* Ô tính năng landing: lớp màu trượt chậm khi rê chuột */
+.feature-tile .feature-art {
+  transition: transform 900ms var(--ease-out);
+}
+.feature-tile:hover .feature-art {
+  transform: translate3d(-6%, -4%, 0) rotate(-4deg);
+}
+.feature-tile .feature-frames > * {
+  transition: transform 700ms var(--ease-out), opacity 700ms var(--ease-out);
+}
+.feature-tile:hover .feature-frames > :nth-child(1) {
+  transform: translate3d(-10px, -6px, 0) rotate(-6deg);
+}
+.feature-tile:hover .feature-frames > :nth-child(2) {
+  transform: translate3d(0, -12px, 0);
+}
+.feature-tile:hover .feature-frames > :nth-child(3) {
+  transform: translate3d(10px, -6px, 0) rotate(6deg);
+}
+.hero-in > * {
+  animation: am-text-in 900ms var(--ease-out) backwards;
+}
+.hero-in > :nth-child(2) {
+  animation-delay: 120ms;
+}
+.hero-in > :nth-child(3) {
+  animation-delay: 240ms;
+}
+.hero-in > :nth-child(4) {
+  animation-delay: 360ms;
+}
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.am, .am-layer) *,
+  :is(.am, .am-layer) *::before,
+  :is(.am, .am-layer) *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes am-dock {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.dock-in {
+  animation: am-dock var(--d3) var(--ease-out) backwards;
+}
+
+/* Toast nằm trên composer / thanh xuất khi có */
+:root {
+  --dock-h: 0px;
+}
+:root:has(.dock-in) {
+  --dock-h: 128px;
 }

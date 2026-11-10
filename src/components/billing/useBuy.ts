@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { ApiError, postJson } from "@/lib/api-client";
 import type { Period } from "./labels";
 
@@ -10,12 +11,11 @@ export type OrderBody = { type: "PLAN"; planCode: "pro" | "ultra"; period: Perio
 
 export function useBuy(returnTo: string) {
   const router = useRouter();
+  const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState("");
 
   async function buy(key: string, order: OrderBody) {
     setBusy(key);
-    setError("");
     try {
       const payment = await postJson<{ id: string }>("/api/payments", order);
       router.push(`/credits/pay/${payment.id}`);
@@ -25,9 +25,9 @@ export function useBuy(returnTo: string) {
         router.push(`/login?callbackUrl=${encodeURIComponent(returnTo)}`);
         return;
       }
-      setError((err as Error).message);
+      toast.error((err as Error).message);
     }
   }
 
-  return { buy, busy, error };
+  return { buy, busy };
 }
