@@ -15,6 +15,9 @@ const imageParams = z.object({
   imageCount: z.union([z.literal(1), z.literal(2), z.literal(4)]).optional(),
   presetId: z.string().min(1).optional(),
   inputUrl: z.string().min(1).optional(),
+  // AI Gateway viết prompt trong job: `prompt` là ý tưởng gốc; bỏ skillId = tự chọn skill.
+  autoWrite: z.boolean().optional(),
+  skillId: z.string().min(1).optional(),
 });
 
 const videoParams = z.object({
@@ -25,6 +28,9 @@ const videoParams = z.object({
   durationSec: z.union([z.literal(5), z.literal(10)]).optional(),
   presetId: z.string().min(1).optional(),
   inputUrl: z.string().min(1).optional(),
+  // AI Gateway viết prompt trong job: `prompt` là ý tưởng gốc; bỏ skillId = tự chọn skill.
+  autoWrite: z.boolean().optional(),
+  skillId: z.string().min(1).optional(),
 });
 
 const assembleParams = z.object({

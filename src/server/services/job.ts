@@ -12,6 +12,7 @@ import { mediaKindOf, validateMedia } from "@/server/engines/media";
 import type { HttpMuseClient } from "@/server/engines/muse";
 import { getVideoBlocked, setVideoBlocked } from "@/server/engines/muse-block";
 import { getScheduler, SlotBusyError, type Lease, type MuseScheduler } from "@/server/engines/muse-scheduler";
+import { loadSkill, writePrompt } from "@/server/engines/prompt-writer";
 import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
 import { assembleErrorCode, runAssembleJob } from "@/server/services/assemble";
 import { charge, hold, publishCredit, refund } from "@/server/services/credit";
@@ -57,6 +58,8 @@ export type ProcessDeps = {
   engines?: Partial<Record<string, FileEngine>>;
   pollMs?: number;
   scheduler?: MuseScheduler;
+  // Test thay AI Gateway viết prompt.
+  writePrompt?: typeof writePrompt;
 };
 export type JobListFilter = {
   kind?: "image" | "video" | "assemble";
@@ -93,11 +96,14 @@ async function isMaintenance(): Promise<boolean> {
 
 // ---------- Sự kiện realtime ----------
 
-export function jobEventData(job: Job) {
+export function jobEventData(job: Job, extra: { stage?: "writing" | "rendering" } = {}) {
+  const params = (job.params ?? {}) as { autoWrite?: unknown; written?: unknown };
   return {
     id: job.id,
     status: job.status,
     progress: job.progress,
+    prompt: job.prompt,
+    ...(extra.stage ? { stage: extra.stage } : params.autoWrite && !params.written && (job.status === "PENDING" || job.status === "RUNNING") ? { stage: "writing" as const } : {}),
     resultUrls: job.resultUrls,
     error: job.error,
     storyId: job.storyId,
@@ -229,6 +235,8 @@ async function prepareJob(userId: string, input: GenerationParams, plan: Plan, o
       }
     }
     if (p.inputUrl) await checkInputUrl(userId, p.inputUrl);
+    // Skill người dùng chọn cho AI Gateway: kiểm ngay để báo lỗi trước khi giữ Credit.
+    if (p.autoWrite && p.skillId) await loadSkill(p.skillId, p.kind === "image" ? "IMAGE" : "VIDEO", plan.rank);
   } else {
     await checkAssembleInputs(userId, p);
   }
@@ -500,7 +508,8 @@ async function buildRequest(
       throw err;
     });
   }
-  let prompt = buildPrompt(job.prompt, preset);
+  const written = Boolean((job.params as { written?: unknown } | null)?.written);
+  let prompt = written ? job.prompt : buildPrompt(job.prompt, preset);
   const omitSize = p.kind === "video" && opts.omitVideoSize === true;
   if (omitSize) prompt = `${prompt}, ${FRAMING_HINT[p.aspectRatio] ?? `${p.aspectRatio} framing`}`;
   return {
@@ -662,9 +671,66 @@ export async function processJob(jobId: string, deps: ProcessDeps = {}): Promise
   const resumable = job.status === "RUNNING" && provider === "MUSE" && job.museTaskId !== null;
   if (job.status !== "PENDING" && !resumable) return;
 
-  if (provider === "MUSE") return runMuse(job, deps);
   if (provider === "LOCAL") return runLocal(job, deps);
-  return runFileEngine(job, deps);
+  // Luồng AI Gateway: viết prompt bằng skill trước, rồi mới gửi cho engine người dùng chọn.
+  const ready = await ensureWritten(job, deps);
+  if (!ready) return;
+  if (provider === "MUSE") return runMuse(ready, deps);
+  return runFileEngine(ready, deps);
+}
+
+export type WrittenInfo = { provider: string; skillSlug: string; skillName: string; ms: number };
+
+// params.autoWrite: `prompt` đang là ý tưởng gốc → AI Gateway (agy → codex → muse) áp skill viết prompt cho engine.
+// Đã viết (params.written) thì bỏ qua — an toàn khi BullMQ chạy lại. Lỗi viết: FAILED + hoàn Credit.
+async function ensureWritten<J extends Job>(job: J, deps: ProcessDeps): Promise<J | null> {
+  const params = (job.params ?? {}) as Record<string, unknown>;
+  if (!params.autoWrite || params.written || (job.kind !== "IMAGE" && job.kind !== "VIDEO")) return job;
+  await publishEvent(job.userId, "job", jobEventData(job, { stage: "writing" }));
+  const kind = job.kind === "IMAGE" ? "image" : "video";
+  const { plan } = await getActivePlan(job.userId);
+  const idea = typeof params.idea === "string" && params.idea ? params.idea : job.prompt;
+  let res: Awaited<ReturnType<typeof writePrompt>>;
+  try {
+    res = await (deps.writePrompt ?? writePrompt)({
+      idea,
+      kind,
+      skillId: typeof params.skillId === "string" ? params.skillId : undefined,
+      autoSkill: true,
+      styleId: kind === "image" && typeof params.presetId === "string" ? params.presetId : undefined,
+      cameraId: kind === "video" && typeof params.presetId === "string" ? params.presetId : undefined,
+      aspect: typeof params.aspectRatio === "string" ? params.aspectRatio : undefined,
+      durationSec: typeof params.durationSec === "number" ? params.durationSec : undefined,
+      hasRef: Boolean(job.inputUrl),
+      planRank: plan.rank,
+    });
+  } catch (err) {
+    console.warn(`[job] ${job.id} AI viết prompt lỗi: ${(err as Error).message.slice(0, 300)}`);
+    await failJob(job.id, "WRITE_FAILED");
+    return null;
+  }
+  if (!res.prompt) {
+    await failJob(job.id, "WRITE_FAILED");
+    return null;
+  }
+  const written: WrittenInfo = {
+    provider: res.provider,
+    skillSlug: res.skill?.slug ?? "",
+    skillName: res.skill?.name ?? "",
+    ms: res.ms ?? 0,
+  };
+  const updated = await db.job.updateMany({
+    where: { id: job.id, status: { in: ["PENDING", "RUNNING"] } },
+    data: {
+      prompt: res.prompt.slice(0, 2000),
+      params: { ...params, idea, written } as Prisma.InputJsonObject,
+    },
+  });
+  if (updated.count === 0) return null;
+  const fresh = await db.job.findUnique({ where: { id: job.id }, include: { model: true } });
+  if (!fresh) return null;
+  await publishEvent(fresh.userId, "job", jobEventData(fresh, { stage: "rendering" }));
+  return fresh as unknown as J;
 }
 
 export async function sweepStuckJobs(now: Date = new Date()): Promise<number> {

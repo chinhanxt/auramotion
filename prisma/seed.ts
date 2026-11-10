@@ -104,7 +104,17 @@ export async function seed(): Promise<void> {
     await db.preset.updateMany({ where: { kind, name, slug: null }, data: meta });
   }
   for (const s of SKILLS) {
-    await db.promptSkill.upsert({ where: { slug: s.slug }, create: s, update: {} });
+    const cur = await db.promptSkill.findUnique({ where: { slug: s.slug } });
+    if (!cur) {
+      await db.promptSkill.create({ data: s });
+    } else if (cur.updatedAt.getTime() - cur.createdAt.getTime() < 5000) {
+      // Admin chưa sửa skill này: cập nhật nội dung theo bản seed mới (giữ bật/tắt + thứ tự).
+      await db.promptSkill.update({
+        where: { id: cur.id },
+        data: { name: s.name, description: s.description, instructions: s.instructions, template: s.template },
+      });
+      await db.$executeRaw`UPDATE prompt_skills SET "updatedAt" = "createdAt" WHERE id = ${cur.id}`;
+    }
   }
   for (const [key, value] of Object.entries(SETTINGS)) {
     await db.setting.upsert({ where: { key }, create: { key, value }, update: {} });

@@ -7,6 +7,7 @@ export const JOB_ERROR_TEXT: Record<string, string> = {
   BAD_CLIP: "có clip không còn hoặc không hợp lệ",
   BAD_PARAMS: "tham số không hợp lệ",
   BAD_MEDIA: "file kết quả bị hỏng",
+  WRITE_FAILED: "AI chưa viết được prompt, đã hoàn Credit",
   NO_RESULT: "engine không trả kết quả",
   NO_IMAGE: "engine không trả ảnh",
   NO_AUDIO: "không tạo được giọng đọc",

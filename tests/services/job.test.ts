@@ -286,6 +286,52 @@ describe("job", () => {
     expect(await balance()).toEqual({ available: "19.00", held: "0.00" });
   });
 
+  it("AI Gateway: autoWrite viết prompt bằng skill rồi mới gửi engine người dùng chọn", async () => {
+    const style = await db.preset.findFirstOrThrow({ where: { kind: "STYLE", slug: "son-mai" } });
+    const skill = await db.promptSkill.findFirstOrThrow({ where: { slug: "image-food-drink" } });
+    const job = await createJob(
+      userId,
+      imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1, prompt: "ly cà phê sữa đá", presetId: style.id, autoWrite: true, skillId: skill.id }),
+    );
+    const out = path.join(os.tmpdir(), `aura-out-${randomUUID()}.png`);
+    await fs.copyFile(SAMPLE_PNG, out);
+    const requests: MediaRequest[] = [];
+    const agy: FileEngine = { generate: async (req) => (requests.push(req), { files: [out] }) };
+    const calls: unknown[] = [];
+    const writePrompt = vi.fn(async (input: unknown) => {
+      calls.push(input);
+      return { prompt: "A glass of Vietnamese iced milk coffee on lacquer", provider: "agy" as const, ms: 900, skill: { id: skill.id, slug: skill.slug, name: skill.name } };
+    });
+    await processJob(job.id, { engines: { AGY: agy }, writePrompt });
+
+    expect(calls[0]).toMatchObject({ idea: "ly cà phê sữa đá", kind: "image", skillId: skill.id, styleId: style.id, autoSkill: true, hasRef: false });
+    // Prompt đã viết đi thẳng tới engine, không nối promptSuffix của style lần nữa.
+    expect(requests[0].prompt).toBe("A glass of Vietnamese iced milk coffee on lacquer");
+    const done = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(done.status).toBe("SUCCEEDED");
+    expect(done.prompt).toBe("A glass of Vietnamese iced milk coffee on lacquer");
+    expect(done.params).toMatchObject({ idea: "ly cà phê sữa đá", written: { provider: "agy", skillSlug: "image-food-drink", ms: 900 } });
+  });
+
+  it("AI Gateway lỗi: job FAILED WRITE_FAILED, hoàn Credit, không gọi engine", async () => {
+    const job = await createJob(userId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1, prompt: "bát phở", autoWrite: true }));
+    const generate = vi.fn();
+    await processJob(job.id, {
+      engines: { AGY: { generate } },
+      writePrompt: vi.fn(async () => {
+        throw new Error("all providers down");
+      }),
+    });
+    expect(generate).not.toHaveBeenCalled();
+    expect(await db.job.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({ status: "FAILED", error: "WRITE_FAILED" });
+    expect(await balance()).toEqual({ available: "20.00", held: "0.00" });
+  });
+
+  it("skill không hợp lệ cho autoWrite bị chặn lúc tạo job", async () => {
+    const story = await db.promptSkill.findFirstOrThrow({ where: { kind: "STORY" } });
+    await expectAppError(createJob(userId, imageParams({ autoWrite: true, skillId: story.id })), "VALIDATION");
+  });
+
   it("file engine is aborted when the job stops running", async () => {
     const job = await createJob(userId, imageParams({ modelId: models["Gemini Ảnh"], imageCount: 1 }));
     let aborted = false;
