@@ -5,6 +5,7 @@
 #   FAKE_RESPONSE=<chuỗi JSON>  giá trị trường response (mặc định "{\"prompt\":\"fake prompt\"}")
 #   FAKE_LOG=<file>     ghi tham số và quyền file token để test kiểm
 #   FAKE_NO_IMAGE=1     --agent imagegen: không tạo ảnh, trả câu từ chối
+#   FAKE_QUOTA=1        --agent imagegen: tool báo hết lượt (429)
 set -u
 
 if [ "${1:-}" = "--version" ]; then
@@ -47,6 +48,10 @@ fi
 
 echo "Loading..."
 if [ "$agent" = "imagegen" ]; then
+  if [ -n "${FAKE_QUOTA:-}" ]; then
+    printf '{"status":"SUCCESS","response":"ERROR: {\\"error\\": {\\"code\\": 429, \\"message\\": \\"You have exhausted your capacity on this model.\\"}}"}\n'
+    exit 0
+  fi
   if [ -n "${FAKE_NO_IMAGE:-}" ]; then
     printf '{"status":"SUCCESS","response":"I cannot generate this"}\n'
   else

@@ -22,6 +22,8 @@ inheritCustomizations: false
 Write exactly what the message asks for, using text only. Do not use tools, do not read files.
 `;
 
+const QUOTA_TEXT = /exhausted your capacity|resource[_ ]exhausted|quota|rate limit|\b429\b/i;
+
 const IMAGEGEN_AGENT = `---
 name: imagegen
 description: Draws exactly one image with the generate_image tool and stops.
@@ -30,7 +32,7 @@ tools:
 excludeDefaultComponents: true
 mainAgent: true
 ---
-Call generate_image exactly once with the user's image prompt and the listed reference images (absolute paths, in the given order). Then reply with the single word done. Never call any other tool, never retry, never review the result.
+Call generate_image exactly once with the user's image prompt and the listed reference images (absolute paths, in the given order). If it succeeds, reply with the single word done. If the tool returns an error or no image, reply with ERROR: followed by the exact error text. Never call any other tool, never retry, never review the result.
 `;
 
 export function agyBin(): string {
@@ -172,6 +174,8 @@ export const agyImage: FileEngine = {
         const answer = parseAgyOutput(stdout).trim().slice(0, 300);
         const said = answer ? ` agy trả: «${answer}»` : " agy không trả lời gì.";
         if (REFUSAL_TEXT.test(answer)) throw new EngineError("REFUSED", `Công cụ ảnh từ chối tạo ảnh này.${said}`);
+        // Tài khoản agy hết lượt ảnh (429 / exhausted capacity): báo QUOTA ngay, không thử lại vô ích.
+        if (QUOTA_TEXT.test(answer)) throw new EngineError("QUOTA", `agy hết lượt tạo ảnh.${said}`);
         throw new EngineError("NO_IMAGE", `agy chạy xong nhưng không có ảnh.${said}`, true);
       },
     });

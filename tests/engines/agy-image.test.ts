@@ -7,7 +7,7 @@ import { getFileEngine } from "@/server/engines";
 import { agyImage } from "@/server/engines/agy";
 import type { MediaRequest } from "@/server/engines/types";
 
-const ENV_KEYS = ["AGY_BIN", "AGY_HOME", "FAKE_LOG", "FAKE_NO_IMAGE"] as const;
+const ENV_KEYS = ["AGY_BIN", "AGY_HOME", "FAKE_LOG", "FAKE_NO_IMAGE", "FAKE_QUOTA"] as const;
 const saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 
 let scratch: string;
@@ -96,5 +96,10 @@ describe("agyImage", () => {
       message: expect.stringContaining("I cannot generate this"),
     });
     expect((await tmpOutputs()).filter((n) => !before.has(n))).toEqual([]);
+  });
+
+  it("agyImage hết lượt (429) báo QUOTA, không thử lại", async () => {
+    process.env.FAKE_QUOTA = "1";
+    await expect(agyImage.generate(req)).rejects.toMatchObject({ code: "QUOTA", retryable: false });
   });
 });
