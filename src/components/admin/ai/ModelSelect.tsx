@@ -6,6 +6,7 @@ import { inputClass } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { Popover } from "@/components/ui/Overlay";
 import { Segmented } from "@/components/ui/Segmented";
+import { Select } from "@/components/ui/Select";
 import type { AiModel } from "./types";
 
 function ProfileTags({ list, all }: { list?: string[]; all: number }) {
@@ -120,6 +121,16 @@ export function ModelSelect({
             </div>
             {(allProfiles.length > 1 || anyHidden) && (
               <div className="no-scrollbar flex items-center gap-1 overflow-x-auto border-b border-line px-1.5 py-1.5">
+                {anyHidden && (
+                  <button
+                    type="button"
+                    aria-pressed={showHidden}
+                    onClick={() => setShowHidden((v) => !v)}
+                    className={cx("press inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-[11px] font-medium", showHidden ? "bg-aura1/25 text-fg" : "text-dim hover:text-fg")}
+                  >
+                    <Icon name="eye" size={12} /> Model ẩn
+                  </button>
+                )}
                 {allProfiles.length > 1 &&
                   ["", ...allProfiles].map((p) => (
                     <button
@@ -134,16 +145,6 @@ export function ModelSelect({
                       {p || "Mọi profile"}
                     </button>
                   ))}
-                {anyHidden && (
-                  <button
-                    type="button"
-                    aria-pressed={showHidden}
-                    onClick={() => setShowHidden((v) => !v)}
-                    className={cx("press ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-[11px] font-medium", showHidden ? "bg-aura1/25 text-fg" : "text-dim hover:text-fg")}
-                  >
-                    <Icon name="eye" size={12} /> Model ẩn
-                  </button>
-                )}
               </div>
             )}
             <ul role="listbox" className="min-h-0 flex-1 overflow-y-auto p-1.5">
@@ -195,8 +196,19 @@ function Row({ children, active, hot, onClick, onHover }: { children: React.Reac
 
 const EFFORT_LABEL: Record<string, string> = { minimal: "Tối thiểu", low: "Thấp", medium: "Vừa", high: "Cao", xhigh: "Rất cao" };
 
-export function EffortPicker({ efforts, value, onChange }: { efforts: string[]; value: string; onChange: (v: string) => void }) {
+export function EffortPicker({ efforts, value, onChange, compact }: { efforts: string[]; value: string; onChange: (v: string) => void; compact?: boolean }) {
   if (efforts.length === 0) return null;
+  if (compact) {
+    return (
+      <Select inputSize="sm" aria-label="Mức suy nghĩ" className="w-28 shrink-0" value={efforts.includes(value) ? value : efforts[0]} onChange={(e) => onChange(e.target.value)}>
+        {efforts.map((e) => (
+          <option key={e} value={e}>
+            {EFFORT_LABEL[e] ?? e}
+          </option>
+        ))}
+      </Select>
+    );
+  }
   return (
     <Segmented
       size="sm"

@@ -61,7 +61,7 @@
 .pn {
   position: relative;
   width: 216px;
-  min-height: 92px;
+  min-height: 112px;
   padding: 12px 13px;
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(26, 26, 32, 0.86), rgba(15, 15, 19, 0.9));

@@ -49,7 +49,7 @@ export function roleOf(d: { kind: string; role?: string }): string | null {
   return null;
 }
 
-const STAT_LABEL: Record<string, string> = {
+export const STAT_LABEL: Record<string, string> = {
   active: "chạy",
   waiting: "chờ",
   failed: "lỗi",

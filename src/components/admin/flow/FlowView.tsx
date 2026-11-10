@@ -33,7 +33,7 @@ import { usePoll } from "../hooks";
 import { KV, PageHeader } from "../kit";
 import { demoFlow, demoJobs } from "./demo";
 import { buildLayout, buildReplay, realAt, segAt, storyGraph, visualAt, withUi, type PipeNodeData, type Replay } from "./graph";
-import { FlowCtx, LaneNode, PipeEdge, PipeNode, roleOf, type FlowVisual, type NodeLive } from "./parts";
+import { FlowCtx, LaneNode, PipeEdge, PipeNode, STAT_LABEL, roleOf, type FlowVisual, type NodeLive } from "./parts";
 import type { ActiveJob, EdgeVisual, FlowData, FlowGraph, FlowJob, FlowNode, Tab } from "./types";
 
 const nodeTypes = { pipe: PipeNode, lane: LaneNode };
@@ -142,7 +142,23 @@ const graphKey = (g: FlowGraph) => JSON.stringify([g.nodes.map((n) => [n.id, n.k
 
 // ───────── Canvas ─────────
 
-function Canvas({ graph, tab, visual, onOpen, replay, v }: { graph: FlowGraph; tab: Tab; visual: FlowVisual; onOpen: (n: FlowNode) => void; replay: Replay | null; v: number }) {
+function Canvas({
+  graph,
+  tab,
+  visual,
+  onOpen,
+  replay,
+  v,
+  fitKey,
+}: {
+  graph: FlowGraph;
+  tab: Tab;
+  visual: FlowVisual;
+  onOpen: (n: FlowNode) => void;
+  replay: Replay | null;
+  v: number;
+  fitKey: string;
+}) {
   const key = graphKey(graph);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const layout = useMemo(() => buildLayout(graph, tab), [key, tab]);
@@ -160,6 +176,16 @@ function Canvas({ graph, tab, visual, onOpen, replay, v }: { graph: FlowGraph; t
     const t = setTimeout(() => void rf.fitView({ duration: 500, padding: 0.08 }), 60);
     return () => clearTimeout(t);
   }, [layout, setNodes, setEdges, rf]);
+  // Khung đổi cao (vào / ra phát lại) → canh lại.
+  const firstFit = useRef(true);
+  useEffect(() => {
+    if (firstFit.current) {
+      firstFit.current = false;
+      return;
+    }
+    const t = setTimeout(() => void rf.fitView({ duration: 450, padding: 0.08 }), 80);
+    return () => clearTimeout(t);
+  }, [fitKey, rf]);
 
   return (
     <FlowCtx.Provider value={visual}>
@@ -204,7 +230,7 @@ function Token({ replay, v, graph }: { replay: Replay; v: number; graph: FlowGra
     const n = rf.getInternalNode(id);
     if (!n) return null;
     const p = n.internals.positionAbsolute;
-    return { x: p.x + (n.measured.width ?? 216) / 2, y: p.y + (n.measured.height ?? 92) / 2 };
+    return { x: p.x + (n.measured.width ?? 216) / 2, y: p.y + (n.measured.height ?? 112) / 2, h: n.measured.height ?? 112 };
   };
   let pos: { x: number; y: number } | null = null;
   if (seg.kind === "travel") {
@@ -221,7 +247,7 @@ function Token({ replay, v, graph }: { replay: Replay; v: number; graph: FlowGra
   } else {
     const c = center(replay.hops[seg.hop].id);
     // Đứng ở cạnh trên nút khi đang xử lý tại đó.
-    if (c) pos = { x: c.x, y: c.y - 46 - 4 };
+    if (c) pos = { x: c.x, y: c.y - c.h / 2 - 6 };
   }
   if (!pos) return null;
   const node = graph.nodes.find((n) => n.id === replay.hops[seg.hop].id);
@@ -415,7 +441,14 @@ export function FlowView({ demo = false }: { demo?: boolean }) {
     };
   }, [job]);
 
-  const replay = useMemo(() => (mode === "replay" && graph && job && trace ? buildReplay(graph, tab, job, trace) : null), [mode, graph, job, trace, tab]);
+  // Chỉ dựng lại khi cấu trúc sơ đồ đổi (poll 3 s đổi số liệu, không được reset phát lại).
+  const gKey = graph ? graphKey(graph) : "";
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
+  const replay = useMemo(
+    () => (mode === "replay" && graphRef.current && job && trace ? buildReplay(graphRef.current, tab, job, trace) : null),
+    [mode, gKey, job, trace, tab],
+  );
   useEffect(() => {
     setV(0);
     setPlaying(Boolean(replay));
@@ -571,10 +604,11 @@ export function FlowView({ demo = false }: { demo?: boolean }) {
         </Notice>
       )}
 
-      <div className="relative h-[calc(100dvh-250px)] min-h-[520px] overflow-hidden rounded-m3 bg-[radial-gradient(120%_80%_at_20%_0%,rgba(124,92,255,.08),transparent_60%),radial-gradient(90%_70%_at_100%_100%,rgba(255,79,216,.06),transparent_60%)] bg-s1 hairline">
+      <div className={cx("relative min-h-[480px] overflow-hidden rounded-m3", mode === "replay" ? "h-[calc(100dvh-400px)]" : "h-[calc(100dvh-250px)]")}>
+      <div className="absolute inset-0 overflow-hidden rounded-m3 bg-[radial-gradient(120%_80%_at_20%_0%,rgba(124,92,255,.08),transparent_60%),radial-gradient(90%_70%_at_100%_100%,rgba(255,79,216,.06),transparent_60%)] bg-s1 hairline">
         {graph ? (
           <ReactFlowProvider key={tab}>
-            <Canvas graph={graph} tab={tab} visual={visual} onOpen={onOpen} replay={replay} v={v} />
+            <Canvas graph={graph} tab={tab} visual={visual} onOpen={onOpen} replay={replay} v={v} fitKey={mode} />
           </ReactFlowProvider>
         ) : live.loading && !demo ? (
           <div className="grid h-full grid-cols-4 content-center gap-6 p-10">
@@ -585,6 +619,7 @@ export function FlowView({ demo = false }: { demo?: boolean }) {
         ) : (
           <Empty icon="route" title="Chưa có dữ liệu luồng" hint={live.error && !missing ? live.error : "Khi backend có /api/admin/flow, sơ đồ hiện ở đây."} className="h-full" />
         )}
+      </div>
       </div>
 
       {mode === "replay" && (
@@ -625,7 +660,7 @@ export function FlowView({ demo = false }: { demo?: boolean }) {
             {open.stats && Object.keys(open.stats).length > 0 && (
               <div className="space-y-2">
                 <h3 className="t-label">Số liệu</h3>
-                <KV items={Object.entries(open.stats).map(([k, val]) => [k, <span key={k} className="tabular-nums">{String(val ?? "—")}</span>])} />
+                <KV items={Object.entries(open.stats).map(([k, val]) => [STAT_LABEL[k] ?? k, <span key={k} className="tabular-nums">{String(val ?? "—")}</span>])} />
               </div>
             )}
             {hop && replay && (

@@ -4,9 +4,9 @@ import type { JobTrace } from "@/lib/api-client";
 import type { FlowAi, FlowData, FlowEdge, FlowGraph, FlowJob, FlowNode, Tab } from "./types";
 
 export const NODE_W = 216;
-export const NODE_H = 92;
+export const NODE_H = 112;
 const COL = 272;
-const PITCH = 106;
+const PITCH = 128;
 const ROW_GAP = 128;
 
 type Place = Record<string, [row: number, col: number]>;

@@ -181,7 +181,7 @@ export function TestBench({ models, call, chain, testFn }: { models: ModelLists;
               options={AI_PROVIDERS.map((p) => ({ value: p, label: PROVIDER_LABEL[p] }))}
             />
             {provider !== "muse" && <ModelSelect models={list} value={model} onChange={setModel} className="min-w-44 flex-1" />}
-            {provider === "codex" && cur?.efforts && <EffortPicker efforts={cur.efforts} value={effort} onChange={setEffort} />}
+            {provider === "codex" && cur?.efforts && <EffortPicker compact efforts={cur.efforts} value={effort} onChange={setEffort} />}
           </div>
         ) : (
           <div className="no-scrollbar -mx-1 flex flex-wrap gap-1.5 px-1">

@@ -84,7 +84,7 @@ export function ChainEditor({
                   setOver(null);
                 }}
                 className={cx(
-                  "flex flex-wrap items-center gap-2 rounded-m2 bg-white/[.025] p-2 hairline transition-[background-color,opacity,box-shadow] duration-200 sm:flex-nowrap",
+                  "flex flex-wrap items-center gap-2 rounded-m2 bg-white/[.025] p-2 hairline transition-[background-color,opacity,box-shadow] duration-200",
                   drag === i && "opacity-40",
                   over === i && drag !== i && "bg-accent/[.06] shadow-[inset_0_0_0_1px_rgba(212,255,58,.35)]",
                 )}
@@ -97,12 +97,12 @@ export function ChainEditor({
                   <span className="absolute -right-1 -bottom-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-s1 px-0.5 text-[10px] font-bold tabular-nums shadow-[0_0_0_1px_var(--color-line2)]">{i + 1}</span>
                 </span>
                 <Segmented size="sm" ariaLabel="Provider" value={s.provider} onChange={(p) => setProvider(i, p)} options={AI_PROVIDERS.map((p) => ({ value: p, label: PROVIDER_LABEL[p] }))} />
-                <div className="flex min-w-0 flex-1 basis-48 items-center gap-2">
+                <div className="flex min-w-0 flex-1 basis-56 flex-wrap items-center gap-2">
                   {s.provider === "codex" && profiles.length > 1 && (
                     <Select
                       inputSize="sm"
                       aria-label="Profile Codex"
-                      className="w-28 shrink-0"
+                      className="w-32 shrink-0"
                       value={s.profile ?? ""}
                       onChange={(e) => patch(i, { profile: e.target.value || undefined })}
                     >
@@ -121,14 +121,14 @@ export function ChainEditor({
                       models={list}
                       value={s.model ?? ""}
                       profile={s.provider === "codex" ? s.profile : undefined}
-                      className="flex-1"
+                      className="min-w-40 flex-1"
                       onChange={(id) => {
                         const nm = list.find((x) => x.id === id);
                         patch(i, { model: id || undefined, ...(s.provider === "codex" ? { effort: nm?.efforts?.includes(s.effort ?? "") ? s.effort : (nm?.defaultEffort ?? nm?.efforts?.[0]) } : {}) });
                       }}
                     />
                   )}
-                  {s.provider === "codex" && m?.efforts && <EffortPicker efforts={m.efforts} value={s.effort ?? m.defaultEffort ?? ""} onChange={(effort) => patch(i, { effort })} />}
+                  {s.provider === "codex" && m?.efforts && <EffortPicker compact efforts={m.efforts} value={s.effort ?? m.defaultEffort ?? ""} onChange={(effort) => patch(i, { effort })} />}
                 </div>
                 <span className="ml-auto flex shrink-0 items-center">
                   <IconButton icon="chevronUp" label="Lên" size="sm" disabled={i === 0} onClick={() => move(i, i - 1)} />
