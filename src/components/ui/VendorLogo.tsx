@@ -1,34 +1,107 @@
+import { useId } from "react";
+import { providerVendor } from "@/lib/providers";
 import { cx } from "./cx";
 
-// Dấu monogram theo hãng model (màu gần nhận diện hãng, không dùng logo thật).
-type Mark = { text: string; bg: string; fg: string; ring: string; glow: string };
+// Logo chính hãng (vẽ nội tuyến từ public/brand/*.svg, không tải ngoài): Gemini, Claude, OpenAI, Muse.
+// Mặc định: ô vuông bo góc nền tối; `plain`: chỉ hình logo (đặt trong dòng chữ).
 
-export const VENDOR_MARK: Record<string, Mark> = {
-  muse: { text: "M", bg: "linear-gradient(140deg,#ff4fd8 0%,#b45cff 55%,#7c5cff 100%)", fg: "#fff", ring: "rgba(255,255,255,.22)", glow: "rgba(200,90,255,.55)" },
-  google: { text: "G", bg: "linear-gradient(140deg,#4285f4 0%,#3b9bf0 45%,#34a853 100%)", fg: "#fff", ring: "rgba(255,255,255,.22)", glow: "rgba(66,133,244,.5)" },
-  anthropic: { text: "A", bg: "linear-gradient(140deg,#e08a64 0%,#d97757 50%,#b85c3e 100%)", fg: "#fff6ee", ring: "rgba(255,240,225,.25)", glow: "rgba(217,119,87,.5)" },
-  openai: { text: "O", bg: "radial-gradient(120% 120% at 30% 20%,#1d1d22 0%,#050506 70%)", fg: "#f5f5f7", ring: "rgba(16,163,127,.75)", glow: "rgba(16,163,127,.45)" },
-  local: { text: "ff", bg: "linear-gradient(140deg,#3a3a46,#5c5c6a)", fg: "#e9e9ef", ring: "rgba(255,255,255,.16)", glow: "rgba(160,160,180,.3)" },
+const GEMINI =
+  "M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81";
+const CLAUDE =
+  "m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z";
+const OPENAI =
+  "M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z";
+const MUSE =
+  "M24.6257 16.1214C28.2365 16.1214 30.8187 18.9408 30.8187 23.3643C30.8185 27.7868 30.1055 31.7765 28.9225 40.2466C28.0743 46.1813 26.62 55.2418 26.0132 59.0088C27.1782 56.7815 29.9074 51.5757 30.3914 50.5982C36.1081 39.061 42.0657 28.7544 43.7826 26.0254C46.0594 22.382 48.062 20.9229 51.1597 20.9229C52.7685 20.923 54.6826 21.7357 55.6315 22.819C56.9178 24.2895 57.1859 26.6602 57.1411 29.244C57.0738 33.2073 56.5599 39.5264 55.8553 46.5698C55.5416 49.7057 54.9365 56.1066 54.5288 60.4004C58.1883 53.8532 64.9609 41.8109 67.6921 37.6058C70.0727 33.9402 72.466 31.5797 75.6836 31.5796C78.4595 31.5796 81.8809 33.5416 81.6772 38.7573C81.3774 46.4556 80.2673 63.2232 79.7607 70.7479C83.1662 65.7913 87.6377 58.4543 89.3148 55.6966C91.0104 52.908 92.75 50.6542 95.3898 50.5778C98.0987 50.4995 99.913 52.341 99.9959 55.1839C100.078 58.0277 98.3835 61.2256 96.1344 64.856C93.6937 68.7957 90.9621 73.0123 87.6383 76.9491C84.3148 80.8856 81.2604 83.8782 76.5991 83.8786C72.4243 83.8786 69.4869 81.1043 69.283 76.0254C69.1768 73.364 69.6804 67.6405 70.0602 63.1673C70.5 57.9875 71.0315 52.9861 71.403 49.6786C67.7337 56.3979 60.0101 70.4676 56.5348 75.9603C53.1343 81.3339 51.4774 83.2269 47.8882 83.2275C44.2977 83.2275 42.7226 80.6416 42.6717 76.7497C42.6142 72.5285 45.7852 47.1821 46.8587 38.737C45.1183 42.4616 40.839 51.6056 38.1551 57.0435C35.5587 62.3055 31.204 71.3978 28.0436 76.6357C25.7668 80.4094 23.2092 83.2273 19.4173 83.2275C15.6252 83.2275 13.4847 80.6784 13.4847 76.5788C13.4847 72.4794 14.6716 65.6492 15.9465 57.1777C16.5839 53.0781 17.3108 48.6133 18.1315 43.8761C18.7324 40.448 19.7764 34.4169 20.4183 30.7129C17.502 35.2539 12.2536 43.4278 10.6567 45.8903C8.88113 48.6291 7.28747 50.626 4.64681 50.6266C1.7329 50.6266 0.000532901 48.3522 0 45.7113C0 43.0703 1.34323 41.0344 3.52376 37.4512C6.32403 32.8465 11.3578 26.57 14.1154 23.2747C17.3656 19.3912 20.6139 16.1219 24.6257 16.1214Z";
+
+type Tile = { bg: string; ring: string };
+const TILE: Record<string, Tile> = {
+  google: { bg: "linear-gradient(160deg,#1c1d24,#0e0f13)", ring: "rgba(155,114,203,.32)" },
+  anthropic: { bg: "linear-gradient(160deg,#241a16,#130f0d)", ring: "rgba(217,119,87,.34)" },
+  openai: { bg: "linear-gradient(160deg,#18181b,#060607)", ring: "rgba(255,255,255,.16)" },
+  muse: { bg: "linear-gradient(160deg,#151a24,#0b0d13)", ring: "rgba(0,130,251,.32)" },
+  local: { bg: "linear-gradient(140deg,#3a3a46,#5c5c6a)", ring: "rgba(255,255,255,.16)" },
 };
-const OTHER: Mark = { text: "•", bg: "linear-gradient(140deg,#2a2a33,#3a3a46)", fg: "#e9e9ef", ring: "rgba(255,255,255,.14)", glow: "rgba(160,160,180,.25)" };
+const OTHER: Tile = { bg: "linear-gradient(140deg,#2a2a33,#3a3a46)", ring: "rgba(255,255,255,.14)" };
 
-export function VendorLogo({ vendor, size = 28, className }: { vendor: string; size?: number; className?: string }) {
-  const m = VENDOR_MARK[vendor] ?? { ...OTHER, text: (vendor[0] ?? "•").toUpperCase() };
+const KNOWN = new Set(["google", "anthropic", "openai", "muse"]);
+
+function Glyph({ vendor, px }: { vendor: string; px: number }) {
+  const id = useId().replace(/:/g, "");
+  if (vendor === "google") {
+    return (
+      <svg width={px} height={px} viewBox="0 0 24 24" aria-hidden="true" className="block shrink-0">
+        <defs>
+          <linearGradient id={`g${id}`} x1="2" y1="21" x2="22" y2="3" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#4285F4" />
+            <stop offset=".55" stopColor="#9B72CB" />
+            <stop offset="1" stopColor="#D96570" />
+          </linearGradient>
+        </defs>
+        <path d={GEMINI} fill={`url(#g${id})`} />
+      </svg>
+    );
+  }
+  if (vendor === "anthropic") {
+    return (
+      <svg width={px} height={px} viewBox="0 0 24 24" aria-hidden="true" className="block shrink-0">
+        <path d={CLAUDE} fill="#D97757" />
+      </svg>
+    );
+  }
+  if (vendor === "openai") {
+    return (
+      <svg width={px} height={px} viewBox="0 0 24 24" aria-hidden="true" className="block shrink-0">
+        <path d={OPENAI} fill="#fff" />
+      </svg>
+    );
+  }
+  // muse
+  return (
+    <svg width={px} height={px} viewBox="0 0 100 100" aria-hidden="true" className="block shrink-0">
+      <defs>
+        <linearGradient id={`m${id}`} x1="133.245" y1="109.046" x2="24.9203" y2="-12.5565" gradientUnits="userSpaceOnUse">
+          <stop offset="0.254808" stopColor="#0082FB" />
+          <stop offset="0.697115" stopColor="#0064E0" />
+          <stop offset="1" stopColor="#0040DC" />
+        </linearGradient>
+      </defs>
+      <path d={MUSE} fill={`url(#m${id})`} />
+    </svg>
+  );
+}
+
+export function VendorLogo({ vendor, size = 28, plain, className }: { vendor: string; size?: number; plain?: boolean; className?: string }) {
+  const v = (vendor || "other").toLowerCase();
+  if (plain && KNOWN.has(v)) {
+    return (
+      <span aria-hidden="true" className={cx("inline-flex shrink-0 items-center justify-center", className)} style={{ width: size, height: size }}>
+        <Glyph vendor={v} px={size} />
+      </span>
+    );
+  }
+  const t = TILE[v] ?? OTHER;
+  // Muse (squiggle ngang) cần rộng hơn; sparkle / starburst / knot ~60% ô.
+  const glyph = Math.round(size * (v === "muse" ? 0.7 : v === "openai" ? 0.6 : 0.62));
   return (
     <span
       aria-hidden="true"
-      className={cx("relative inline-flex shrink-0 items-center justify-center font-bold tracking-[-0.04em] select-none", className)}
+      className={cx("relative inline-flex shrink-0 items-center justify-center font-bold tracking-[-0.04em] text-[#e9e9ef] select-none", className)}
       style={{
         width: size,
         height: size,
-        borderRadius: Math.round(size * 0.32),
-        background: m.bg,
-        color: m.fg,
-        fontSize: size * (m.text.length > 1 ? 0.36 : 0.46),
-        boxShadow: `0 6px 16px -8px ${m.glow}, inset 0 0 0 ${vendor === "openai" ? 1.5 : 1}px ${m.ring}`,
+        borderRadius: Math.round(size * 0.3),
+        background: t.bg,
+        fontSize: size * (v === "local" ? 0.36 : 0.46),
+        boxShadow: `inset 0 0 0 1px ${t.ring}`,
       }}
     >
-      {m.text}
+      {KNOWN.has(v) ? <Glyph vendor={v} px={glyph} /> : v === "local" ? "ff" : (v[0] ?? "•").toUpperCase()}
     </span>
   );
+}
+
+// Logo theo provider AI (agy → Google, codex → OpenAI, muse → Muse); có model thì theo hãng của model (Claude qua agy → Claude).
+export function ProviderLogo({ provider, model, size = 28, plain, className }: { provider?: string | null; model?: string | null; size?: number; plain?: boolean; className?: string }) {
+  return <VendorLogo vendor={providerVendor(provider, model)} size={size} plain={plain} className={className} />;
 }
