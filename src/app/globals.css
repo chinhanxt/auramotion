@@ -771,3 +771,17 @@ body {
 [data-closing] .drawer-panel[data-side="left"] {
   transform: translateX(-32px);
 }
+
+/* Thanh đo (admin AI): mọc từ trái */
+@keyframes am-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+.bench-grow {
+  transform-origin: left;
+  animation: am-grow-x 700ms var(--ease-out) backwards;
+}

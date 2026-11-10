@@ -220,9 +220,9 @@ export function SettingsView({
               lines={[museSlots ? `Ảnh ${museSlots.image} · Video ${museSlots.video} · Chat ${museSlots.chat}` : "Mặc định", museSlots ? `Giãn ${museSlots.gapSec}s` : ""].filter(Boolean)}
             />
             <LinkCard
-              href="/admin/gateway"
+              href="/admin/ai"
               icon="route"
-              title="AI Gateway"
+              title="AI & Model"
               lines={[gateway ? gateway.order.map((p) => PROVIDER_LABEL[p]).join(" → ") : "Mặc định", gateway ? `Timeout ${gateway.timeoutSec}s` : ""].filter(Boolean)}
             />
           </div>

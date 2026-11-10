@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { api } from "@/lib/api-client";
+import { ApiError, api } from "@/lib/api-client";
 
 export function jsonInit(method: "POST" | "PATCH" | "PUT" | "DELETE", body?: unknown): RequestInit {
   return body === undefined ? { method } : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -44,6 +44,7 @@ export function useAction() {
 export function usePoll<T>(url: string | null, intervalMs = 0, initial?: T) {
   const [data, setData] = useState<T | undefined>(initial);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<number | null>(null);
   const [loading, setLoading] = useState(initial === undefined);
   const [at, setAt] = useState<number | null>(initial === undefined ? null : Date.now());
   const ctrl = useRef<AbortController | null>(null);
@@ -57,9 +58,13 @@ export function usePoll<T>(url: string | null, intervalMs = 0, initial?: T) {
       const v = await api<T>(url, { signal: c.signal, cache: "no-store" });
       setData(v);
       setError(null);
+      setStatus(null);
       setAt(Date.now());
     } catch (err) {
-      if ((err as Error).name !== "AbortError") setError((err as Error).message);
+      if ((err as Error).name !== "AbortError") {
+        setError((err as Error).message);
+        setStatus(err instanceof ApiError ? err.status : null);
+      }
     } finally {
       if (ctrl.current === c) setLoading(false);
     }
@@ -96,7 +101,7 @@ export function usePoll<T>(url: string | null, intervalMs = 0, initial?: T) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, intervalMs, refresh]);
 
-  return { data, setData, error, loading, refresh, at };
+  return { data, setData, error, status, loading, refresh, at };
 }
 
 // Giữ bản nháp của form; `dirty` khi khác bản gốc.
