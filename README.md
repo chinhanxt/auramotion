@@ -135,6 +135,17 @@ bash scripts/svc.sh status | stop
 - **Loại việc theo tài khoản** (Admin → Muse → Loại việc): vd tài khoản bị Muse chặn video theo vùng vẫn để *Ảnh + Chat*; video chỉ đi vào tài khoản cho phép. Cần muse2api có commit `fa9e13d` (`meta.kinds`, header `X-Muse-Account`).
 - **Ghim tài khoản cho 1 model**: Admin → Model → *Tài khoản Muse* (ghi `options.museAccount`). Seed tạo sẵn "MUSE Ảnh 2" nếu đặt `SEED_MUSE_IMAGE_ACCOUNT`. Model ghim có slot chat phụ riêng.
 
+## Luồng chính: yêu cầu → AI Gateway (skill) → engine thực thi
+1. Người dùng gõ ý tưởng (tiếng Việt), chọn **engine thực thi**: ảnh = MUSE / MUSE Ảnh 2 / Gemini (agy) / Codex; video = MUSE.
+2. Chế độ **AI viết** (mặc định bật): job lưu ý tưởng gốc, worker gọi **AI Gateway** (agy → codex → Muse chat, tự chuyển khi lỗi; provider hết quota bị bỏ qua tới lúc reset).
+3. Gateway áp **skill**: người dùng chọn, hoặc *Tự chọn* theo nội dung ý tưởng (món ăn, chân dung, phong cảnh, sản phẩm, nhân vật…; video có ảnh khung đầu → *Làm ảnh chuyển động*), kèm phong cách / camera đã chọn → viết prompt tiếng Anh theo luật Muse.
+4. Prompt đi thẳng tới engine người dùng chọn; thẻ kết quả ghi *skill · người viết · thời gian*, xem được cả ý tưởng gốc lẫn prompt.
+5. Tắt *AI viết* → prompt gửi nguyên văn; *Viết vào ô để sửa* → xem/sửa prompt trước khi tạo.
+
+**Skill** (Admin → Skill, sửa được, có Chạy thử): ảnh 6 (sản phẩm, nhân vật nhất quán, khung điện ảnh, món ăn & đồ uống, chân dung & thời trang, phong cảnh Việt Nam) · video 7 (1 chuyển động máy, sản phẩm, nhân vật, món ăn, du lịch, thời trang, làm ảnh chuyển động) · Story 4 · lời thoại 2. Mọi skill ảnh/video dùng chung luật hiểu yêu cầu tiếng Việt + luật Muse (1 chuyển động máy/cảnh, không zoom giật, không chữ/logo, không ghi tỷ lệ khung, khóa nhân vật bằng loài + 3–5 màu). `npm run db:seed` cập nhật nội dung skill mà Admin chưa sửa.
+
+**Bìa preset thật**: `npx tsx --env-file=.env scripts/gen-covers.ts [--only slug] [--force]` — STYLE = ảnh Muse, CAMERA = video Muse 5 s đúng chuyển động máy (job miễn phí, worker gán bìa).
+
 ## Nghiệm thu thật (10/11/2026, Muse thật gói Free, agy/codex thật)
 | Bước | Thời gian | Ghi chú |
 |---|---|---|
@@ -144,6 +155,7 @@ bash scripts/svc.sh status | stop
 | 3 video song song (3 chat phụ) | 61 s | gửi cách 15–20 s, file hợp lệ, không trùng |
 | Story 3 cảnh · Song song + tự ghép | 139 s | 1080×1920, 15 s |
 | Story 3 cảnh · Nối cảnh + tự ghép (qua giao diện) | 287 s | khung cuối cảnh trước = khung đầu cảnh sau, nhân vật giữ nguyên |
+| AI viết (gateway) trong job: agy / codex | 6–10 s / 10–24 s | 12 ca thật: tự chọn đúng skill 12/12, ảnh agy lỗi khi tài khoản agy hết quota (báo QUOTA, hoàn Credit) |
 | Lập kịch bản bằng chat chính Muse | 14–23 s | JSON hỏng được tự sửa / hỏi lại trong cùng thread |
 | Ghép 2 clip + 2 câu VieNeu + nhạc + phụ đề | 72 s | 1080×1920, giọng "Trúc Ly", phụ đề đốt vào video |
 
