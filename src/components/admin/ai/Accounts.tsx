@@ -12,7 +12,10 @@ import { useToast } from "@/components/ui/Toast";
 import { jsonInit, useAction } from "../hooks";
 import { Panel, TextInput } from "../kit";
 import { Countdown } from "./bits";
-import { toTime, type AgyAccount, type AgyInfo, type CodexInfo, type Quota } from "./types";
+import { VendorLogo } from "@/components/ui/VendorLogo";
+import type { CodexQuota, QuotaRemain, QuotaWindow } from "@/lib/api-client";
+import { timeAgo } from "../format";
+import { toTime, type AgyAccount, type AgyInfo, type CodexInfo } from "./types";
 
 export type Call = <T>(url: string, init?: RequestInit) => Promise<T>;
 
@@ -22,25 +25,117 @@ function quotaTone(pct: number) {
   return pct <= 15 ? "bg-danger" : pct <= 40 ? "bg-warn" : "bg-accent";
 }
 
-function QuotaBar({ q }: { q: Quota }) {
-  const reset = toTime(q.resetAt);
-  const pct = Math.max(0, Math.min(100, Math.round(q.pct)));
+// Mốc reset: ISO, ms hoặc giây unix (codex `resets_at`).
+function toMs(v: string | number | null | undefined): number | null {
+  if (typeof v === "number" && v > 0 && v < 1e12) return v * 1000;
+  return toTime(v);
+}
+
+const clampPct = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+
+// Một thanh quota: % còn lại + đếm ngược reset.
+function WindowBar({ label, pct, resetAt }: { label: string; pct: number | null; resetAt?: number | null }) {
+  const known = pct !== null;
+  const p = known ? clampPct(pct) : 0;
   return (
     <div className="min-w-0">
       <div className="mb-1 flex items-center justify-between gap-2 text-[11.5px]">
-        <span className="truncate text-muted">{q.group}</span>
+        <span className="truncate text-muted">{label}</span>
         <span className="flex shrink-0 items-center gap-1.5 tabular-nums">
-          <b className={cx("font-semibold", pct <= 15 ? "text-danger" : "text-fg/90")}>{pct}%</b>
-          {reset && pct < 100 && (
+          {known ? <b className={cx("font-semibold", p <= 15 ? "text-danger" : "text-fg/90")}>{p}%</b> : <span className="text-dim">—</span>}
+          {resetAt && (!known || p < 100) && (
             <span className="text-dim">
-              <Countdown until={reset} prefix="↻ " />
+              <Countdown until={resetAt} prefix="↻ " />
             </span>
           )}
         </span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/[.07]">
-        <div className={cx("h-full rounded-full transition-[width] duration-700 ease-[var(--ease-out)]", quotaTone(pct))} style={{ width: `${pct}%` }} />
+        <div className={cx("h-full rounded-full transition-[width] duration-700 ease-[var(--ease-out)]", quotaTone(p))} style={{ width: `${p}%` }} />
       </div>
+    </div>
+  );
+}
+
+type Win = { pct: number | null; resetAt: number | null };
+type GroupView = { fiveHour: Win; weekly: Win };
+const EMPTY_WIN: Win = { pct: null, resetAt: null };
+
+function remainOf(v: number | QuotaRemain | null | undefined, reset?: string | number | null): Win {
+  if (v === null || v === undefined) return { pct: null, resetAt: toMs(reset) };
+  if (typeof v === "number") return { pct: v, resetAt: toMs(reset) };
+  const pct = v.remainingPercent ?? v.pct ?? (typeof v.usedPercent === "number" ? 100 - v.usedPercent : null);
+  return { pct: typeof pct === "number" ? pct : null, resetAt: toMs(v.resetAt ?? v.resetsAt ?? reset) };
+}
+
+// Gemini | Claude, mỗi nhóm 5 giờ + tuần: `groups` nếu backend có, không thì suy từ `quota[]` theo tiền tố nhóm.
+export function agyGroups(a: AgyAccount): Record<"gemini" | "claude", GroupView | null> {
+  const out: Record<"gemini" | "claude", GroupView | null> = { gemini: null, claude: null };
+  for (const k of ["gemini", "claude"] as const) {
+    const g = a.groups?.[k];
+    if (g) {
+      out[k] = { fiveHour: remainOf(g.fiveHour, g.fiveHourResetAt ?? g.resetAt), weekly: remainOf(g.weekly, g.weeklyResetAt) };
+      continue;
+    }
+    const list = (a.quota ?? []).filter((q) => q.group.toLowerCase().replace(/[\s-]+/g, "_").startsWith(k));
+    if (!list.length) continue;
+    const pick = (weekly: boolean): Win => {
+      const hits = list.filter((q) => /week|tuần|7d|weekly/i.test(q.group) === weekly);
+      if (!hits.length) return EMPTY_WIN;
+      const low = hits.reduce((x, y) => (y.pct < x.pct ? y : x));
+      return { pct: low.pct, resetAt: toMs(low.resetAt) };
+    };
+    out[k] = { fiveHour: pick(false), weekly: pick(true) };
+  }
+  return out;
+}
+
+function GroupCol({ vendor, title, g }: { vendor: string; title: string; g: GroupView | null }) {
+  return (
+    <div className="min-w-0 rounded-m1 bg-white/[.025] p-2.5 shadow-[inset_0_0_0_1px_var(--color-line)]">
+      <p className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold">
+        <VendorLogo vendor={vendor} size={16} />
+        {title}
+        {!g && <span className="ml-auto text-[11px] font-normal text-dim">chưa có số</span>}
+      </p>
+      <div className="space-y-2">
+        <WindowBar label="5 giờ" pct={g?.fiveHour.pct ?? null} resetAt={g?.fiveHour.resetAt} />
+        <WindowBar label="Tuần" pct={g?.weekly.pct ?? null} resetAt={g?.weekly.resetAt} />
+      </div>
+    </div>
+  );
+}
+
+function windowLabel(w: QuotaWindow | null | undefined, fallback: string): string {
+  const m = w?.windowMinutes;
+  if (!m) return fallback;
+  if (m >= 10080 - 60 && m <= 10080 + 60) return "Tuần";
+  if (m % 1440 === 0) return `${m / 1440} ngày`;
+  if (m % 60 === 0) return `${m / 60} giờ`;
+  return `${m} phút`;
+}
+
+function codexWin(w?: QuotaWindow | null): Win {
+  if (!w) return EMPTY_WIN;
+  return { pct: typeof w.usedPercent === "number" ? 100 - w.usedPercent : null, resetAt: toMs(w.resetsAt) };
+}
+
+const SOURCE_LABEL: Record<string, string> = { "app-server": "app-server", "session-log": "log phiên" };
+
+function CodexQuotaBars({ q }: { q?: CodexQuota | null }) {
+  if (!q || (!q.primary && !q.secondary)) return <p className="text-[11.5px] text-dim">Chưa có số quota</p>;
+  const a = codexWin(q.primary);
+  const b = codexWin(q.secondary);
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+        <WindowBar label={windowLabel(q.primary, "5 giờ")} pct={a.pct} resetAt={a.resetAt} />
+        <WindowBar label={windowLabel(q.secondary, "Tuần")} pct={b.pct} resetAt={b.resetAt} />
+      </div>
+      <p className="flex items-center gap-1.5 text-[11px] text-dim">
+        {q.source && <span className="rounded-[5px] bg-white/[.05] px-1.5 py-px font-mono text-[10.5px] text-muted">{SOURCE_LABEL[q.source] ?? q.source}</span>}
+        {q.checkedAt && <span suppressHydrationWarning>cập nhật {timeAgo(toMs(q.checkedAt) ?? q.checkedAt)}</span>}
+      </p>
     </div>
   );
 }
@@ -118,13 +213,15 @@ export function AgyAccounts({ agy, call, refresh, loading }: { agy?: AgyInfo; ca
                 )}
                 <IconButton icon="trash" label="Gỡ" size="sm" onClick={() => setRemoving(a)} />
               </div>
-              {a.quota && a.quota.length > 0 && (
-                <div className="mt-3 grid gap-x-4 gap-y-2.5 pl-[42px] sm:grid-cols-3">
-                  {a.quota.map((q) => (
-                    <QuotaBar key={q.group} q={q} />
-                  ))}
-                </div>
-              )}
+              {(a.groups || (a.quota && a.quota.length > 0)) && (() => {
+                const g = agyGroups(a);
+                return (
+                  <div className="mt-3 grid gap-2.5 sm:grid-cols-2 sm:pl-[42px]">
+                    <GroupCol vendor="google" title="Gemini" g={g.gemini} />
+                    <GroupCol vendor="anthropic" title="Claude" g={g.claude} />
+                  </div>
+                );
+              })()}
             </li>
           ))}
         </ul>
@@ -253,9 +350,12 @@ export function CodexProfiles({
       icon="cpu"
       pad={false}
       actions={
-        <Button size="sm" variant="outline" icon="plus" onClick={() => setLogin("")}>
-          Thêm
-        </Button>
+        <>
+          <IconButton icon="refresh" label="Cập nhật quota" size="sm" loading={loading} onClick={refresh} />
+          <Button size="sm" variant="outline" icon="plus" onClick={() => setLogin("")}>
+            Thêm
+          </Button>
+        </>
       }
     >
       {profiles.length === 0 ? (
@@ -265,7 +365,8 @@ export function CodexProfiles({
           {profiles.map((p, i) => {
             const on = p.name === active;
             return (
-              <li key={p.name} className="reveal flex items-center gap-3 px-4 py-3 sm:px-5" style={{ "--i": i } as React.CSSProperties}>
+              <li key={p.name} className="reveal px-4 py-3 sm:px-5" style={{ "--i": i } as React.CSSProperties}>
+                <div className="flex items-center gap-3">
                 <button
                   type="button"
                   role="radio"
@@ -298,6 +399,12 @@ export function CodexProfiles({
                   <Button size="sm" variant="outline" icon="user" onClick={() => setLogin(p.name)}>
                     Đăng nhập
                   </Button>
+                )}
+                </div>
+                {p.loggedIn && (
+                  <div className="mt-2.5 pl-[30px]">
+                    <CodexQuotaBars q={p.quota} />
+                  </div>
                 )}
               </li>
             );
