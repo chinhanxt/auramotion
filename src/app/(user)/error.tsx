@@ -1,12 +1,26 @@
 "use client";
 
+import { Button, LinkButton } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
+
 export default function UserError({ reset }: { error: Error; reset: () => void }) {
   return (
-    <div className="space-y-3 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
-      <p>Có lỗi xảy ra khi tải trang, vui lòng thử lại.</p>
-      <button type="button" onClick={reset} className="rounded-md border border-red-300 px-3 py-1.5 font-medium hover:bg-red-100">
-        Thử lại
-      </button>
+    <div className="flex min-h-[70vh] flex-col items-center justify-center gap-5 px-6 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-m3 bg-danger/10 text-danger hairline">
+        <Icon name="alert" size={24} />
+      </span>
+      <div className="space-y-1.5">
+        <h1 className="t-h2">Có lỗi khi tải trang</h1>
+        <p className="text-sm text-muted">Thử lại, hoặc quay về Studio.</p>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="primary" icon="refresh" onClick={reset}>
+          Thử lại
+        </Button>
+        <LinkButton href="/studio/image" variant="outline">
+          Về Studio
+        </LinkButton>
+      </div>
     </div>
   );
 }
