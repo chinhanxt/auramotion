@@ -10,6 +10,7 @@ import { Icon } from "@/components/ui/Icon";
 import { ConfirmDialog, useFocusTrap } from "@/components/ui/Overlay";
 import { useToast } from "@/components/ui/Toast";
 import { api, formatCredit, isVideoUrl, jobAspect, remakeHref, type JobItem } from "@/lib/api-client";
+import { JobPrompt } from "./JobPrompt";
 import { downloadName } from "./JobTile";
 
 export type LightboxEntry = { job: JobItem; index: number };
@@ -159,7 +160,7 @@ export default function Lightbox({
           {job.kind === "VIDEO" && params.durationSec && <Badge>{params.durationSec}s</Badge>}
           <Badge tone="neutral">{formatCredit(job.cost)} Credit</Badge>
         </div>
-        <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-fg/90">{job.prompt}</p>
+        <JobPrompt key={job.id} prompt={job.prompt} params={job.params} label={job.kind === "ASSEMBLE" ? "Lời thoại" : "Prompt"} />
         <button
           type="button"
           onClick={() => navigator.clipboard?.writeText(job.prompt).then(() => toast.success("Đã chép prompt"), () => {})}

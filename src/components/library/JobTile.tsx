@@ -6,7 +6,8 @@ import { AuraBar } from "@/components/ui/Bits";
 import { cx } from "@/components/ui/cx";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { FadeImage, SmartVideo } from "@/components/ui/Media";
-import { ACTIVE_STATUSES, STATUS_LABEL, isVideoUrl, jobAspect, jobErrorText, ratioCss, remakeHref, type JobItem } from "@/lib/api-client";
+import { ACTIVE_STATUSES, STATUS_LABEL, isVideoUrl, isWriting, jobAspect, jobErrorText, ratioCss, remakeHref, writeParams, type JobItem } from "@/lib/api-client";
+import { JobPrompt, WritingLabel, WritingLines } from "./JobPrompt";
 
 export type TileAction = "download" | "remake" | "frame" | "ref" | "delete" | "details";
 
@@ -75,6 +76,7 @@ export const JobTile = memo(function JobTile({
   const done = job.status === "SUCCEEDED" && url;
   const video = done && (job.kind !== "IMAGE" || isVideoUrl(url));
   const pct = typeof job.progress === "number" ? job.progress : null;
+  const writing = active && isWriting(job);
 
   return (
     <div
@@ -101,6 +103,13 @@ export const JobTile = memo(function JobTile({
           ) : (
             <FadeImage src={url} alt={job.prompt} className="absolute inset-0" imgClassName="transition-transform duration-[700ms] ease-[var(--ease-out)] group-hover/tile:scale-[1.025]" />
           )
+        ) : writing ? (
+          <div className="skel skel-aura @container absolute inset-0 flex flex-col justify-end p-2.5 sm:p-3.5">
+            <div className="relative space-y-2.5">
+              <WritingLabel skillName={writeParams(job).skillName} />
+              <WritingLines />
+            </div>
+          </div>
         ) : active ? (
           <div className="skel skel-aura @container absolute inset-0 flex flex-col justify-end p-2.5 sm:p-3.5">
             <div className="relative space-y-2.5">
@@ -130,9 +139,12 @@ export const JobTile = memo(function JobTile({
         {done && (
           <>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 via-black/20 to-transparent opacity-0 transition-opacity duration-[260ms] group-hover/tile:opacity-100 group-focus-within/tile:opacity-100" />
-            <p className="pointer-events-none absolute inset-x-3 bottom-2.5 line-clamp-2 translate-y-1 text-[12px] leading-snug text-white/90 opacity-0 transition-[opacity,transform] duration-[260ms] group-hover/tile:translate-y-0 group-hover/tile:opacity-100">
-              {job.prompt}
-            </p>
+            <JobPrompt
+              variant="tile"
+              prompt={job.prompt}
+              params={job.params}
+              className="pointer-events-none absolute inset-x-3 bottom-2.5 translate-y-1 opacity-0 transition-[opacity,transform] duration-[260ms] group-hover/tile:translate-y-0 group-hover/tile:opacity-100 group-focus-within/tile:opacity-100"
+            />
           </>
         )}
         {video && (

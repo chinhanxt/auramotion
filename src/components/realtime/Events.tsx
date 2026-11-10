@@ -73,7 +73,9 @@ export function EventsProvider({ children, initialBalance, initialHeld = 0 }: { 
           duration: 6000,
         });
       } else if (j.status === "FAILED") {
-        toast.error("Tạo thất bại", { body: `${j.error ? jobErrorText(j.error) : "có lỗi"} · đã hoàn Credit` });
+        // WRITE_FAILED: câu lỗi đã gồm "đã hoàn Credit".
+        const why = j.error ? jobErrorText(j.error) : "có lỗi";
+        toast.error("Tạo thất bại", { body: j.error === "WRITE_FAILED" ? why : `${why} · đã hoàn Credit` });
       }
     },
     [toast],
