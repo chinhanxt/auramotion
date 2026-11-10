@@ -24,9 +24,17 @@ async function clearPw() {
 }
 
 function fakeWriter(prompt = "A tall glass of iced coffee", ms = 0) {
-  return vi.fn(async (input: { idea: string }): Promise<WritePromptResult> => {
+  return vi.fn(async (input: { idea: string }, _deps?: unknown, _skill?: unknown): Promise<WritePromptResult> => {
     if (ms) await new Promise((r) => setTimeout(r, ms));
-    return { prompt: `${prompt} (${input.idea})`, provider: "agy", model: "gemini-3.8-flash-low", ms: 5 };
+    return {
+      prompt: `${prompt} (${input.idea})`,
+      provider: "agy",
+      model: "gemini-3.8-flash-low",
+      ms: 5,
+      skill: { id: "s", slug: "image-food-drink", name: "Món ăn" },
+      route: { method: "ai", candidates: ["image-food-drink", "image-product-hero"], chosen: "image-food-drink", ms: 900 },
+      guard: { fixes: ["bỏ chữ tỷ lệ/độ phân giải (engine đã nhận tỷ lệ riêng)"] },
+    };
   });
 }
 
@@ -60,6 +68,7 @@ describe("prewrite", () => {
     }
     expect(prewriteKey(base, { id: "s1", updatedAt: new Date(2000) })).not.toBe(k);
     expect(prewriteKey(base, null)).not.toBe(k);
+    expect(prewriteKey(base, "auto:62@1")).not.toBe(prewriteKey(base, "auto:63@1"));
   });
 
   it("pending → ready; same key while pending does not start a second write", async () => {
@@ -72,8 +81,8 @@ describe("prewrite", () => {
     expect(second).toEqual({ key: first.key, status: "pending" });
     await job;
     expect(writePrompt).toHaveBeenCalledTimes(1);
-    // skill tự chọn theo ý tưởng được truyền vào lần viết.
-    expect(writePrompt.mock.calls[0][2]).toMatchObject({ slug: "image-food-drink" });
+    // Tự chọn skill: bộ chọn chạy trong lần viết (không chọn trước), kết quả nằm trong cache.
+    expect(writePrompt.mock.calls[0][2]).toBeUndefined();
     const ready = await prewrite(input, { writePrompt });
     expect(ready).toMatchObject({ key: first.key, status: "ready", prompt: "Iced coffee (ly cà phê sữa đá)", provider: "agy" });
     expect(writePrompt).toHaveBeenCalledTimes(1);
@@ -121,8 +130,10 @@ describe("prewrite", () => {
     expect(trace.writer).toMatchObject({ provider: "agy", model: "gemini-3.8-flash-low", skill: "image-food-drink", cache: true });
     expect(trace).toMatchObject({ writeStart: expect.any(Number), writeEnd: expect.any(Number), slotAt: expect.any(Number), submitAt: expect.any(Number), doneAt: expect.any(Number) });
     expect(trace.engine).toEqual({ provider: "agy", model: model.engineModel });
+    expect(trace.router).toEqual({ method: "ai", candidates: ["image-food-drink", "image-product-hero"], chosen: "image-food-drink", ms: 900 });
+    expect(trace.guard?.fixes).toHaveLength(1);
     expect(trace.writeStart! <= trace.writeEnd! && trace.writeEnd! <= trace.submitAt! && trace.submitAt! <= trace.doneAt!).toBe(true);
-    expect(done.params).toMatchObject({ written: { cache: true, provider: "agy" } });
+    expect(done.params).toMatchObject({ written: { cache: true, provider: "agy", router: { chosen: "image-food-drink" }, guard: { fixes: expect.any(Array) } } });
   });
 
   it("autoWrite without cache writes once, stores cache; failure records failedAt", async () => {

@@ -133,8 +133,13 @@ export async function setJobFeatured(id: string, input: unknown) {
 
 export async function getGatewayAdmin() {
   const [setting, health, cooldowns] = await Promise.all([getGatewaySetting(), getGatewayHealth(), getCooldowns()]);
-  // cooldowns: provider đang hết quota → số giây còn lại trước khi gateway dùng lại.
-  return { setting, health, cooldowns };
+  // cooldowns (dạng cũ theo provider): số giây nghỉ lâu nhất trong các model của provider; `cooldownsByModel` đầy đủ.
+  const byProvider: Record<string, number> = {};
+  for (const [id, ttl] of Object.entries(cooldowns)) {
+    const p = id.split(":")[0];
+    byProvider[p] = Math.max(byProvider[p] ?? 0, ttl);
+  }
+  return { setting, health, cooldowns: byProvider, cooldownsByModel: cooldowns };
 }
 
 // API cũ (order + model theo provider): đổi sang chuỗi writer của ai_roles, giữ model / effort đã có của từng provider.

@@ -10,7 +10,8 @@ export type JobTrace = {
   writeEnd?: number;
   writer?: { provider: string; model?: string; skill?: string; cache: boolean; ms?: number };
   // Bộ chọn skill 2 tầng (src/server/ai/router.ts) và bộ sửa prompt (src/server/ai/guard.ts) ghi vào đây.
-  router?: { method: "rule" | "ai"; candidates: string[]; chosen: string; ms: number };
+  // method: rule | ai (thêm fixed = ảnh khung đầu video, fallback = AI chọn lỗi, dùng luật).
+  router?: { method: "rule" | "ai" | "fixed" | "fallback"; candidates: string[]; chosen: string; ms: number };
   guard?: { fixes: string[] };
   slotAt?: number;
   submitAt?: number;

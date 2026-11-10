@@ -4,10 +4,12 @@ import { AppError } from "@/lib/errors";
 import { redis } from "@/lib/redis";
 import type { GatewayDeps } from "@/server/ai/gateway";
 import { getAiRoles } from "@/server/ai/roles";
-import { resolveSkill, writePrompt, type WritePromptInput, type WritePromptResult } from "@/server/engines/prompt-writer";
+import { db } from "@/lib/db";
+import { loadSkill, writePrompt, type WritePromptInput, type WritePromptResult } from "@/server/engines/prompt-writer";
 
 // Viết trước (prewrite): người dùng còn gõ thì đã viết prompt; bấm Tạo lấy ngay từ cache Redis.
-// Khóa = sha256(skill id + updatedAt, ý tưởng, style, camera, tỷ lệ, thời lượng, có ảnh, loại).
+// Khóa = sha256(skill id + updatedAt — hoặc "auto" + phiên bản bộ skill khi tự chọn —, ý tưởng, style, camera,
+// tỷ lệ, thời lượng, có ảnh, loại). Cache giữ cả skill bộ chọn đã chọn (route) và các sửa của guard.
 
 export type PrewriteInput = {
   idea: string;
@@ -27,6 +29,8 @@ export type CachedWrite = {
   model?: string;
   ms?: number;
   skill?: { id: string; slug: string; name: string };
+  route?: WritePromptResult["route"];
+  guard?: WritePromptResult["guard"];
   at: number;
 };
 
@@ -43,9 +47,10 @@ const errorKey = (k: string) => `${prefix()}pw:err:${k}`;
 const ERROR_TTL_SEC = 30;
 const WAIT_POLL_MS = 300;
 
-export function prewriteKey(input: PrewriteInput, skill?: Pick<PromptSkill, "id" | "updatedAt"> | null): string {
+// `skill`: skill chỉ định (id + updatedAt) hoặc chuỗi phiên bản bộ skill khi tự chọn.
+export function prewriteKey(input: PrewriteInput, skill?: Pick<PromptSkill, "id" | "updatedAt"> | string | null): string {
   const parts = [
-    skill ? `${skill.id}@${new Date(skill.updatedAt).getTime()}` : "",
+    typeof skill === "string" ? skill : skill ? `${skill.id}@${new Date(skill.updatedAt).getTime()}` : "",
     input.idea.trim(),
     input.styleId ?? "",
     input.cameraId ?? "",
@@ -61,10 +66,24 @@ function writeInput(input: PrewriteInput): WritePromptInput {
   return { ...input, autoSkill: !input.skillId };
 }
 
-// Khóa + skill sẽ dùng (tự chọn skill nếu không chỉ định — không gọi AI nên khóa ổn định).
+// Phiên bản bộ skill tự chọn (số skill + lần sửa gần nhất): đổi skill thì khóa cũ hết hiệu lực.
+async function skillSetVersion(input: PrewriteInput): Promise<string> {
+  const kind = input.kind === "image" ? "IMAGE" : "VIDEO";
+  const agg = await db.promptSkill.aggregate({
+    where: { kind, enabled: true, ...(input.planRank !== undefined ? { minPlanRank: { lte: input.planRank } } : {}) },
+    _count: { _all: true },
+    _max: { updatedAt: true },
+  });
+  return `auto:${agg._count._all}@${agg._max.updatedAt?.getTime() ?? 0}`;
+}
+
+// Khóa + skill chỉ định (không gọi AI: bộ chọn skill chạy lúc viết, kết quả nằm trong cache).
 export async function resolvePrewrite(input: PrewriteInput): Promise<{ key: string; skill?: PromptSkill }> {
-  const skill = await resolveSkill(writeInput(input));
-  return { key: prewriteKey(input, skill), skill };
+  if (input.skillId) {
+    const skill = await loadSkill(input.skillId, input.kind === "image" ? "IMAGE" : "VIDEO", input.planRank);
+    return { key: prewriteKey(input, skill), skill };
+  }
+  return { key: prewriteKey(input, await skillSetVersion(input)) };
 }
 
 export async function getCachedWrite(key: string): Promise<CachedWrite | null> {
@@ -89,6 +108,8 @@ export async function storeWrite(key: string, res: WritePromptResult, cacheHours
     ...(res.model ? { model: res.model } : {}),
     ...(res.ms !== undefined ? { ms: res.ms } : {}),
     ...(res.skill ? { skill: res.skill } : {}),
+    ...(res.route ? { route: res.route } : {}),
+    ...(res.guard ? { guard: res.guard } : {}),
     at: Date.now(),
   };
   const ttl = Math.round(cacheHours * 3600);
@@ -136,7 +157,7 @@ export async function prewrite(input: PrewriteInput, deps: PrewriteDeps = {}): P
   if (won !== "OK") return { key, status: "pending" };
   const job = (async () => {
     try {
-      const res = await (deps.writePrompt ?? writePrompt)(writeInput(input), deps.gateway ?? {}, skill ?? null);
+      const res = await (deps.writePrompt ?? writePrompt)(writeInput(input), deps.gateway ?? {}, skill);
       if (!res.skill && skill) res.skill = { id: skill.id, slug: skill.slug, name: skill.name };
       if (!(await storeWrite(key, res, roles.cacheHours))) throw new Error("AI không trả prompt");
     } catch (err) {

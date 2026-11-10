@@ -72,6 +72,15 @@ export const DEFAULT_AI_ROLES = {
     strategy: "fallback" as "fallback" | "race",
     timeoutSec: 120,
   },
+  // Bộ chọn skill (tầng AI): đầu ra rất ngắn, chạy model nhanh qua ACP (~1–2 s).
+  router: {
+    chain: [
+      { provider: "agy", model: DEFAULT_AGY_MODEL },
+      { provider: "codex", model: "gpt-6-luna", effort: "low" },
+    ] as ChainStep[],
+    strategy: "fallback" as "fallback" | "race",
+    timeoutSec: 20,
+  },
   prewrite: true,
   cacheHours: 72,
   agy: { transport: "acp" as "acp" | "cli", proxy: false },
@@ -81,6 +90,7 @@ export const DEFAULT_AI_ROLES = {
 export const aiRolesSchema = z.object({
   writer: roleSchema(DEFAULT_AI_ROLES.writer.timeoutSec).default(DEFAULT_AI_ROLES.writer),
   story: roleSchema(DEFAULT_AI_ROLES.story.timeoutSec).default(DEFAULT_AI_ROLES.story),
+  router: roleSchema(DEFAULT_AI_ROLES.router.timeoutSec).default(DEFAULT_AI_ROLES.router),
   prewrite: z.boolean().default(true),
   cacheHours: z.coerce.number().min(0).max(24 * 30).default(72),
   agy: z
@@ -91,7 +101,7 @@ export const aiRolesSchema = z.object({
     .default(DEFAULT_AI_ROLES.codex),
 });
 export type AiRoles = z.infer<typeof aiRolesSchema>;
-export type RoleName = "writer" | "story";
+export type RoleName = "writer" | "story" | "router";
 export type RoleSetting = AiRoles["writer"];
 
 // Setting cũ.

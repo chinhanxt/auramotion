@@ -218,24 +218,42 @@ export async function getGatewayHealth(): Promise<Record<AiProvider, ProviderHea
   return out;
 }
 
-// Provider báo hết quota: tạm bỏ qua tới lúc reset (đọc "Resets in 2h34m33s", không có thì 15 phút).
+// Mắt xích báo hết quota: tạm bỏ qua đúng provider + model đó (quota agy tính theo model / tài khoản) tới lúc reset
+// ("Resets in 2h34m33s", không có thì 15 phút), tối đa 30 phút. Trong lúc nghỉ, cứ 5 phút chạy 1 câu thử rất ngắn;
+// thử được thì bỏ nghỉ luôn.
 const QUOTA_RE = /quota|exhausted your capacity|resource[_ ]exhausted|rate limit|usage limit|\b429\b/i;
-const cooldownKey = (p: AiProvider) => `${keyPrefix()}gw:cooldown:${p}`;
+const MAX_COOLDOWN_SEC = 30 * 60;
+const PROBE_EVERY_SEC = 5 * 60;
+const PROBE_PROMPT = "Reply with exactly: OK";
+
+export function stepId(step: ChainStep): string {
+  const model = step.model || (step.provider === "agy" ? DEFAULT_AGY_MODEL : "default");
+  return `${step.provider}:${model}${step.profile ? `@${step.profile}` : ""}`;
+}
+const cooldownKey = (id: string) => `${keyPrefix()}gw:cooldown:${id}`;
+const probeKey = (id: string) => `${keyPrefix()}gw:probe:${id}`;
 
 export function quotaCooldownSec(message: string): number | null {
   if (!QUOTA_RE.test(message)) return null;
   const m = /resets? in\s+(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i.exec(message);
   const sec = m ? Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) : 0;
-  return Math.min(Math.max(sec || 15 * 60, 60), 24 * 3600);
+  return Math.min(Math.max(sec || 15 * 60, 60), MAX_COOLDOWN_SEC);
 }
 
-export async function getCooldowns(): Promise<Partial<Record<AiProvider, number>>> {
-  const out: Partial<Record<AiProvider, number>> = {};
-  for (const p of AI_PROVIDERS) {
-    const ttl = await redis.ttl(cooldownKey(p)).catch(() => -2);
-    if (ttl > 0) out[p] = ttl;
+// "<provider>:<model>[@profile]" → số giây còn nghỉ.
+export async function getCooldowns(): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  const prefix = cooldownKey("");
+  const keys = await redis.keys(`${prefix}*`).catch(() => [] as string[]);
+  for (const key of keys) {
+    const ttl = await redis.ttl(key).catch(() => -2);
+    if (ttl > 0) out[key.slice(prefix.length)] = ttl;
   }
   return out;
+}
+
+export async function clearCooldown(id: string): Promise<void> {
+  await redis.del(cooldownKey(id), probeKey(id)).catch(() => 0);
 }
 
 // Chuỗi của vai: setting cũ truyền vào > ghi đè `deps.role` > ai_roles; provider ưu tiên lên đầu.
@@ -247,6 +265,9 @@ export function resolveChain(role: RoleSetting, preferred?: AiProvider): ChainSt
 
 class LostRace extends Error {}
 
+// Proxy xoay tài khoản: chờ chút cho proxy đổi tài khoản rồi mới chạy lại.
+const PROXY_RETRY_MS = process.env.NODE_ENV === "test" ? 10 : 1000;
+
 export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promise<AiTextResult> {
   const roles = deps.roles ?? (await getAiRoles());
   const base: RoleSetting = deps.setting
@@ -255,11 +276,32 @@ export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promis
   const role: RoleSetting = { ...base, ...deps.role };
   const runners = { ...defaultRunners(deps), ...deps.runners };
   const preferred = resolveChain(role, input.provider);
-  // Provider đang hết quota xuống cuối hàng (vẫn dùng nếu mọi provider khác đều lỗi).
-  const cooling = deps.runners ? {} : await getCooldowns();
-  const chain = [...preferred.filter((s) => !cooling[s.provider]), ...preferred.filter((s) => cooling[s.provider])];
+  // Mắt xích (provider + model) đang hết quota xuống cuối hàng (vẫn dùng nếu mọi mắt xích khác đều lỗi).
+  const cooling = new Set<string>();
+  if (!deps.runners) {
+    for (const step of preferred) {
+      if ((await redis.exists(cooldownKey(stepId(step))).catch(() => 0)) === 1) cooling.add(stepId(step));
+    }
+  }
+  const chain = [...preferred.filter((s) => !cooling.has(stepId(s))), ...preferred.filter((s) => cooling.has(stepId(s)))];
   const setting = legacyView({ ...role, chain });
   const timeoutMs = role.timeoutSec * 1000;
+  // Câu thử cho mắt xích đang nghỉ (chạy nền, mỗi mắt xích tối đa 1 lần / 5 phút): được thì bỏ nghỉ.
+  for (const step of chain.filter((s) => cooling.has(stepId(s)))) {
+    const id = stepId(step);
+    const won = await redis.set(probeKey(id), "1", "EX", PROBE_EVERY_SEC, "NX").catch(() => null);
+    if (won !== "OK") continue;
+    const probeMs = Math.min(timeoutMs, 30_000);
+    void Promise.resolve(
+      runners[step.provider]({ prompt: PROBE_PROMPT, signal: AbortSignal.timeout(probeMs), setting, step, roles, timeoutMs: probeMs }),
+    ).then(
+      async () => {
+        await redis.del(cooldownKey(id)).catch(() => 0);
+        console.warn(`[ai] ${id} thử lại được, bỏ tạm nghỉ quota`);
+      },
+      () => undefined,
+    );
+  }
   const agySwitch =
     deps.agySwitch ??
     (deps.runners
@@ -301,7 +343,7 @@ export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promis
       if (race?.aborted) throw new LostRace();
       const ms = Date.now() - started;
       await recordHealth(provider, true, ms);
-      if (cooling[provider]) await redis.del(cooldownKey(provider)).catch(() => 0);
+      if (cooling.has(stepId(step))) await redis.del(cooldownKey(stepId(step))).catch(() => 0);
       return {
         text: out.text,
         ...(input.json || input.validate ? { data } : {}),
@@ -321,15 +363,25 @@ export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promis
     }
   };
 
-  // Lỗi quota: agy (proxy tắt) đổi tài khoản 1 lần rồi chạy lại; vẫn lỗi thì tạm bỏ qua provider tới lúc reset.
+  const cool = async (step: ChainStep, sec: number) => {
+    await redis.set(cooldownKey(stepId(step)), "1", "EX", sec).catch(() => null);
+  };
+
+  // Lỗi quota của agy: proxy xoay tài khoản bật → chờ proxy xoay rồi chạy lại 1 lần, không tạm nghỉ; proxy tắt →
+  // đổi tài khoản agy 1 lần rồi chạy lại. Vẫn lỗi (hoặc provider khác) thì tạm nghỉ đúng provider + model đó.
   const attemptStep = async (step: ChainStep, race?: AbortSignal): Promise<AiTextResult> => {
     try {
       return await attempt(step, race);
     } catch (err) {
       if (err instanceof LostRace) throw err;
-      const message = (err as Error).message ?? String(err);
-      const cool = quotaCooldownSec(message);
-      if (cool && step.provider === "agy" && !roles.agy.proxy && !switched && agySwitch && !input.signal?.aborted && !race?.aborted) {
+      const sec = quotaCooldownSec((err as Error).message ?? String(err));
+      if (!sec || input.signal?.aborted || race?.aborted) throw err;
+      if (step.provider === "agy" && roles.agy.proxy) {
+        console.warn(`[ai] ${stepId(step)} hết quota, proxy xoay tài khoản: chạy lại 1 lần`);
+        await new Promise((r) => setTimeout(r, PROXY_RETRY_MS));
+        return attempt(step, race);
+      }
+      if (step.provider === "agy" && !switched && agySwitch) {
         switched = true;
         const ok = await agySwitch().catch((e: Error) => {
           console.warn(`[ai] không đổi được tài khoản agy: ${e.message.slice(0, 200)}`);
@@ -341,13 +393,13 @@ export async function aiText(input: AiTextInput, deps: GatewayDeps = {}): Promis
             return await attempt(step, race);
           } catch (again) {
             if (again instanceof LostRace) throw again;
-            const cool2 = quotaCooldownSec((again as Error).message ?? "");
-            if (cool2) await redis.set(cooldownKey("agy"), "1", "EX", cool2).catch(() => null);
+            const sec2 = quotaCooldownSec((again as Error).message ?? "");
+            if (sec2) await cool(step, sec2);
             throw again;
           }
         }
       }
-      if (cool) await redis.set(cooldownKey(step.provider), "1", "EX", cool).catch(() => null);
+      await cool(step, sec);
       throw err;
     }
   };

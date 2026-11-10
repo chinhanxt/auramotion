@@ -710,7 +710,16 @@ export async function processJob(jobId: string, deps: ProcessDeps = {}): Promise
   return runFileEngine(ready, deps);
 }
 
-export type WrittenInfo = { provider: string; model?: string; skillSlug: string; skillName: string; ms: number; cache?: boolean };
+export type WrittenInfo = {
+  provider: string;
+  model?: string;
+  skillSlug: string;
+  skillName: string;
+  ms: number;
+  cache?: boolean;
+  router?: { method: string; candidates: string[]; chosen: string; ms: number; reason?: string };
+  guard?: { fixes: string[] };
+};
 
 // params.autoWrite: `prompt` đang là ý tưởng gốc → AI Gateway (vai writer) áp skill viết prompt cho engine.
 // Có bản viết trước (prewrite) cùng khóa thì dùng luôn; đang viết dở thì chờ nó. Viết xong lưu cache cho lần chạy lại.
@@ -745,9 +754,17 @@ async function ensureWritten<J extends Job>(job: J, deps: ProcessDeps): Promise<
     if (!hit && (await isWritePending(key))) hit = await waitCachedWrite(key, roles.writer.timeoutSec * 1000);
     if (hit) {
       cache = true;
-      res = { prompt: hit.prompt, provider: hit.provider as WritePromptResult["provider"], model: hit.model, ms: hit.ms, skill: hit.skill };
+      res = {
+        prompt: hit.prompt,
+        provider: hit.provider as WritePromptResult["provider"],
+        model: hit.model,
+        ms: hit.ms,
+        skill: hit.skill,
+        ...(hit.route ? { route: hit.route } : {}),
+        ...(hit.guard ? { guard: hit.guard } : {}),
+      };
     } else {
-      res = await (deps.writePrompt ?? writePrompt)({ ...input }, {}, skill ?? null);
+      res = await (deps.writePrompt ?? writePrompt)({ ...input }, {}, skill);
       if (!res.skill && skill) res = { ...res, skill: { id: skill.id, slug: skill.slug, name: skill.name } };
       await storeWrite(key, res, roles.cacheHours);
     }
@@ -767,6 +784,8 @@ async function ensureWritten<J extends Job>(job: J, deps: ProcessDeps): Promise<
     skillName: res.skill?.name ?? "",
     ms: res.ms ?? 0,
     ...(cache ? { cache: true } : {}),
+    ...(res.route ? { router: res.route } : {}),
+    ...(res.guard ? { guard: res.guard } : {}),
   };
   // Đọc lại trace mới nhất (mốc khác có thể đã ghi trong lúc viết) rồi ghi cùng prompt.
   const latest = await db.job.findUnique({ where: { id: job.id }, select: { params: true } });
@@ -776,6 +795,8 @@ async function ensureWritten<J extends Job>(job: J, deps: ProcessDeps): Promise<
     writeStart,
     writeEnd: Date.now(),
     writer: { provider: res.provider, ...(res.model ? { model: res.model } : {}), ...(res.skill ? { skill: res.skill.slug } : {}), cache, ...(res.ms !== undefined ? { ms: res.ms } : {}) },
+    ...(res.route ? { router: { method: res.route.method, candidates: res.route.candidates, chosen: res.route.chosen, ms: res.route.ms } } : {}),
+    ...(res.guard ? { guard: res.guard } : {}),
   };
   const updated = await db.job.updateMany({
     where: { id: job.id, status: { in: ["PENDING", "RUNNING"] } },

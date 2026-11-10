@@ -7,7 +7,7 @@ import { redis } from "@/lib/redis";
 import { AcpAgent } from "@/server/ai/acp/agent";
 import { AgentPool } from "@/server/ai/acp/pool";
 import { acpModels, acpStatus, acpText, restartAcp, stopAcp } from "@/server/ai/acp/runtime";
-import { aiText } from "@/server/ai/gateway";
+import { aiText, clearCooldown, getCooldowns } from "@/server/ai/gateway";
 import { aiRolesSchema } from "@/server/ai/roles";
 
 const FAKE_ACP = path.resolve("tests/fixtures/fake-acp.mjs");
@@ -34,7 +34,7 @@ describe("agy ACP pool", () => {
     process.env.AGY_TRANSPORT = "acp";
     process.env.FAKE_ACP_LOG = path.join(dir, "acp.log");
     process.env.FAKE_LOG = path.join(dir, "cli.log");
-    await redis.del("am:test:gw:cooldown:agy");
+    await clearCooldown("agy:gemini-3.8-flash-low");
   });
 
   afterEach(() => {
@@ -47,7 +47,8 @@ describe("agy ACP pool", () => {
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     }
-    await redis.del("am:test:gw:cooldown:agy", "am:test:ai:health:agy");
+    await clearCooldown("agy:gemini-3.8-flash-low");
+    await redis.del("am:test:ai:health:agy");
     await rm(dir, { recursive: true, force: true });
     await redis.quit();
     await db.$disconnect();
@@ -105,9 +106,24 @@ describe("agy ACP pool", () => {
     const log = await readLog(process.env.FAKE_ACP_LOG!);
     // 2 lượt prompt agy: lần đầu + lần chạy lại sau khi đổi tài khoản.
     expect(log.split("\n").filter((l) => l === "session/prompt").length).toBeGreaterThanOrEqual(2);
+ 
+    // Chỉ đúng agy + model đó tạm nghỉ, tối đa 30 phút; model khác của agy vẫn chạy ngay.
+    const cd = await getCooldowns();
+    expect(cd["agy:gemini-3.8-flash-low"]).toBeGreaterThan(0);
+    expect(cd["agy:gemini-3.8-flash-low"]).toBeLessThanOrEqual(1800);
+    expect(cd["agy:claude-sonnet-5-5-low"]).toBeUndefined();
+
+    // Mắt xích đang nghỉ được thử nền bằng 1 câu ngắn; thử được thì bỏ nghỉ.
+    const res2 = await aiText(
+      { prompt: "viết", json: true },
+      { roles, role: { chain: [{ provider: "agy", model: "claude-sonnet-5-5-low" }, { provider: "agy", model: "gemini-3.8-flash-low" }] }, agySwitch },
+    );
+    expect(res2.model).toBe("claude-sonnet-5-5-low");
+    await vi.waitFor(async () => expect((await getCooldowns())["agy:gemini-3.8-flash-low"]).toBeUndefined(), { timeout: 5000 });
   });
 
-  it("proxy enabled: no switch, provider skipped immediately", async () => {
+  it("proxy enabled: retry once after rotation, no switch, no cooldown", async () => {
+    await clearCooldown("agy:gemini-3.8-flash-low");
     const agySwitch = vi.fn(async () => true);
     const withProxy = aiRolesSchema.parse({ agy: { transport: "acp", proxy: true } });
     const res = await aiText(
@@ -116,6 +132,8 @@ describe("agy ACP pool", () => {
     );
     expect(res.provider).toBe("codex");
     expect(agySwitch).not.toHaveBeenCalled();
+    // Proxy xoay tài khoản: chạy lại 1 lần, không tạm nghỉ agy.
+    expect((await getCooldowns())["agy:gemini-3.8-flash-low"]).toBeUndefined();
   });
 
   it("ACP start failure falls back to the agy CLI", async () => {
