@@ -34,6 +34,10 @@ const MODELS: {
   sort: number;
 }[] = [
   { name: "MUSE Ảnh", provider: "MUSE", engineModel: "muse-image", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1 }, sort: 1 },
+  // Ghim tài khoản Muse riêng cho ảnh (SEED_MUSE_IMAGE_ACCOUNT = id trong muse2api). Bỏ trống thì không tạo.
+  ...(process.env.SEED_MUSE_IMAGE_ACCOUNT
+    ? [{ name: "MUSE Ảnh 2", provider: "MUSE" as const, engineModel: "muse-image", kind: "IMAGE" as const, minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1, 2, 4], maxRefs: 1, museAccount: process.env.SEED_MUSE_IMAGE_ACCOUNT }, sort: 2 }]
+    : []),
   { name: "Gemini Ảnh", provider: "AGY", engineModel: "gemini-3.8-flash-medium", kind: "IMAGE", minPlanRank: 0, baseCost: 1, options: { aspectRatios: IMAGE_RATIOS, counts: [1], maxRefs: 1 }, sort: 2 },
   // engineModel rỗng: codex dùng model mặc định.
   { name: "Codex Ảnh", provider: "CODEX", engineModel: "", kind: "IMAGE", minPlanRank: 1, baseCost: 2, options: { aspectRatios: IMAGE_RATIOS, counts: [1], maxRefs: 1 }, sort: 3 },

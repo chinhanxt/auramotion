@@ -28,11 +28,11 @@ async function main() {
   const t0 = Date.now();
   let last = "";
   for (;;) {
-    const s = await getStory(user.id, story.id);
+    const { story: s } = await getStory(user.id, story.id);
     const jobs = await db.job.findMany({ where: { storyId: story.id }, orderBy: { shotIndex: "asc" } });
-    const line = `${s.story.status} | ` + jobs.map((j) => `#${j.shotIndex}:${j.status}:${j.progress}`).join(" ");
+    const line = `${s.status} | ` + jobs.map((j) => `#${j.shotIndex}:${j.status}:${j.progress}`).join(" ");
     if (line !== last) { console.log(`${Math.round((Date.now() - t0) / 1000)}s ${line}`); last = line; }
-    if (["DONE","FAILED","CANCELED"].includes(s.story.status)) {
+    if (["DONE","FAILED","CANCELED"].includes(s.status)) {
       console.log(JSON.stringify({ plan: s.plan, error: s.error, finalJobId: s.finalJobId }, null, 1).slice(0, 3000));
       if (s.finalJobId) console.log(JSON.stringify(await db.job.findUnique({ where: { id: s.finalJobId }, select: { status: true, resultUrls: true, error: true } })));
       break;

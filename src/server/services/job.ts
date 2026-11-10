@@ -485,7 +485,7 @@ const FRAMING_HINT: Record<string, string> = {
 };
 
 async function buildRequest(
-  job: Job & { model: { engineModel: string; provider?: ModelProvider } },
+  job: Job & { model: { engineModel: string; provider?: ModelProvider; options?: unknown } },
   opts: { omitVideoSize?: boolean } = {},
 ): Promise<MediaRequest> {
   const p = generationParamsSchema.parse(job.params);
@@ -512,7 +512,14 @@ async function buildRequest(
     ...(job.inputUrl ? { inputUrl: job.inputUrl } : {}),
     ...(inputPath ? { inputPath } : {}),
     ...(omitSize ? { omitSize: true } : {}),
+    ...(museAccountOf(job.model.options) ? { museAccount: museAccountOf(job.model.options) } : {}),
   };
+}
+
+// options.museAccount của model: ghim tài khoản Muse (vd tài khoản chỉ dùng tạo ảnh).
+export function museAccountOf(options: unknown): string | undefined {
+  const v = (options as { museAccount?: unknown } | null)?.museAccount;
+  return typeof v === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(v) ? v : undefined;
 }
 
 async function failMuse(job: Job, kind: "image" | "video", code: string, message?: string): Promise<void> {
@@ -520,17 +527,19 @@ async function failMuse(job: Job, kind: "image" | "video", code: string, message
   await failJob(job.id, code);
 }
 
-async function runMuse(job: Job & { model: { engineModel: string } }, deps: ProcessDeps): Promise<void> {
+async function runMuse(job: Job & { model: { engineModel: string; options?: unknown } }, deps: ProcessDeps): Promise<void> {
   const muse = deps.muse ?? getMuse();
   const scheduler = deps.scheduler ?? getScheduler();
   const pollMs = deps.pollMs ?? DEFAULT_POLL_MS;
   const kind = job.kind === "IMAGE" ? "image" : "video";
+  // Model ghim tài khoản riêng: slot đếm riêng theo tài khoản (chat phụ của tài khoản đó).
+  const scope = museAccountOf(job.model.options);
   let taskId = job.museTaskId;
   let lease: Lease;
 
   if (!taskId) {
     // Chưa gửi: phải có slot chat phụ (và đủ giãn cách với video trước) rồi mới nhận job.
-    const got = await scheduler.tryAcquire(kind);
+    const got = await scheduler.tryAcquire(kind, { scope });
     if ("waitMs" in got) throw new SlotBusyError(kind, got.waitMs);
     lease = got.lease;
     if (!(await claim(job.id))) {
@@ -550,7 +559,7 @@ async function runMuse(job: Job & { model: { engineModel: string } }, deps: Proc
     await db.job.update({ where: { id: job.id }, data: { museTaskId: taskId } });
   } else {
     // Chạy tiếp task đã gửi (worker khởi động lại): task vẫn chiếm tab, ghi nhận lease bất kể giới hạn.
-    const got = await scheduler.tryAcquire(kind, { force: true });
+    const got = await scheduler.tryAcquire(kind, { force: true, scope });
     lease = (got as { lease: Lease }).lease;
   }
 

@@ -41,6 +41,26 @@ describe("HttpMuseClient input", () => {
   });
 });
 
+describe("HttpMuseClient ghim tài khoản", () => {
+  it("museAccount gửi header X-Muse-Account kèm Bearer", async () => {
+    const seen: Record<string, string>[] = [];
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      seen.push(init?.headers as Record<string, string>);
+      return new Response(JSON.stringify({ id: "task_1", status: "queued" }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const client = new HttpMuseClient("http://127.0.0.1:9", "k");
+      await client.submit({ kind: "image", engineModel: "muse-image", prompt: "x", aspectRatio: "1:1", museAccount: "acc_old" });
+      await client.submit({ kind: "image", engineModel: "muse-image", prompt: "x", aspectRatio: "1:1" });
+    } finally {
+      globalThis.fetch = orig;
+    }
+    expect(seen[0]).toMatchObject({ Authorization: "Bearer k", "X-Muse-Account": "acc_old" });
+    expect(seen[1]["X-Muse-Account"]).toBeUndefined();
+  });
+});
+
 describe.skipIf(!inject("museMock"))("HttpMuseClient (muse2api mock)", () => {
   const client = new HttpMuseClient(MUSE_URL, "dev-muse-key");
 

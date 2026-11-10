@@ -49,7 +49,7 @@ export async function getCatalog(userId: string, kind: CatalogKind) {
   const videoUnavailable = usesVideo && models.some((m) => m.provider === "MUSE") ? Boolean(await getVideoBlocked()) : false;
   const story = kind === "story" ? await getStorySetting() : undefined;
   return {
-    models: models.map((m) => ({ ...m, locked: m.minPlanRank > plan.rank })),
+    models: models.map((m) => ({ ...m, options: publicOptions(m.options), locked: m.minPlanRank > plan.rank })),
     presets,
     skills: skills.map(({ minPlanRank, ...s }) => ({ ...s, locked: minPlanRank > plan.rank })),
     plan,
@@ -90,4 +90,11 @@ export async function getExplore(cursor?: string) {
     }),
     nextCursor: rows.length > EXPLORE_PAGE ? page[page.length - 1].id : null,
   };
+}
+
+// Bỏ cấu hình nội bộ (vd museAccount) trước khi trả options model cho trình duyệt.
+function publicOptions(options: unknown): unknown {
+  if (!options || typeof options !== "object" || Array.isArray(options)) return options;
+  const { museAccount: _hidden, ...rest } = options as Record<string, unknown>;
+  return rest;
 }

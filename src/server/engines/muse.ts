@@ -106,6 +106,7 @@ export class HttpMuseClient {
   async submit(req: MediaRequest): Promise<{ taskId: string }> {
     // muse2api chặn URL nội bộ: gửi ảnh tham chiếu dạng data URL.
     const image = req.inputPath ? await toDataUrl(req.inputPath) : req.inputUrl;
+    const opts = req.museAccount ? { headers: { ...this.authHeaders, "X-Muse-Account": req.museAccount } } : {};
     const task =
       req.kind === "image"
         ? await this.request<MuseTask>("POST", "/v1/images/generations", {
@@ -116,7 +117,7 @@ export class HttpMuseClient {
             image,
             async: true,
             response_format: "url",
-          })
+          }, opts)
         : await this.request<MuseTask>("POST", "/v1/videos", {
             model: req.engineModel,
             prompt: req.prompt,
@@ -124,7 +125,7 @@ export class HttpMuseClient {
             ...(req.omitSize ? {} : { size: req.aspectRatio }),
             duration: req.durationSec ?? 5,
             image,
-          });
+          }, opts);
     if (!task.id) throw new EngineError("MUSE_BAD_RESPONSE", "muse2api không trả mã tác vụ");
     return { taskId: task.id };
   }

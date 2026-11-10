@@ -9,6 +9,8 @@ export type MediaRequest = {
   inputUrl?: string;
   // Muse video: không gửi `size`.
   omitSize?: boolean;
+  // Ghim tài khoản Muse (id trong muse2api) bằng header X-Muse-Account.
+  museAccount?: string;
 };
 
 export class EngineError extends Error {

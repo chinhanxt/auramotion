@@ -25,6 +25,24 @@ describe("muse scheduler", () => {
     await redis.quit();
   });
 
+  it("tài khoản ghim (scope) có slot riêng, không chiếm slot chung", async () => {
+    const clock = { t: 1_000_000 };
+    const s = make(clock);
+    expect("lease" in (await s.tryAcquire("image"))).toBe(true);
+    expect("lease" in (await s.tryAcquire("image"))).toBe(true);
+    expect(await s.tryAcquire("image")).toEqual({ waitMs: 5000 });
+    const a = await s.tryAcquire("image", { scope: "acc_old" });
+    const b = await s.tryAcquire("image", { scope: "acc_old" });
+    expect("lease" in a && "lease" in b).toBe(true);
+    expect(await s.tryAcquire("image", { scope: "acc_old" })).toEqual({ waitMs: 5000 });
+    if ("lease" in a) {
+      expect(a.lease.scope).toBe("acc_old");
+      expect(await s.renew(a.lease)).toBe(true);
+      await s.release(a.lease);
+    }
+    expect("lease" in (await s.tryAcquire("image", { scope: "acc_old" }))).toBe(true);
+  });
+
   it("limits image slots and frees on release", async () => {
     const clock = { t: 1_000_000 };
     const s = make(clock);

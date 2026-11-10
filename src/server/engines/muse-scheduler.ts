@@ -62,7 +62,7 @@ end
 return 0
 `;
 
-export type Lease = { type: SlotType; id: string };
+export type Lease = { type: SlotType; id: string; scope?: string };
 
 export type SchedulerOptions = {
   redis?: IORedis;
@@ -87,8 +87,8 @@ export class MuseScheduler {
     this.slots = opts.slots ?? getMuseSlots;
   }
 
-  private semKey(type: SlotType): string {
-    return `${this.prefix}sem:${type}`;
+  private semKey(type: SlotType, scope?: string): string {
+    return scope ? `${this.prefix}sem:${type}@${scope}` : `${this.prefix}sem:${type}`;
   }
 
   private gapKey(): string {
@@ -100,7 +100,11 @@ export class MuseScheduler {
   }
 
   // force: job MUSE chạy tiếp sau khi worker khởi động lại — task đã chiếm tab, chỉ ghi nhận lease.
-  async tryAcquire(type: SlotType, opts: { force?: boolean } = {}): Promise<{ lease: Lease } | { waitMs: number }> {
+  // scope: tài khoản Muse được ghim — đếm slot riêng (cùng giới hạn theo loại), không dính giãn cách video chung.
+  async tryAcquire(
+    type: SlotType,
+    opts: { force?: boolean; scope?: string } = {},
+  ): Promise<{ lease: Lease } | { waitMs: number }> {
     const slots = await this.slots();
     const limit = Math.max(0, Math.floor(slots[type]));
     const gapMs = type === "video" ? Math.max(0, slots.gapSec) * 1000 : 0;
@@ -108,8 +112,8 @@ export class MuseScheduler {
     const [ok, wait] = (await this.redis.eval(
       ACQUIRE,
       2,
-      this.semKey(type),
-      this.gapKey(),
+      this.semKey(type, opts.scope),
+      opts.scope ? `${this.gapKey()}@${opts.scope}` : this.gapKey(),
       this.now(),
       this.leaseMs,
       limit,
@@ -117,7 +121,7 @@ export class MuseScheduler {
       gapMs,
       opts.force ? "1" : "0",
     )) as [number, number];
-    if (ok === 1) return { lease: { type, id } };
+    if (ok === 1) return { lease: { type, id, ...(opts.scope ? { scope: opts.scope } : {}) } };
     return { waitMs: wait < 0 ? BUSY_RETRY_MS : wait };
   }
 
@@ -134,12 +138,12 @@ export class MuseScheduler {
   }
 
   async renew(lease: Lease): Promise<boolean> {
-    const ok = await this.redis.eval(RENEW, 1, this.semKey(lease.type), lease.id, this.now() + this.leaseMs);
+    const ok = await this.redis.eval(RENEW, 1, this.semKey(lease.type, lease.scope), lease.id, this.now() + this.leaseMs);
     return ok === 1;
   }
 
   async release(lease: Lease): Promise<void> {
-    await this.redis.zrem(this.semKey(lease.type), lease.id).catch(() => 0);
+    await this.redis.zrem(this.semKey(lease.type, lease.scope), lease.id).catch(() => 0);
   }
 
   // Gia hạn lease định kỳ trong lúc task chạy; gọi hàm trả về để dừng + trả slot.
@@ -168,7 +172,8 @@ export class MuseScheduler {
 
   // Chỉ dùng trong test.
   async reset(): Promise<void> {
-    await this.redis.del(...SLOT_TYPES.map((t) => this.semKey(t)), this.gapKey());
+    const scoped = await this.redis.keys(`${this.prefix}sem:*@*`);
+    await this.redis.del(...SLOT_TYPES.map((t) => this.semKey(t)), this.gapKey(), ...scoped);
   }
 }
 
