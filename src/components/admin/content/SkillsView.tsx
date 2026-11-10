@@ -137,7 +137,7 @@ export function SkillsView({ initial }: { initial: Skill[] }) {
                           <p className="truncate text-[15px] font-semibold">{s.name}</p>
                           <p className="truncate font-mono text-[11.5px] text-dim">{s.slug}</p>
                         </div>
-                        <div onClick={(e) => e.stopPropagation()} className="-mt-1 -mr-1 w-12 shrink-0">
+                        <div onClick={(e) => e.stopPropagation()} className="-mt-1 w-12 shrink-0">
                           <Switch checked={s.enabled} onChange={(v) => toggle(s, v)} label={<span className="sr-only">Bật</span>} />
                         </div>
                       </div>

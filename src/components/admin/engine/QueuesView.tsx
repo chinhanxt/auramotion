@@ -116,7 +116,7 @@ export function QueuesView({ slots }: { slots: MuseSlots }) {
     <div className="space-y-4">
       <PageHeader icon="layers" title="Hàng đợi" sub={<LiveDot at={poll.at} />} />
       {poll.error && !data && <Notice tone="danger">{poll.error}</Notice>}
-      <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {data
           ? data.queues.map((q, i) => <QueueCard key={q.name} q={q} i={i} busy={isBusy(q.name)} onToggle={() => void toggle(q)} />)
           : Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[186px] rounded-m3" />)}

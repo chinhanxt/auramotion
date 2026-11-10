@@ -138,7 +138,7 @@ function Tile({ job, url, aspect, i, busy, onToggle }: { job: Item; url?: string
         <p className="flex items-center gap-1.5 truncate text-[11px] text-dim">
           <span className="truncate">{job.user.email}</span>
           <span>·</span>
-          <span className="shrink-0">{timeAgo(job.createdAt)}</span>
+          <span suppressHydrationWarning className="shrink-0">{timeAgo(job.createdAt)}</span>
         </p>
       </figcaption>
     </figure>

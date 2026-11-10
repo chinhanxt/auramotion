@@ -50,7 +50,7 @@ export function DashboardView({ range, stats, ops, slots }: { range: StatsRange;
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1">
         <Stat i={0} icon="users" label="Người dùng" value={formatNumber(ops.users)} hint={`+${formatNumber(stats.newUsers)} mới`} href="/admin/users" />
         <Stat i={1} icon="layers" label="Tác vụ hôm nay" value={formatNumber(ops.jobsToday)} hint={`${ops.activeNow} đang chạy`} href="/admin/jobs" />
         <Stat
@@ -73,7 +73,7 @@ export function DashboardView({ range, stats, ops, slots }: { range: StatsRange;
         <QueueStrip data={queues.data} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Panel title="Lượt tạo" icon="sparkle" actions={<Legend items={[["Ảnh", "#d4ff3a"], ["Video", "#7c5cff"], ["Ghép", "#ff4fd8"]]} />}>
           <Chart
             data={daily}
@@ -83,21 +83,22 @@ export function DashboardView({ range, stats, ops, slots }: { range: StatsRange;
               { key: "videos", label: "Video", color: "#7c5cff" },
               { key: "assembles", label: "Ghép", color: "#ff4fd8" },
             ]}
+            height={330}
           />
         </Panel>
         <HealthPanel />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Panel title="Doanh thu" icon="card" actions={<span className="text-sm font-semibold tabular-nums">{formatVnd(stats.revenue)}</span>}>
-          <Chart data={daily} xKey="label" series={[{ key: "revenue", label: "Doanh thu", color: "#ffb36b" }]} height={200} format={compactVnd} />
+          <Chart data={daily} xKey="label" series={[{ key: "revenue", label: "Doanh thu", color: "#ffb36b" }]} height={196} format={compactVnd} />
         </Panel>
         <Panel title="Slot Muse" icon="bolt" actions={<Link href="/admin/muse" className="text-xs text-muted hover:text-fg">Sửa</Link>}>
           <SlotMeters used={queues.data?.museSlots} limits={slots} />
         </Panel>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Panel title="Lỗi gần đây" icon="alert" pad={false} actions={<Link href="/admin/jobs?status=FAILED" className="text-xs text-muted hover:text-fg">Tất cả</Link>}>
           {ops.recentFailed.length === 0 ? (
             <Empty icon="check" title="Không có lỗi" className="py-10" />
@@ -116,7 +117,7 @@ export function DashboardView({ range, stats, ops, slots }: { range: StatsRange;
                   </span>
                   <span className="hidden shrink-0 text-right sm:block">
                     <Badge tone="danger">{j.error ? jobErrorText(j.error) : "Lỗi"}</Badge>
-                    <span className="mt-1 block text-[11px] text-dim">{timeAgo(j.finishedAt ?? j.createdAt)}</span>
+                    <span suppressHydrationWarning className="mt-1 block text-[11px] text-dim">{timeAgo(j.finishedAt ?? j.createdAt)}</span>
                   </span>
                 </li>
               ))}

@@ -89,7 +89,8 @@ function QuotaCell({ account }: { account: Account }) {
     setBusy(true);
     try {
       const r = await api<{ quota?: Quota }>(`/api/admin/muse/accounts/${encodeURIComponent(account.id)}/quota${refresh ? "?refresh=1" : ""}`);
-      setQ(r.quota ?? null);
+      // muse2api đang bận có thể trả quota rỗng: giữ số đã lưu trong meta.
+      setQ(r.quota && r.quota.found !== false ? r.quota : (account.meta?.quota ?? r.quota ?? null));
       if (refresh) toast.success("Đã cập nhật quota");
     } catch (err) {
       setQ((prev) => prev ?? account.meta?.quota ?? null);
@@ -349,7 +350,7 @@ export function MuseView({ slots }: { slots: MuseSlots }) {
         if (!exp) return <span className="text-xs text-dim">—</span>;
         const days = (exp - Date.now()) / 86_400_000;
         return (
-          <span className={cx("text-[13px] tabular-nums", days < 0 ? "text-danger" : days < 3 ? "text-warn" : "text-fg/85")} title={formatDateTime(exp)}>
+          <span className={cx("text-[13px] whitespace-nowrap tabular-nums", days < 0 ? "text-danger" : days < 3 ? "text-warn" : "text-fg/85")} title={formatDateTime(exp)}>
             {days < 0 ? "Hết hạn" : timeAgo(exp)}
           </span>
         );
@@ -378,7 +379,7 @@ export function MuseView({ slots }: { slots: MuseSlots }) {
             {a.last_error}
           </span>
         ) : (
-          <span className="text-xs text-dim">{a.last_used_at ? `dùng ${timeAgo(a.last_used_at * 1000)}` : "—"}</span>
+          <span className="text-xs whitespace-nowrap text-dim">{a.last_used_at ? `dùng ${timeAgo(a.last_used_at * 1000)}` : "—"}</span>
         ),
     },
     {

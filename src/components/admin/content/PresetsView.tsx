@@ -181,7 +181,7 @@ export function PresetsView({ initial }: { initial: Preset[] }) {
       {shown.length === 0 ? (
         <Empty icon="palette" title="Trống" />
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">
           {shown.map((p, i) => {
             const job = jobs[p.id];
             const busy = job && (job.status === "PENDING" || job.status === "RUNNING");
@@ -196,11 +196,11 @@ export function PresetsView({ initial }: { initial: Preset[] }) {
                 <div className="relative aspect-[4/5]" style={coverStyle(p)}>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
                   <div className="absolute top-2 left-2 flex gap-1">
-                    <Badge tone="neutral" className="bg-black/50 backdrop-blur">
+                    <Badge tone="neutral" className="!bg-black/55 !text-white/90 backdrop-blur">
                       <Icon name={p.kind === "CAMERA" ? "camera" : "palette"} size={11} />
                       {KIND_LABEL[p.kind]}
                     </Badge>
-                    {!p.enabled && <Badge tone="neutral" className="bg-black/50">Tắt</Badge>}
+                    {!p.enabled && <Badge tone="neutral" className="!bg-black/55 !text-white/90">Tắt</Badge>}
                   </div>
                   {p.featured && (
                     <span className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-ink">

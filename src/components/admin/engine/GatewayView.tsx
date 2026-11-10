@@ -52,8 +52,8 @@ function HealthLine({ h }: { h?: ProviderHealth }) {
         <Icon name="clock" size={12} className="mr-1 inline -translate-y-px" />
         {formatMs(h.lastMs)}
       </span>
-      {h.lastOkAt && <span className="text-dim">ok {timeAgo(h.lastOkAt)}</span>}
-      {h.lastErrAt && st === "danger" && <span className="text-dim">lỗi {timeAgo(h.lastErrAt)}</span>}
+      {h.lastOkAt && <span suppressHydrationWarning className="text-dim">ok {timeAgo(h.lastOkAt)}</span>}
+      {h.lastErrAt && st === "danger" && <span suppressHydrationWarning className="text-dim">lỗi {timeAgo(h.lastErrAt)}</span>}
     </span>
   );
 }
@@ -165,7 +165,7 @@ export function GatewayView({ initial }: { initial: GatewayData }) {
                       value={d[MODEL_KEY[p]]}
                       placeholder={MODEL_HINT[p]}
                       onChange={(e) => setD((x) => ({ ...x, [MODEL_KEY[p]]: e.target.value }))}
-                      className="font-mono text-[12.5px]"
+                      className="font-mono !text-[12.5px]"
                     />
                   </div>
                   {health?.[p]?.lastError && providerState(health[p]) === "danger" && (

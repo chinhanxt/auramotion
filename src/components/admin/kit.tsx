@@ -144,9 +144,10 @@ export function Dot({ tone = "neutral", pulse }: { tone?: "ok" | "warn" | "dange
 }
 
 // Thanh "đang dùng / giới hạn".
-export function Meter({ used, limit, label }: { used: number; limit: number; label?: React.ReactNode }) {
+// fullTone: màu khi đầy ("warn" cho slot hết chỗ, "ok" cho tiến độ xong).
+export function Meter({ used, limit, label, fullTone = "warn" }: { used: number; limit: number; label?: React.ReactNode; fullTone?: "warn" | "ok" }) {
   const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
-  const tone = limit > 0 && used >= limit ? "bg-warn" : "bg-accent";
+  const tone = limit > 0 && used >= limit ? (fullTone === "ok" ? "bg-ok" : "bg-warn") : "bg-accent";
   return (
     <div className="min-w-0">
       {label !== undefined && (

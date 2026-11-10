@@ -81,7 +81,21 @@ function optionSummary(m: Model): string {
   return [o.aspectRatios?.join(" "), o.counts && `×${o.counts.join("/")}`, o.durations && `${o.durations.join("/")}s`].filter(Boolean).join(" · ");
 }
 
-function ModelEditor({ open, model, accounts, onClose, onSaved }: { open: boolean; model?: Model; accounts?: MuseAccount[]; onClose: () => void; onSaved: (m: Model) => void }) {
+function ModelEditor({
+  open,
+  model,
+  accounts,
+  accountsFailed,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  model?: Model;
+  accounts?: MuseAccount[];
+  accountsFailed: boolean;
+  onClose: () => void;
+  onSaved: (m: Model) => void;
+}) {
   const [d, setD] = useState<Draft>(() => toDraft(model));
   const [confirmDel, setConfirmDel] = useState(false);
   const { run, isBusy } = useAction();
@@ -200,8 +214,12 @@ function ModelEditor({ open, model, accounts, onClose, onSaved }: { open: boolea
         </div>
 
         {d.provider === "MUSE" && d.kind !== "ASSEMBLE" && (
-          <FieldRow label="Tài khoản Muse" hint={accounts ? "Trống = tài khoản nào cũng được" : "Không tải được danh sách — nhập mã"}>
-            {accounts ? (
+          <FieldRow label="Tài khoản Muse" hint={accountsFailed && !accounts ? "Không tải được danh sách — nhập mã" : "Trống = tài khoản nào cũng được"}>
+            {!accounts && !accountsFailed ? (
+              <Select inputSize="sm" disabled value="">
+                <option value="">Đang tải…</option>
+              </Select>
+            ) : accounts ? (
               <Select inputSize="sm" value={d.museAccount} onChange={(e) => set("museAccount", e.target.value)}>
                 <option value="">Mọi tài khoản</option>
                 {accounts.map((a) => (
@@ -303,7 +321,7 @@ export function ModelsView({ models: initial }: { models: Model[] }) {
       mobile: "actions",
       cell: (m) => (
         <span className="ml-auto inline-flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <span className="w-11">
+          <span className="w-12">
             <Switch label={<span className="sr-only">Bật {m.name}</span>} checked={m.enabled} disabled={isBusy(m.id)} onChange={(v) => void toggle(m, v)} />
           </span>
         </span>
@@ -340,6 +358,7 @@ export function ModelsView({ models: initial }: { models: Model[] }) {
         open={editing !== null}
         model={editing && editing !== "new" ? editing : undefined}
         accounts={accounts.data?.data}
+        accountsFailed={Boolean(accounts.error)}
         onClose={() => setEditing(null)}
         onSaved={(m) => setModels((l) => (l.some((x) => x.id === m.id) ? l.map((x) => (x.id === m.id ? m : x)) : [...l, m]))}
       />

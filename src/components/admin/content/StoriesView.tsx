@@ -104,7 +104,7 @@ export function StoriesView({ data }: { data: { items: Row[]; total: number; pag
       label: "Story",
       mobile: "title",
       cell: (s) => (
-        <div className="min-w-0 max-w-[420px]">
+        <div className="min-w-0 max-w-[clamp(180px,22vw,420px)]">
           <p className="truncate font-medium">{s.title || "Chưa đặt tên"}</p>
           <p className="truncate text-xs text-muted">{s.idea}</p>
         </div>
@@ -117,7 +117,7 @@ export function StoriesView({ data }: { data: { items: Row[]; total: number; pag
       label: "Cảnh",
       cell: (s) => (
         <div className="ml-auto w-28 md:ml-0">
-          <Meter used={s.doneCount} limit={s.shotCount} label={<span className="text-dim">{s.mode === "CHAIN" ? "nối" : "song song"}</span>} />
+          <Meter fullTone="ok" used={s.doneCount} limit={s.shotCount} label={<span className="text-dim">{s.mode === "CHAIN" ? "nối" : "song song"}</span>} />
         </div>
       ),
     },
@@ -128,7 +128,7 @@ export function StoriesView({ data }: { data: { items: Row[]; total: number; pag
       label: "Tạo",
       align: "right",
       cell: (s) => (
-        <span className="text-xs whitespace-nowrap text-muted" title={formatDateTime(s.createdAt)}>
+        <span suppressHydrationWarning className="text-xs whitespace-nowrap text-muted" title={formatDateTime(s.createdAt)}>
           {timeAgo(s.createdAt)}
         </span>
       ),
