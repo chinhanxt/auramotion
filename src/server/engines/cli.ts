@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { acquireSlot } from "@/lib/semaphore";
 import { EngineError } from "@/server/engines/types";
 
 export type RunCliOptions<T> = {
@@ -16,6 +17,8 @@ export type RunCliOptions<T> = {
   // Nhận stdout ngay khi có, kể cả khi lệnh sau đó lỗi / quá giờ (lúc đó `collect` không chạy).
   onStdout?: (chunk: string) => void;
   signal?: AbortSignal;
+  // Giới hạn số tiến trình cùng tên chạy đồng thời trên cả app + worker (agy chạy song song dễ hỏng phiên / cắt đầu ra).
+  lock?: { key: string; limit: number };
 };
 
 const STDERR_TAIL = 300;
@@ -70,7 +73,30 @@ function killGroup(pid: number | undefined): void {
 
 // Chạy 1 lệnh CLI trong thư mục tạm riêng (cwd), không qua shell. Quá giờ / bị hủy thì kill cả nhóm tiến trình.
 // Thư mục tạm luôn bị xóa sau khi `collect` xong, kể cả khi lỗi.
+// Số tiến trình agy / codex chạy cùng lúc (env AGY_CONCURRENCY, CODEX_CONCURRENCY; mặc định 2).
+export function cliLock(name: "agy" | "codex"): { key: string; limit: number } {
+  const raw = Number.parseInt(process.env[name === "agy" ? "AGY_CONCURRENCY" : "CODEX_CONCURRENCY"] ?? "", 10);
+  return { key: `am:cli:${name}`, limit: Number.isFinite(raw) && raw > 0 ? raw : 2 };
+}
+
 export async function runCli<T = undefined>(opts: RunCliOptions<T>): Promise<{ stdout: string; result: T }> {
+  let release: (() => Promise<void>) | undefined;
+  if (opts.lock && process.env.NODE_ENV !== "test") {
+    const { redis } = await import("@/lib/redis");
+    try {
+      release = await acquireSlot(redis, opts.lock.key, { limit: opts.lock.limit, timeoutMs: opts.timeoutMs, signal: opts.signal });
+    } catch {
+      throw new EngineError("CLI_BUSY", `${path.basename(opts.bin)} đang bận, thử lại sau`, true);
+    }
+  }
+  try {
+    return await runCliNow(opts);
+  } finally {
+    await release?.();
+  }
+}
+
+async function runCliNow<T>(opts: RunCliOptions<T>): Promise<{ stdout: string; result: T }> {
   const dir = await mkdtemp(path.join(os.tmpdir(), "aura-cli-"));
   try {
     await opts.setup?.(dir);

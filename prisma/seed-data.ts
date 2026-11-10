@@ -80,6 +80,7 @@ ${IMAGE_RULES}
 For products: describe the subject with exact material and colour, placement in frame, surface and backdrop, a real studio lighting setup (key light direction, rim light, soft shadows), lens and depth of field.
 - The product is always the hero: centred or on a clear third, fully visible, sharp edges, true colours.
 - Props are few and support the product story; nothing covers the label area.
+- Labels and packaging stay plain and unbranded (no readable words, no invented brand names); only show a brand name if the user wrote one.
 - No text, logos, watermarks or hands unless the idea asks for them.
 - Never mention aspect ratio or image size.
 ${IMAGE_JSON}`,
@@ -144,6 +145,7 @@ Duration: {{duration}} seconds`,
     instructions: `You write product commercial shots for the Muse video model.
 ${INPUT_RULES}
 ${VIDEO_RULES}
+- Labels stay plain and unbranded (no readable words, no invented brand names) unless the user wrote a brand.
 - The product stays sharp, fully in frame and recognisable for the whole shot; light glides across its surface (a moving highlight, a soft light sweep, condensation drops, steam, particles) to create motion without moving the camera fast.
 - Prefer slow dolly in, gentle orbit or slow crane up for products.
 ${VIDEO_JSON}`,

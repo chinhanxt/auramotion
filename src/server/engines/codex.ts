@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { copyFile, readFile, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { runCli } from "@/server/engines/cli";
+import { cliLock, runCli } from "@/server/engines/cli";
 import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
 
 const TEXT_TIMEOUT_MS = 150_000;
@@ -22,6 +22,7 @@ export async function codexText(
 ): Promise<string> {
   const { result } = await runCli({
     bin: codexBin(),
+    lock: cliLock("codex"),
     args: (dir) => [
       "exec",
       "--ephemeral",
@@ -137,6 +138,7 @@ export const codexImage: FileEngine = {
     try {
       await runCli({
         bin: codexBin(),
+        lock: cliLock("codex"),
         args: (dir) => [
           "exec",
           "--skip-git-repo-check",

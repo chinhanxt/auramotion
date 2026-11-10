@@ -636,7 +636,10 @@ async function runFileEngine(job: Job & { model: { engineModel: string; provider
     if (files.length === 0) return failJob(job.id, "NO_RESULT");
     await finishJob(job.id, files.map((p) => ({ path: p })));
   } catch (err) {
-    if (isFatal(err)) return failJob(job.id, err.code);
+    if (isFatal(err)) {
+      console.warn(`[job] ${job.id} lỗi ${err.code}: ${err.message.slice(0, 300)}`);
+      return failJob(job.id, err.code);
+    }
     await release(job.id);
     throw err;
   } finally {

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { runCli } from "@/server/engines/cli";
+import { cliLock, runCli } from "@/server/engines/cli";
 import { EngineError, type FileEngine, type MediaRequest } from "@/server/engines/types";
 
 const STATE_FILES = ["antigravity-oauth-token", "installation_id", "settings.json"];
@@ -68,12 +68,17 @@ export async function setupAgyWorkspace(dir: string, agents: Record<string, stri
 export function parseAgyOutput(stdout: string): string {
   const start = stdout.indexOf("{");
   const end = stdout.lastIndexOf("}");
-  if (start === -1 || end < start) throw new EngineError("AGY_FAILED", `agy không trả JSON: ${stdout.slice(-300)}`);
-  let data: { status?: string; response?: unknown };
+  let data: { status?: string; response?: unknown } | null = null;
   try {
-    data = JSON.parse(stdout.slice(start, end + 1));
+    data = start !== -1 && end > start ? JSON.parse(stdout.slice(start, end + 1)) : null;
   } catch {
-    throw new EngineError("AGY_FAILED", `agy trả JSON hỏng: ${stdout.slice(-300)}`);
+    data = null;
+  }
+  // Không có vỏ {status, response}: agy (khi chạy song song) có lúc in thẳng câu trả lời — trả nguyên văn để bên gọi tự đọc.
+  if (!data || (data.status === undefined && data.response === undefined)) {
+    const raw = stdout.trim();
+    if (raw) return raw;
+    throw new EngineError("AGY_FAILED", "agy không trả gì");
   }
   if (data.status !== "SUCCESS") throw new EngineError("AGY_FAILED", `agy lỗi: ${JSON.stringify(data).slice(0, 300)}`);
   return typeof data.response === "string" ? data.response : "";
@@ -82,6 +87,7 @@ export function parseAgyOutput(stdout: string): string {
 export async function agyText(prompt: string, model: string, signal?: AbortSignal): Promise<string> {
   const { stdout } = await runCli({
     bin: agyBin(),
+    lock: cliLock("agy"),
     args: (dir) => [
       ...agyStateArgs(dir),
       "-p",
@@ -135,6 +141,7 @@ export const agyImage: FileEngine = {
     const refName = req.inputPath ? `ref-1${path.extname(req.inputPath).toLowerCase() || ".png"}` : null;
     const { result } = await runCli({
       bin: agyBin(),
+      lock: cliLock("agy"),
       args: (dir) => [
         ...agyStateArgs(dir),
         "-p",
@@ -165,7 +172,7 @@ export const agyImage: FileEngine = {
         const answer = parseAgyOutput(stdout).trim().slice(0, 300);
         const said = answer ? ` agy trả: «${answer}»` : " agy không trả lời gì.";
         if (REFUSAL_TEXT.test(answer)) throw new EngineError("REFUSED", `Công cụ ảnh từ chối tạo ảnh này.${said}`);
-        throw new EngineError("NO_IMAGE", `agy chạy xong nhưng không có ảnh.${said}`);
+        throw new EngineError("NO_IMAGE", `agy chạy xong nhưng không có ảnh.${said}`, true);
       },
     });
     return { files: [result] };
