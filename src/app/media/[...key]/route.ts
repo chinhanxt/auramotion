@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { storagePath } from "@/lib/storage";
-import { ensureThumb, snapWidth } from "@/lib/thumb";
+import { ensureLiteVideo, ensureThumb, snapWidth } from "@/lib/thumb";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -70,11 +70,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
     }
   }
 
-  const size = stat.size;
+  // Video xem trước: bản nhẹ 360p (cache vĩnh viễn, vẫn hỗ trợ Range). Lỗi → phục vụ file gốc.
+  let servePath = filePath;
+  let serveStat = stat;
+  let immutable: string | null = null;
+  if (isVideo && url.searchParams.get("lite") === "1") {
+    try {
+      const lite = await ensureLiteVideo(filePath);
+      servePath = lite.file;
+      serveStat = await fs.stat(lite.file);
+      immutable = lite.etag;
+    } catch (err) {
+      console.warn(`[media] không tạo được bản nhẹ ${key.join("/")}: ${(err as Error).message.slice(0, 160)}`);
+    }
+  }
+
+  const size = serveStat.size;
   const headers = new Headers({
-    "Content-Type": CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream",
+    "Content-Type": CONTENT_TYPES[path.extname(servePath).toLowerCase()] ?? "application/octet-stream",
     "Accept-Ranges": "bytes",
-    "Cache-Control": "public, max-age=604800",
+    "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "public, max-age=604800",
     "X-Content-Type-Options": "nosniff",
   });
 
@@ -87,10 +102,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
     }
     headers.set("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
     headers.set("Content-Length", String(range.end - range.start + 1));
-    const stream = createReadStream(filePath, range);
+    const stream = createReadStream(servePath, range);
     return new Response(Readable.toWeb(stream) as ReadableStream, { status: 206, headers });
   }
 
   headers.set("Content-Length", String(size));
-  return new Response(Readable.toWeb(createReadStream(filePath)) as ReadableStream, { status: 200, headers });
+  return new Response(Readable.toWeb(createReadStream(servePath)) as ReadableStream, { status: 200, headers });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { posterUrl, thumbSrcSet, thumbUrl } from "@/lib/media-url";
+import { liteUrl, posterUrl, thumbSrcSet, thumbUrl } from "@/lib/media-url";
 import { cx } from "./cx";
 
 // Một IntersectionObserver dùng chung cho mọi media: tiết kiệm khi lưới có hàng trăm ô.
@@ -140,7 +140,7 @@ export function SmartVideo({
       )}
       <video
         ref={ref}
-        src={`${src}#t=0.1`}
+        src={`${liteUrl(src)}#t=0.1`}
         muted
         loop
         playsInline

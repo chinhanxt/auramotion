@@ -57,6 +57,51 @@ function ffmpegFrame(src: string, out: string, width: number): Promise<void> {
   });
 }
 
+// Bản video nhẹ để xem trước (360p, 20 fps, không tiếng): gốc 3–7 MB → ~0,2–0,5 MB.
+function ffmpegLite(src: string, out: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const p = spawn(
+      "ffmpeg",
+      ["-v", "error", "-y", "-i", src, "-an", "-vf", "scale='min(360,iw)':-2,fps=20", "-c:v", "libx264", "-preset", "veryfast", "-crf", "33", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", out],
+      { stdio: ["ignore", "ignore", "pipe"] },
+    );
+    let err = "";
+    p.stderr.on("data", (d: Buffer) => (err += d.toString()));
+    const timer = setTimeout(() => p.kill("SIGKILL"), 90_000);
+    p.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    p.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg ${code}: ${err.slice(-200)}`));
+    });
+  });
+}
+
+// Bản video nhẹ: trả đường dẫn file mp4 đã sinh (route /media tự lo Range).
+export async function ensureLiteVideo(srcPath: string): Promise<{ file: string; etag: string }> {
+  const stat = await fs.stat(srcPath);
+  const key = createHash("sha1").update(`${srcPath}|${stat.mtimeMs}|${stat.size}|lite`).digest("hex");
+  const file = path.join(thumbDir(), key.slice(0, 2), `${key}.mp4`);
+  const etag = `"${key.slice(0, 20)}"`;
+  if (await fs.stat(file).then((s) => s.size > 0, () => false)) return { file, etag };
+  let job = inflight.get(key);
+  if (!job) {
+    job = slot(async () => {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      const tmp = `${file}.${process.pid}.tmp.mp4`;
+      await ffmpegLite(srcPath, tmp);
+      await fs.rename(tmp, file);
+      return file;
+    }).finally(() => inflight.delete(key));
+    inflight.set(key, job);
+  }
+  await job;
+  return { file, etag };
+}
+
 // Trả đường dẫn file đã sinh (webp). Lỗi (file hỏng / không đọc được) → ném lỗi để route trả file gốc.
 export async function ensureThumb(srcPath: string, kind: "image" | "poster", width: number): Promise<{ file: string; etag: string }> {
   const stat = await fs.stat(srcPath);

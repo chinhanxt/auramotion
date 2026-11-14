@@ -5,6 +5,11 @@ export function thumbUrl(url: string, w: number): string {
   return isMedia(url) ? `${url}?w=${w}` : url;
 }
 
+// Bản video nhẹ để xem trước (360p); xem phóng to / tải về vẫn dùng URL gốc.
+export function liteUrl(url: string): string {
+  return isMedia(url) ? `${url}?lite=1` : url;
+}
+
 export function posterUrl(url: string, w: number): string {
   return isMedia(url) ? `${url}?poster=${w}` : url;
 }
