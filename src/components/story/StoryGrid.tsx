@@ -7,6 +7,7 @@ import { useRealtime, useStoryEvents } from "@/components/realtime/Events";
 import { AuraBar, Badge, Empty, Notice } from "@/components/ui/Bits";
 import { Spinner } from "@/components/ui/Button";
 import { SmartVideo } from "@/components/ui/Media";
+import { thumbUrl } from "@/lib/media-url";
 import { STORY_ACTIVE, STORY_STATUS_LABEL, api, isNotFound, isVideoUrl, type StoryItem, type StoryStatus } from "@/lib/api-client";
 
 type Page = { items: StoryItem[]; nextCursor: string | null };
@@ -34,7 +35,7 @@ const StoryCard = memo(function StoryCard({ story, order }: { story: StoryItem; 
           isVideoUrl(story.cover) ? (
             <SmartVideo src={story.cover} mode="hover" hovering className="absolute inset-0" />
           ) : (
-            <img src={story.cover} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={thumbUrl(story.cover, 480)} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
           )
         ) : (
           <div className={active ? "skel skel-aura absolute inset-0" : "absolute inset-0 bg-[radial-gradient(90%_80%_at_20%_10%,rgba(124,92,255,.35),transparent_60%),radial-gradient(80%_80%_at_90%_90%,rgba(255,79,216,.25),transparent_60%)]"} />

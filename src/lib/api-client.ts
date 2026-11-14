@@ -449,6 +449,21 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+// GET có nhớ tạm trong trình duyệt (catalog, chủ đề…): chuyển tab / quay lại studio không phải chờ mạng lại.
+// Hết hạn sau ttl; lỗi thì bỏ khỏi bộ nhớ để lần sau thử lại. Gọi invalidateApiCache() sau khi đổi gói / mua Credit.
+const apiCache = new Map<string, { at: number; p: Promise<unknown> }>();
+export function apiCached<T>(url: string, ttlMs = 60_000): Promise<T> {
+  const hit = apiCache.get(url);
+  if (hit && Date.now() - hit.at < ttlMs) return hit.p as Promise<T>;
+  const p = api<T>(url);
+  apiCache.set(url, { at: Date.now(), p });
+  p.catch(() => apiCache.delete(url));
+  return p;
+}
+export function invalidateApiCache(prefix = ""): void {
+  for (const k of apiCache.keys()) if (k.startsWith(prefix)) apiCache.delete(k);
+}
+
 export function postJson<T>(url: string, data: unknown, signal?: AbortSignal): Promise<T> {
   return api<T>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), signal });
 }

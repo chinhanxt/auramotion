@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, postJson, type Catalog, type CatalogModel, type CatalogPreset, type CatalogSkill, type CatalogPlan } from "@/lib/api-client";
+import { api, apiCached, postJson, type Catalog, type CatalogModel, type CatalogPreset, type CatalogSkill, type CatalogPlan } from "@/lib/api-client";
 
 export type StoryCatalog = {
   skills: CatalogSkill[];
@@ -20,9 +20,9 @@ export function useStoryCatalog() {
     let cancelled = false;
     (async () => {
       const [story, image, video] = await Promise.all([
-        api<Catalog>("/api/catalog?kind=story").catch(() => null),
-        api<Catalog>("/api/catalog?kind=image").catch(() => null),
-        api<Catalog>("/api/catalog?kind=video").catch(() => null),
+        apiCached<Catalog>("/api/catalog?kind=story").catch(() => null),
+        apiCached<Catalog>("/api/catalog?kind=image").catch(() => null),
+        apiCached<Catalog>("/api/catalog?kind=video").catch(() => null),
       ]);
       if (cancelled) return;
       const presets = [...(story?.presets ?? []), ...(image?.presets ?? []), ...(video?.presets ?? [])].filter(

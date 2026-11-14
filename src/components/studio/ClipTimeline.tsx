@@ -6,6 +6,7 @@ import { Slider } from "@/components/ui/Controls";
 import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import type { PickedClip } from "./ClipPicker";
+import { posterUrl, thumbUrl } from "@/lib/media-url";
 
 export type TimelineClip = PickedClip & {
   key: string;
@@ -133,9 +134,9 @@ export function ClipStrip({
               style={{ width: `clamp(76px, ${sec * 22}px, 220px)`, "--i": i } as React.CSSProperties}
             >
               {c.kind === "image" ? (
-                <img src={c.url} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+                <img src={thumbUrl(c.url, 240)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
               ) : (
-                <video src={`${c.url}#t=0.5`} muted playsInline preload="metadata" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+                <img src={posterUrl(c.url, 240)} alt="" loading="lazy" decoding="async" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
               )}
               <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
               <span className="absolute top-1.5 left-2 text-[11px] font-bold text-white tabular-nums">{i + 1}</span>

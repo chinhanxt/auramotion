@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { storagePath } from "@/lib/storage";
+import { ensureThumb, snapWidth } from "@/lib/thumb";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -52,11 +53,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
   const stat = await fs.stat(filePath).catch(() => null);
   if (!stat?.isFile()) return notFound();
 
+  // Ảnh thu nhỏ / khung hình xem trước: sinh 1 lần rồi cache vĩnh viễn (URL gốc bất biến).
+  const url = new URL(req.url);
+  const ext = path.extname(filePath).toLowerCase();
+  const isVideo = ext === ".mp4" || ext === ".webm";
+  const w = snapWidth(url.searchParams.get("w") ?? url.searchParams.get("poster"));
+  if (w && ((!isVideo && url.searchParams.has("w") && CONTENT_TYPES[ext]?.startsWith("image/")) || (isVideo && url.searchParams.has("poster")))) {
+    try {
+      const { file, etag } = await ensureThumb(filePath, isVideo ? "poster" : "image", w);
+      const h = { "Cache-Control": "public, max-age=31536000, immutable", ETag: etag, "Content-Type": "image/webp", "X-Content-Type-Options": "nosniff" };
+      if (req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: h });
+      const st = await fs.stat(file);
+      return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, { status: 200, headers: { ...h, "Content-Length": String(st.size) } });
+    } catch (err) {
+      console.warn(`[media] không tạo được ảnh thu nhỏ ${key.join("/")}: ${(err as Error).message.slice(0, 160)}`);
+    }
+  }
+
   const size = stat.size;
   const headers = new Headers({
     "Content-Type": CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream",
     "Accept-Ranges": "bytes",
-    "Cache-Control": "public, max-age=86400",
+    "Cache-Control": "public, max-age=604800",
     "X-Content-Type-Options": "nosniff",
   });
 

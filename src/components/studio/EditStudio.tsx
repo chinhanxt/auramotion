@@ -12,7 +12,7 @@ import { Icon, type IconName } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Overlay";
 import { Segmented } from "@/components/ui/Segmented";
 import { useToast } from "@/components/ui/Toast";
-import { ApiError, api, planLabel, postJson, ratioCss, type Catalog, type JobItem } from "@/lib/api-client";
+import { ApiError, api, apiCached, planLabel, postJson, ratioCss, type Catalog, type JobItem } from "@/lib/api-client";
 import { ClipPicker, type PickedClip } from "./ClipPicker";
 import { ClipInspector, ClipStrip, MAX_CLIPS, clipError, clipSeconds, moveItem, type TimelineClip } from "./ClipTimeline";
 import { GenerateButton, RatioShape } from "./Composer";
@@ -110,7 +110,7 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
     (async () => {
       try {
         const [cat, saved] = await Promise.all([
-          api<Catalog>("/api/catalog?kind=assemble"),
+          apiCached<Catalog>("/api/catalog?kind=assemble"),
           fromJobId ? api<SavedParams>(`/api/jobs/${encodeURIComponent(fromJobId)}/params`).catch(() => null) : null,
         ]);
         if (cancelled) return;

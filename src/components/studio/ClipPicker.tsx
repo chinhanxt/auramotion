@@ -5,6 +5,7 @@ import { Empty, Notice } from "@/components/ui/Bits";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { SmartVideo } from "@/components/ui/Media";
+import { thumbUrl } from "@/lib/media-url";
 import { Segmented } from "@/components/ui/Segmented";
 import { api, type JobItem } from "@/lib/api-client";
 
@@ -82,7 +83,7 @@ export function ClipPicker({ onAdd, columns = "grid-cols-3 sm:grid-cols-4 lg:gri
             style={{ "--i": i % 18 } as React.CSSProperties}
           >
             {clipKind === "image" ? (
-              <img src={url} alt={job.prompt} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+              <img src={thumbUrl(url, 320)} alt={job.prompt} loading="lazy" decoding="async" className="h-full w-full object-cover" />
             ) : (
               <SmartVideo src={url} hovering={hover === url} className="h-full w-full" />
             )}

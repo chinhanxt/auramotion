@@ -13,7 +13,7 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Overlay";
 import { useToast } from "@/components/ui/Toast";
-import { ApiError, api, planLabel, postJson, type Catalog, type CatalogModel, type JobItem } from "@/lib/api-client";
+import { ApiError, api, apiCached, planLabel, postJson, type Catalog, type CatalogModel, type JobItem } from "@/lib/api-client";
 import { AiWriteControl, AspectMenu, AutoTextarea, GenerateButton, RATIO_LABEL, RatioShape, ToolButton } from "./Composer";
 import { ModelList, ModelPicker } from "./ModelPicker";
 import { describeError, toApiError, useErrorToast } from "./errors";
@@ -167,7 +167,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
     (async () => {
       try {
         const [cat, saved] = await Promise.all([
-          api<Catalog>(`/api/catalog?kind=${kind}`),
+          apiCached<Catalog>(`/api/catalog?kind=${kind}`),
           fromJobId ? api<SavedParams>(`/api/jobs/${encodeURIComponent(fromJobId)}/params`).catch(() => null) : null,
         ]);
         if (cancelled) return;

@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { MenuItem, Modal, Popover } from "@/components/ui/Overlay";
 import { useToast } from "@/components/ui/Toast";
 import { api, type JobItem } from "@/lib/api-client";
+import { thumbUrl } from "@/lib/media-url";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -56,7 +57,7 @@ export function LibraryImagePicker({ open, onClose, onPick }: { open: boolean; o
             className="press reveal group relative aspect-square overflow-hidden rounded-m1 bg-s2 hairline"
             style={{ "--i": i } as React.CSSProperties}
           >
-            <img src={t.url} alt={t.prompt} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            <img src={thumbUrl(t.url, 240)} alt={t.prompt} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
           </button>
         ))}
       </div>
@@ -102,7 +103,7 @@ export function RefSlot({
       <input ref={input} type="file" accept={TYPES.join(",")} className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
       {value ? (
         <div className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-m1 hairline">
-          <img src={value} alt={label} className="h-full w-full object-cover" />
+          <img src={thumbUrl(value, 240)} alt={label} className="h-full w-full object-cover" />
           <button
             type="button"
             aria-label={`Bỏ ${label.toLowerCase()}`}

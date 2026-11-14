@@ -50,7 +50,7 @@ export function CoverMedia({ image, video }: { image?: string; video?: string })
   return video ? (
     <SmartVideo key={video} src={video} mode="inview" preload="none" plain className="absolute inset-0" onError={() => setFailed(video)} />
   ) : (
-    <FadeImage key={src} src={src} alt="" skeleton={false} className="absolute inset-0" onError={() => setFailed(src)} />
+    <FadeImage key={src} src={src} w={240} alt="" skeleton={false} className="absolute inset-0" onError={() => setFailed(src)} />
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { posterUrl, thumbSrcSet, thumbUrl } from "@/lib/media-url";
 import { cx } from "./cx";
 
 // Một IntersectionObserver dùng chung cho mọi media: tiết kiệm khi lưới có hàng trăm ô.
@@ -43,6 +44,7 @@ export function FadeImage({
   imgClassName,
   style,
   skeleton = true,
+  w = 480,
   onError,
 }: {
   src: string;
@@ -51,6 +53,8 @@ export function FadeImage({
   imgClassName?: string;
   style?: React.CSSProperties;
   skeleton?: boolean;
+  // Chiều rộng hiển thị (px): tải ảnh thu nhỏ vừa đủ (1x/2x) thay vì ảnh gốc.
+  w?: number;
   onError?: () => void;
 }) {
   const [loaded, setLoaded] = useState(false);
@@ -63,7 +67,8 @@ export function FadeImage({
       {!loaded && skeleton && <span className="skel absolute inset-0" aria-hidden="true" />}
       <img
         ref={ref}
-        src={src}
+        src={thumbUrl(src, w * 2)}
+        srcSet={thumbSrcSet(src, w)}
         alt={alt}
         loading="lazy"
         decoding="async"
@@ -83,7 +88,7 @@ export function SmartVideo({
   className,
   poster,
   hovering,
-  preload = "metadata",
+  preload = "none",
   plain,
   onReady,
   onError,
@@ -101,6 +106,8 @@ export function SmartVideo({
   const ref = useRef<HTMLVideoElement>(null);
   const visible = useInView(ref);
   const [ready, setReady] = useState(false);
+  // Khung hình đầu (nhỏ) hiện ngay, video chỉ tải khi rê chuột / đang trong màn hình và được phát.
+  const still = poster ?? posterUrl(src, 480);
 
   // Video có thể đã tải xong trước khi React gắn sự kiện (hydrate muộn).
   useEffect(() => {
@@ -128,10 +135,12 @@ export function SmartVideo({
   return (
     <span className={cx("block overflow-hidden", !plain && "bg-s2", !POSITIONED.test(className ?? "") && "relative", className)}>
       {!ready && !plain && <span className="skel absolute inset-0" aria-hidden="true" />}
+      {still !== src && (
+        <img src={still} alt="" loading="lazy" decoding="async" aria-hidden="true" className={cx("absolute inset-0 h-full w-full object-cover transition-opacity duration-500", ready && "opacity-0")} />
+      )}
       <video
         ref={ref}
         src={`${src}#t=0.1`}
-        poster={poster}
         muted
         loop
         playsInline
