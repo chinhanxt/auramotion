@@ -43,6 +43,11 @@ const CAMERA_SUBJECT: Record<string, string> = {
   "cam-slow-pan": "Ha Long Bay karst islands in soft morning mist with a wooden junk boat sailing.",
   "cam-fpv-glide": "Low over a winding river through a misty jungle canyon at dawn.",
   "cam-orbit-360": "A vintage red Vespa parked on a cobblestone street with bougainvillea above.",
+  "cam-zoom-in": "A lone wooden boat on a calm misty lake at dawn with distant mountains.",
+  "cam-zoom-out": "A single paper lantern glowing on a quiet stone bridge at dusk.",
+  "cam-pan-left": "A row of colourful shophouses along a canal in Hoi An in warm afternoon light.",
+  "cam-pan-right": "A wide terraced rice field curving along a green hillside under soft clouds.",
+  "cam-static": "A steaming cup of Vietnamese coffee on a wooden table by a rainy window.",
 };
 
 async function main() {
