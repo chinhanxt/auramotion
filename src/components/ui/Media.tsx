@@ -44,7 +44,7 @@ export function FadeImage({
   imgClassName,
   style,
   skeleton = true,
-  w = 480,
+  w = 360,
   onError,
 }: {
   src: string;
@@ -107,7 +107,7 @@ export function SmartVideo({
   const visible = useInView(ref);
   const [ready, setReady] = useState(false);
   // Khung hình đầu (nhỏ) hiện ngay, video chỉ tải khi rê chuột / đang trong màn hình và được phát.
-  const still = poster ?? posterUrl(src, 480);
+  const still = poster ?? posterUrl(src, 360);
 
   // Video có thể đã tải xong trước khi React gắn sự kiện (hydrate muộn).
   useEffect(() => {

@@ -7,7 +7,7 @@ import sharp from "sharp";
 // Ảnh thu nhỏ (`?w=`) và khung hình xem trước của video (`?poster=`): sinh 1 lần, lưu trên đĩa, phục vụ với cache dài hạn.
 // File gốc luôn bất biến theo URL (đường dẫn có mã job / mốc thời gian) nên khóa cache = đường dẫn + mtime + size + cỡ.
 
-export const THUMB_WIDTHS = [160, 240, 320, 480, 640, 960, 1280] as const;
+export const THUMB_WIDTHS = [160, 240, 320, 360, 480, 640, 960, 1280] as const;
 const MAX_PARALLEL = 3;
 
 export function snapWidth(raw: string | null): number | null {
