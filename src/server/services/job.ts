@@ -1,3 +1,4 @@
+import { warmMedia } from "@/lib/thumb";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -432,6 +433,7 @@ export async function finishJob(
     await deleteByUrls(urls);
     throw err;
   }
+  await warmMedia(urls).catch(() => undefined);
   const done = await db.$transaction(async (tx) => {
     // Đọc lại params trong transaction: trace có thể đã thêm mốc sau lúc đọc job ở trên.
     const current = await tx.job.findUnique({ where: { id: jobId }, select: { params: true } });

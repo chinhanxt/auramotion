@@ -137,7 +137,7 @@ export function SmartVideo({
     <span className={cx("block overflow-hidden", !plain && "bg-s2", !POSITIONED.test(className ?? "") && "relative", className)}>
       {!ready && !plain && <span className="skel absolute inset-0" aria-hidden="true" />}
       {still !== src && (
-        <img src={still} srcSet={stillSet} sizes="(min-width:1024px) 420px, 50vw" alt="" loading="lazy" decoding="async" aria-hidden="true" className={cx("absolute inset-0 h-full w-full object-cover transition-opacity duration-500", ready && "opacity-0")} />
+        <img src={still} srcSet={stillSet} sizes="(min-width:1024px) 420px, 50vw" alt="" loading="lazy" decoding="async" aria-hidden="true" onError={(e) => (e.currentTarget.style.display = "none")} className={cx("absolute inset-0 h-full w-full object-cover transition-opacity duration-500", ready && "opacity-0")} />
       )}
       <video
         ref={ref}

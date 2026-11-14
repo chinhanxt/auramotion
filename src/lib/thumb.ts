@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { storagePath } from "./storage";
 
 // Ảnh thu nhỏ (`?w=`) và khung hình xem trước của video (`?poster=`): sinh 1 lần, lưu trên đĩa, phục vụ với cache dài hạn.
 // File gốc luôn bất biến theo URL (đường dẫn có mã job / mốc thời gian) nên khóa cache = đường dẫn + mtime + size + cỡ.
@@ -39,7 +40,7 @@ const inflight = new Map<string, Promise<string>>();
 
 function ffmpegFrame(src: string, out: string, width: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = spawn("ffmpeg", ["-v", "error", "-y", "-ss", "0.3", "-i", src, "-frames:v", "1", "-vf", `scale=${width}:-2`, "-c:v", "libwebp", "-quality", "70", out], {
+    const p = spawn("ffmpeg", ["-v", "error", "-y", "-ss", "0.3", "-i", src, "-frames:v", "1", "-f", "webp", "-vf", `scale=${width}:-2`, "-c:v", "libwebp", "-quality", "70", out], {
       stdio: ["ignore", "ignore", "pipe"],
     });
     let err = "";
@@ -125,4 +126,38 @@ export async function ensureThumb(srcPath: string, kind: "image" | "poster", wid
   }
   await job;
   return { file, etag };
+}
+
+// Bản nhẹ đã có sẵn chưa (không sinh mới).
+export async function liteIfReady(srcPath: string): Promise<{ file: string; etag: string } | null> {
+  const stat = await fs.stat(srcPath);
+  const key = createHash("sha1").update(`${srcPath}|${stat.mtimeMs}|${stat.size}|lite540`).digest("hex");
+  const file = path.join(thumbDir(), key.slice(0, 2), `${key}.mp4`);
+  return (await fs.stat(file).then((s) => s.size > 0, () => false)) ? { file, etag: `"${key.slice(0, 20)}"` } : null;
+}
+
+// Sinh trước ảnh thu nhỏ / khung hình / bản nhẹ ngay khi job xong, để người dùng mở ra là có.
+// Chỉ chờ phần nhanh (khung hình / ảnh 960); bản video nhẹ chạy nền.
+export async function warmMedia(urls: string[]): Promise<void> {
+  const jobs: Promise<unknown>[] = [];
+  for (const u of urls) {
+    if (!u.startsWith("/media/")) continue;
+    let file: string;
+    try {
+      file = storagePath(decodeURIComponent(u.slice("/media/".length)));
+    } catch {
+      continue;
+    }
+    const ext = path.extname(file).toLowerCase();
+    if (ext === ".mp4" || ext === ".webm") {
+      jobs.push(ensureThumb(file, "poster", 640).catch(() => null));
+      void ensureThumb(file, "poster", 360).catch(() => null);
+      void ensureThumb(file, "poster", 960).catch(() => null);
+      void ensureLiteVideo(file).catch(() => null);
+    } else if ([".jpg", ".jpeg", ".png", ".webp"].includes(ext)) {
+      jobs.push(ensureThumb(file, "image", 960).catch(() => null));
+      void ensureThumb(file, "image", 360).catch(() => null);
+    }
+  }
+  await Promise.all(jobs);
 }

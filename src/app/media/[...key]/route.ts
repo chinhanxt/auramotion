@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { storagePath } from "@/lib/storage";
-import { ensureLiteVideo, ensureThumb, snapWidth } from "@/lib/thumb";
+import { ensureLiteVideo, ensureThumb, liteIfReady, snapWidth } from "@/lib/thumb";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -76,10 +76,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
   let immutable: string | null = null;
   if (isVideo && url.searchParams.get("lite") === "1") {
     try {
-      const lite = await ensureLiteVideo(filePath);
-      servePath = lite.file;
-      serveStat = await fs.stat(lite.file);
-      immutable = lite.etag;
+      // Chưa có bản nhẹ: không bắt người xem chờ ffmpeg, phát ngay file gốc (Range) và sinh bản nhẹ nền cho lần sau.
+      const lite = await liteIfReady(filePath);
+      if (lite) {
+        servePath = lite.file;
+        serveStat = await fs.stat(lite.file);
+        immutable = lite.etag;
+      } else void ensureLiteVideo(filePath).catch(() => null);
     } catch (err) {
       console.warn(`[media] không tạo được bản nhẹ ${key.join("/")}: ${(err as Error).message.slice(0, 160)}`);
     }
