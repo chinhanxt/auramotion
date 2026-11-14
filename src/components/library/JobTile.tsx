@@ -18,7 +18,7 @@ export function downloadName(url: string, index: number) {
 
 function ActionBtn({ icon, label, onClick, href, download }: { icon: IconName; label: string; onClick?: () => void; href?: string; download?: string }) {
   const cls =
-    "press flex h-8 w-8 items-center justify-center rounded-[9px] bg-black/55 text-white backdrop-blur-md hover:bg-black/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,.12)]";
+    "press pointer-events-auto flex h-8 w-8 items-center justify-center rounded-[9px] bg-black/55 text-white backdrop-blur-md hover:bg-black/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,.12)]";
   if (href) {
     return download ? (
       <a href={href} download={download} aria-label={label} data-tip={label} data-tip-side="bottom" className={cls} onClick={(e) => e.stopPropagation()}>
@@ -80,7 +80,7 @@ export const JobTile = memo(function JobTile({
 
   return (
     <div
-      className="reveal group/tile relative"
+      className="reveal group/tile @container/tile relative"
       style={{ "--i": order } as React.CSSProperties}
       onPointerEnter={(e) => e.pointerType === "mouse" && setHover(true)}
       onPointerLeave={() => setHover(false)}
@@ -163,7 +163,7 @@ export const JobTile = memo(function JobTile({
       {(done || (!active && actions.includes("delete"))) && (
         <div
           className={cx(
-            "absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity duration-[160ms] group-hover/tile:opacity-100 group-focus-within/tile:opacity-100",
+            "pointer-events-none absolute top-2 right-2 left-2 flex flex-wrap justify-end gap-1 opacity-0 transition-opacity duration-[160ms] group-hover/tile:opacity-100 group-focus-within/tile:opacity-100",
             done ? "[@media(hover:none)]:hidden" : "[@media(hover:none)]:opacity-100",
           )}
         >

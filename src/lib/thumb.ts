@@ -57,12 +57,12 @@ function ffmpegFrame(src: string, out: string, width: number): Promise<void> {
   });
 }
 
-// Bản video nhẹ để xem trước (360p, 20 fps, không tiếng): gốc 3–7 MB → ~0,2–0,5 MB.
+// Bản video nhẹ để xem trước (540p, 24 fps, không tiếng).
 function ffmpegLite(src: string, out: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const p = spawn(
       "ffmpeg",
-      ["-v", "error", "-y", "-i", src, "-an", "-vf", "scale='min(360,iw)':-2,fps=20", "-c:v", "libx264", "-preset", "veryfast", "-crf", "33", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", out],
+      ["-v", "error", "-y", "-i", src, "-an", "-vf", "scale='min(540,iw)':-2,fps=24", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", out],
       { stdio: ["ignore", "ignore", "pipe"] },
     );
     let err = "";
@@ -83,7 +83,7 @@ function ffmpegLite(src: string, out: string): Promise<void> {
 // Bản video nhẹ: trả đường dẫn file mp4 đã sinh (route /media tự lo Range).
 export async function ensureLiteVideo(srcPath: string): Promise<{ file: string; etag: string }> {
   const stat = await fs.stat(srcPath);
-  const key = createHash("sha1").update(`${srcPath}|${stat.mtimeMs}|${stat.size}|lite`).digest("hex");
+  const key = createHash("sha1").update(`${srcPath}|${stat.mtimeMs}|${stat.size}|lite540`).digest("hex");
   const file = path.join(thumbDir(), key.slice(0, 2), `${key}.mp4`);
   const etag = `"${key.slice(0, 20)}"`;
   if (await fs.stat(file).then((s) => s.size > 0, () => false)) return { file, etag };

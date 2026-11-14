@@ -15,10 +15,10 @@ export function WrittenLine({ written, ms, className }: { written: WrittenInfo; 
     <span className={cx("inline-flex min-w-0 items-center gap-1 text-[11px] font-medium", className)}>
       <Icon name="sparkle" size={11} className="shrink-0 text-accent" />
       <span className="truncate">{written.skillName}</span>
-      <span className="inline-flex shrink-0 items-center gap-1">
+      <span className="inline-flex min-w-0 shrink items-center gap-1 overflow-hidden">
         <span className="opacity-60">·</span>
         <ProviderLogo provider={written.provider} model={written.model} size={11} plain />
-        <span className="opacity-60">{providerLabel(written.provider)}</span>
+        <span className="truncate opacity-60">{providerLabel(written.provider)}</span>
       </span>
       {ms && written.ms > 0 && <span className="shrink-0 tabular-nums opacity-60">· {(written.ms / 1000).toFixed(1)}s</span>}
     </span>
@@ -83,10 +83,10 @@ export function JobPrompt({
               if (canToggle) flip();
             }}
             data-tip={canToggle ? (showIdea ? "Xem prompt AI viết" : "Xem ý tưởng gốc") : undefined}
-            className={cx("pointer-events-none flex max-w-full items-center gap-1 rounded-full group-hover/tile:pointer-events-auto bg-black/45 px-2 py-0.5 text-white/85 backdrop-blur-md", canToggle && "press hover:bg-black/70")}
+            className={cx("pointer-events-none flex max-w-full min-w-0 items-center gap-1 overflow-hidden rounded-full group-hover/tile:pointer-events-auto bg-black/45 px-2 py-0.5 text-white/85 backdrop-blur-md", canToggle && "press hover:bg-black/70")}
           >
             <WrittenLine written={written} />
-            {canToggle && <span className="shrink-0 text-[10px] font-semibold text-white/55">{showIdea ? "Ý tưởng" : "Prompt"}</span>}
+            {canToggle && <span className="hidden shrink-0 text-[10px] font-semibold text-white/55 @[210px]/tile:inline">{showIdea ? "Ý tưởng" : "Prompt"}</span>}
           </button>
         )}
         <p className="line-clamp-2 text-[12px] leading-snug text-white/90">{text}</p>

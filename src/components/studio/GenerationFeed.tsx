@@ -1,13 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { JobTile, type TileAction } from "@/components/library/JobTile";
 import { useInfiniteSentinel } from "@/components/library/useJobFeed";
 import type { LightboxEntry } from "@/components/library/Lightbox";
 import { Spinner } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/Overlay";
 import { useToast } from "@/components/ui/Toast";
+import { Stage } from "./Stage";
 import { ACTIVE_STATUSES, api, jobAspect, type JobItem } from "@/lib/api-client";
 
 const Lightbox = dynamic(() => import("@/components/library/Lightbox"), { ssr: false });
@@ -57,12 +58,15 @@ export function GenerationFeed({
   onUseRef,
   empty,
   skeletonRatio,
+  stage = false,
 }: {
   feed: Feed;
   actions: TileAction[];
   onUseRef?: (url: string) => void;
   empty: React.ReactNode;
   skeletonRatio?: string;
+  // Màn xem giữa trang cho job vừa tạo (đang chạy → xong).
+  stage?: boolean;
 }) {
   const toast = useToast();
   const tiles = useMemo(() => expandTiles(feed.items), [feed.items]);
@@ -71,6 +75,15 @@ export function GenerationFeed({
   const [confirm, setConfirm] = useState<JobItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const sentinel = useInfiniteSentinel(feed.loadMore, Boolean(feed.nextCursor) && !feed.loadingMore, feed.items.length);
+
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const dismissed = useRef(new Set<string>());
+  useEffect(() => {
+    if (!stage) return;
+    const a = feed.items.find((j) => ACTIVE_STATUSES.includes(j.status) && !dismissed.current.has(j.id));
+    if (a) setFocusId((cur) => (cur === a.id ? cur : a.id));
+  }, [stage, feed.items]);
+  const focus = stage && focusId ? feed.items.find((j) => j.id === focusId) : undefined;
 
   // Giữ danh sách trong ref để hàm mở ổn định: cập nhật một ô không làm render lại cả lưới.
   const listRef = useRef(viewable);
@@ -103,6 +116,17 @@ export function GenerationFeed({
 
   return (
     <>
+      {focus && (
+        <Stage
+          key={focus.id}
+          job={focus}
+          onOpen={onOpen}
+          onClose={() => {
+            dismissed.current.add(focus.id);
+            setFocusId(null);
+          }}
+        />
+      )}
       <div className="justified">
         {tiles.map((t, i) => {
           const a = ratioNum(jobAspect(t.job));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { liteUrl, posterUrl, thumbSrcSet, thumbUrl } from "@/lib/media-url";
+import { liteUrl, posterSrcSet, posterUrl, thumbSrcSet, thumbUrl } from "@/lib/media-url";
 import { cx } from "./cx";
 
 // Một IntersectionObserver dùng chung cho mọi media: tiết kiệm khi lưới có hàng trăm ô.
@@ -107,7 +107,8 @@ export function SmartVideo({
   const visible = useInView(ref);
   const [ready, setReady] = useState(false);
   // Khung hình đầu (nhỏ) hiện ngay, video chỉ tải khi rê chuột / đang trong màn hình và được phát.
-  const still = poster ?? posterUrl(src, 360);
+  const still = poster ?? posterUrl(src, 640);
+  const stillSet = poster ? undefined : posterSrcSet(src);
 
   // Video có thể đã tải xong trước khi React gắn sự kiện (hydrate muộn).
   useEffect(() => {
@@ -136,7 +137,7 @@ export function SmartVideo({
     <span className={cx("block overflow-hidden", !plain && "bg-s2", !POSITIONED.test(className ?? "") && "relative", className)}>
       {!ready && !plain && <span className="skel absolute inset-0" aria-hidden="true" />}
       {still !== src && (
-        <img src={still} alt="" loading="lazy" decoding="async" aria-hidden="true" className={cx("absolute inset-0 h-full w-full object-cover transition-opacity duration-500", ready && "opacity-0")} />
+        <img src={still} srcSet={stillSet} sizes="(min-width:1024px) 420px, 50vw" alt="" loading="lazy" decoding="async" aria-hidden="true" className={cx("absolute inset-0 h-full w-full object-cover transition-opacity duration-500", ready && "opacity-0")} />
       )}
       <video
         ref={ref}

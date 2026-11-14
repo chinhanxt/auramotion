@@ -373,6 +373,7 @@ export function Workspace({ kind, fromJobId, initialPrompt, initialFrame }: { ki
           <Notice tone="danger">{loadError}</Notice>
         ) : (
           <GenerationFeed
+            stage
             feed={feed}
             skeletonRatio={kind === "image" ? "1:1" : "9:16"}
             actions={kind === "image" ? IMAGE_ACTIONS : VIDEO_ACTIONS}
