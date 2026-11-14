@@ -250,6 +250,108 @@ def cmd_proxy(action, args):
           "accountsReady": status.get("accounts_ready")})
 
 
+# ---- Chế độ 1 tài khoản (không có switcher): đọc token agy đang đăng nhập (tệp hoặc keyring) và hỏi quota ----
+QUOTA_HOSTS = ["https://daily-cloudcode-pa.googleapis.com", "https://cloudcode-pa.googleapis.com"]
+AGY_TOKEN_FILE = os.path.expanduser("~/.gemini/antigravity-cli/antigravity-oauth-token")
+
+
+def solo_token():
+    raw = None
+    if os.path.isfile(AGY_TOKEN_FILE):
+        raw = open(AGY_TOKEN_FILE, encoding="utf-8").read()
+    else:
+        bus = f"/run/user/{os.getuid()}/bus"
+        if not os.environ.get("DBUS_SESSION_BUS_ADDRESS") and os.path.exists(bus):
+            os.environ["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=" + bus
+        try:
+            import gi  # type: ignore
+            gi.require_version("Secret", "1")
+            from gi.repository import Secret  # type: ignore
+            schema = Secret.Schema.new("org.freedesktop.Secret.Generic", Secret.SchemaFlags.DONT_MATCH_NAME,
+                                       {"service": Secret.SchemaAttributeType.STRING, "username": Secret.SchemaAttributeType.STRING})
+            raw = Secret.password_lookup_sync(schema, {"service": "gemini", "username": "antigravity"}, None)
+        except Exception:
+            raw = None
+    if not raw:
+        return None, None
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        return None, None
+    tok = d.get("token") or d
+    return tok.get("access_token"), d.get("id_token_email") or d.get("email")
+
+
+def _post(url, token, body):
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={
+        "Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "antigravity/1.1.12"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        return json.loads(r.read().decode())
+
+
+def solo_quota(token):
+    """Trả {group: (pct còn lại, reset)}. Tóm tắt (5h/tuần) cho nhóm Claude/GPT; nhóm còn thiếu (thường Gemini của tài khoản Free)
+    lấy từ hạn mức theo model, gộp 5h = tuần."""
+    out = {}
+    for host in QUOTA_HOSTS:
+        try:
+            data = _post(host + "/v1internal:retrieveUserQuotaSummary", token, {})
+        except Exception:
+            data = None
+        for g in (data or {}).get("groups") or []:
+            name = (g.get("displayName") or "").lower()
+            fam = "claude" if ("claude" in name or "gpt" in name) else "gemini" if "gemini" in name else None
+            for b in g.get("buckets", []):
+                win = ((b.get("window") or "") + (b.get("bucketId") or "")).lower()
+                kind = "5h" if "5h" in win else "weekly" if "weekly" in win else None
+                if fam and kind:
+                    out[f"{fam}_{kind}"] = (round((b.get("remainingFraction", 1.0) or 0.0) * 100, 2), b.get("resetTime"))
+        if all(f"{f}_5h" in out for f in ("claude", "gemini")):
+            return out
+        try:
+            info = _post(host + "/v1internal:loadCodeAssist", token,
+                         {"metadata": {"ideType": "IDE_UNSPECIFIED", "platform": "PLATFORM_UNSPECIFIED", "pluginType": "GEMINI"}})
+            proj = info.get("cloudaicompanionProject")
+            data = _post(host + "/v1internal:retrieveUserQuota", token, {"project": proj} if proj else {})
+        except Exception:
+            if out:
+                return out
+            continue
+        groups = {"claude": [], "gemini": []}
+        for b in data.get("buckets") or []:
+            mid = (b.get("modelId") or "").lower()
+            fam = "claude" if ("claude" in mid or "gpt" in mid) else "gemini" if mid.startswith("gemini") else None
+            if fam:
+                groups[fam].append((round((b.get("remainingFraction", 1.0) or 0.0) * 100, 2), b.get("resetTime")))
+        for fam, vals in groups.items():
+            if vals and f"{fam}_5h" not in out:
+                v = min(vals, key=lambda x: x[0])
+                out[f"{fam}_weekly"] = v
+                out[f"{fam}_5h"] = v
+        if out:
+            return out
+    return out
+
+
+def cmd_status_solo():
+    token, email = solo_token()
+    if not token:
+        fail("Chưa đăng nhập Google trên máy này (không có token agy)")
+    item = {"id": email or "agy", "email": email or "(tài khoản agy đang dùng)", "active": True, "status": "VALID", "quota": []}
+    try:
+        q = solo_quota(token)
+    except Exception as e:  # noqa: BLE001
+        q = {}
+        item["error"] = redact(e)
+    if q:
+        item["quota"] = [{"group": g, "pct": q[g][0], "resetAt": q[g][1]} for g in QUOTA_GROUPS if g in q]
+        item["minQuota"] = min(v[0] for v in q.values())
+    else:
+        item["status"] = "UNKNOWN"
+        item.setdefault("error", "Không đọc được quota (token hết hạn — chạy 1 prompt để agy làm mới)")
+    emit({"ok": True, "accounts": [item]})
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -260,6 +362,8 @@ def main():
             if cmd not in ("proxy-status", "proxy-start", "proxy-stop"):
                 fail(f"Lệnh không hỗ trợ: {cmd}")
             cmd_proxy(cmd, rest)
+        if cmd == "status" and not os.path.isfile(os.path.join(SWITCHER_DIR, "switcher.py")):
+            cmd_status_solo()
         sw = load_switcher()
         if cmd == "status":
             cmd_status(sw)

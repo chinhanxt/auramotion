@@ -129,7 +129,7 @@ function ProviderCard({
           </div>
         )}
         <div className="border-t border-line pt-3">
-          <HealthLine h={h} loading={loading} />
+          <HealthLine h={h} loading={loading} ready={!!installed} />
           {h?.lastError && st === "danger" && <p className="mt-1.5 line-clamp-2 text-xs break-words text-danger/85">{h.lastError}</p>}
         </div>
       </div>

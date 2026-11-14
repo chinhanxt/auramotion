@@ -39,13 +39,22 @@ export function Countdown({ until, prefix }: { until: number; prefix?: string })
   );
 }
 
-export function HealthLine({ h, loading }: { h?: ProviderHealth; loading?: boolean }) {
-  if (!h) return loading ? <Skeleton className="h-4 w-40" /> : <span className="text-xs text-dim">Chưa chạy</span>;
+export function HealthLine({ h, loading, ready }: { h?: ProviderHealth; loading?: boolean; ready?: boolean }) {
+  if (!h)
+    return loading ? (
+      <Skeleton className="h-4 w-40" />
+    ) : ready ? (
+      <Badge tone="ok" dot>
+        Sẵn sàng · chưa dùng
+      </Badge>
+    ) : (
+      <span className="text-xs text-dim">Chưa sẵn sàng</span>
+    );
   const st = providerState(h);
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
       <Badge tone={st === "ok" ? "ok" : st === "danger" ? "danger" : "neutral"} dot>
-        {st === "ok" ? "OK" : st === "danger" ? "Lỗi" : "Chưa chạy"}
+        {st === "ok" ? "OK" : st === "danger" ? "Lỗi" : ready ? "Sẵn sàng · chưa dùng" : "Chưa dùng"}
       </Badge>
       <span className="text-muted tabular-nums">
         <Icon name="clock" size={12} className="mr-1 inline -translate-y-px" />
