@@ -18,6 +18,7 @@ import { ClipInspector, ClipStrip, MAX_CLIPS, clipError, clipSeconds, moveItem, 
 import { GenerateButton, RatioShape } from "./Composer";
 import { describeError, toApiError, useErrorToast } from "./errors";
 import { GenerationFeed } from "./GenerationFeed";
+import { PreviewPlayer } from "./PreviewPlayer";
 import { MusicPicker } from "./MusicPicker";
 import { ScriptEditor, scriptError, splitLines } from "./ScriptEditor";
 import { VoicePicker, type VoiceValue } from "./VoicePicker";
@@ -102,8 +103,7 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
   const linesError = scriptError(script);
   const sel = clips.find((c) => c.key === selected) ?? null;
   const selIndex = sel ? clips.indexOf(sel) : -1;
-  const preview = sel ?? clips[0] ?? null;
-  const total = useMemo(() => clips.reduce((s, c) => s + clipSeconds(c), 0), [clips]);
+    const total = useMemo(() => clips.reduce((s, c) => s + clipSeconds(c), 0), [clips]);
 
   useEffect(() => {
     let cancelled = false;
@@ -296,23 +296,16 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
 
           {/* Xem trước */}
           <section className="relative flex items-center justify-center overflow-hidden rounded-m3 bg-[#050506] p-4 pt-14 hairline lg:min-h-[420px] lg:pt-4">
-            <div className="relative max-h-[52dvh] overflow-hidden rounded-m2 bg-s2 shadow-2xl" style={{ aspectRatio: ratioCss(aspect), height: "clamp(220px, 40dvh, 560px)", maxWidth: "100%" }}>
-              {preview ? (
-                preview.kind === "image" ? (
-                  <img key={preview.key} src={preview.url} alt="" className="blur-in h-full w-full object-cover" />
-                ) : (
-                  <video key={preview.key} src={`${preview.url}#t=${preview.in}`} muted loop autoPlay playsInline className="blur-in h-full w-full object-cover" />
-                )
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-6 text-center text-muted">
-                  <Icon name="film" size={26} />
-                  <span className="text-sm">Thêm clip để xem trước</span>
-                </div>
-              )}
-              {subtitles && lines[0] && (
-                <span className="absolute inset-x-3 bottom-[12%] text-center text-[13px] leading-snug font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,.9)]">{lines[0]}</span>
-              )}
-            </div>
+            <PreviewPlayer
+              clips={clips}
+              aspect={aspect}
+              lines={lines}
+              subtitles={subtitles}
+              musicUrl={catalog.music?.find((t) => t.id === musicId)?.file}
+              keepClipAudio={keepClipAudio}
+              selectedKey={selected}
+              onSelect={setSelected}
+            />
             <button
               type="button"
               onClick={() => setBin(true)}
