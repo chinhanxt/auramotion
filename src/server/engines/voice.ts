@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { putFile, storagePath } from "@/lib/storage";
 import { runCli } from "@/server/engines/cli";
@@ -34,6 +34,7 @@ const globalForVoice = globalThis as unknown as {
   voicePreviews?: Map<string, Promise<string>>;
 };
 const previewsInFlight = (globalForVoice.voicePreviews ??= new Map());
+const scriptsInFlight = new Map<string, Promise<ScriptPreview>>();
 
 export async function listVoices(): Promise<Voice[]> {
   const cached = globalForVoice.voiceList;
@@ -96,5 +97,51 @@ export async function previewVoice(voice: VoiceRef, text: string = SAMPLE_TEXT):
     .then(({ result }) => result)
     .finally(() => previewsInFlight.delete(key));
   previewsInFlight.set(key, job);
+  return job;
+}
+
+export type ScriptSegment = { text: string; start: number; end: number };
+export type ScriptPreview = { url: string; segments: ScriptSegment[] };
+export const MAX_SCRIPT_LINES = 30;
+const SCRIPT_TIMEOUT_MS = 480_000;
+
+// Đọc cả kịch bản (mỗi dòng 1 câu) đúng như lúc ghép: file wav + mốc giờ từng câu để xem thử khớp bản xuất.
+// Cùng giọng + cùng lời thì dùng lại file cũ.
+export async function previewScript(voice: VoiceRef, lines: string[]): Promise<ScriptPreview> {
+  if (!voice.preset && !voice.refPath) throw new EngineError("BAD_INPUT", "Cần chọn giọng hoặc audio mẫu");
+  const clean = lines.map((l) => l.trim()).filter(Boolean);
+  if (clean.length === 0 || clean.length > MAX_SCRIPT_LINES) throw new EngineError("BAD_INPUT", `Kịch bản 1–${MAX_SCRIPT_LINES} câu`);
+  const id = voice.refPath ? { ref: voice.refPath } : { preset: voice.preset };
+  const hash = createHash("sha1").update(JSON.stringify({ ...id, lines: clean })).digest("hex");
+  const key = `previews/s-${hash}.wav`;
+  const segKey = `previews/s-${hash}.json`;
+  const read = async (): Promise<ScriptPreview | null> => {
+    if (!(await exists(storagePath(key))) || !(await exists(storagePath(segKey)))) return null;
+    return { url: `/media/${key}`, segments: JSON.parse(await readFile(storagePath(segKey), "utf8")) as ScriptSegment[] };
+  };
+  const cached = await read();
+  if (cached) return cached;
+
+  const flightKey = `script:${hash}`;
+  const running = scriptsInFlight.get(flightKey);
+  if (running) return running;
+  const job = runCli({
+    bin: vieneuBin(),
+    args: (dir) => ["-f", path.join(dir, "s.txt"), "-o", path.join(dir, "s.wav"), "--segments", path.join(dir, "s.json"), ...(voice.refPath ? ["--ref", voice.refPath] : ["--voice", voice.preset!])],
+    setup: (dir) => writeFile(path.join(dir, "s.txt"), clean.join("\n"), "utf8"),
+    timeoutMs: SCRIPT_TIMEOUT_MS,
+    collect: async (dir) => {
+      const wav = path.join(dir, "s.wav");
+      const seg = path.join(dir, "s.json");
+      if (!(await exists(wav)) || !(await exists(seg))) throw new EngineError("NO_AUDIO", "vieneu-say không tạo file âm thanh");
+      const segments = JSON.parse(await readFile(seg, "utf8")) as ScriptSegment[];
+      await putFile(wav, key);
+      await writeFile(storagePath(segKey), JSON.stringify(segments));
+      return { url: `/media/${key}`, segments };
+    },
+  })
+    .then(({ result }) => result)
+    .finally(() => scriptsInFlight.delete(flightKey));
+  scriptsInFlight.set(flightKey, job);
   return job;
 }

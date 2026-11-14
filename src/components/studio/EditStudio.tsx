@@ -5,6 +5,7 @@ import type { TileAction } from "@/components/library/JobTile";
 import { useJobFeed } from "@/components/library/useJobFeed";
 import { useCreditBalance } from "@/components/realtime/Events";
 import { Empty, Notice } from "@/components/ui/Bits";
+import { Spinner } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Controls";
 import { Dock } from "@/components/ui/Dock";
 import { cx } from "@/components/ui/cx";
@@ -18,7 +19,7 @@ import { ClipInspector, ClipStrip, MAX_CLIPS, clipError, clipSeconds, moveItem, 
 import { GenerateButton, RatioShape } from "./Composer";
 import { describeError, toApiError, useErrorToast } from "./errors";
 import { GenerationFeed } from "./GenerationFeed";
-import { PreviewPlayer } from "./PreviewPlayer";
+import { PreviewPlayer, type VoicePreview } from "./PreviewPlayer";
 import { MusicPicker } from "./MusicPicker";
 import { ScriptEditor, scriptError, splitLines } from "./ScriptEditor";
 import { VoicePicker, type VoiceValue } from "./VoicePicker";
@@ -97,10 +98,15 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
   const [aiBusy, setAiBusy] = useState(false);
   const [panel, setPanel] = useState<Panel>("clip");
   const [bin, setBin] = useState(false);
+  const [voicePv, setVoicePv] = useState<{ key: string; data: VoicePreview } | null>(null);
+  const [voiceGen, setVoiceGen] = useState(false);
 
   const model = catalog?.models.find((m) => !m.locked) ?? catalog?.models[0];
   const lines = splitLines(script);
   const linesError = scriptError(script);
+  const voiceKey = JSON.stringify([lines, voice.preset ?? null, voice.refUrl ?? null]);
+  const voiceFresh = voicePv && voicePv.key === voiceKey ? voicePv.data : null;
+  const canVoice = lines.length > 0 && !linesError && Boolean(voice.preset || voice.refUrl);
   const sel = clips.find((c) => c.key === selected) ?? null;
   const selIndex = sel ? clips.indexOf(sel) : -1;
     const total = useMemo(() => clips.reduce((s, c) => s + clipSeconds(c), 0), [clips]);
@@ -190,6 +196,21 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
       controller.abort();
     };
   }, [model?.id, aspect, lineCount, linesError, model]);
+
+  // Đọc cả kịch bản bằng giọng đã chọn (đúng như lúc ghép) để xem thử có tiếng + phụ đề khớp.
+  async function genVoice() {
+    if (!canVoice || voiceGen) return;
+    const key = voiceKey;
+    setVoiceGen(true);
+    try {
+      const data = await postJson<VoicePreview>("/api/voices/script", { ...(voice.refUrl ? { refUrl: voice.refUrl } : { preset: voice.preset }), lines });
+      setVoicePv({ key, data });
+    } catch (err) {
+      showError(err);
+    } finally {
+      setVoiceGen(false);
+    }
+  }
 
   function addClip(c: PickedClip, at = clips.length) {
     if (clips.length >= MAX_CLIPS) return toast.error(`Tối đa ${MAX_CLIPS} clip`);
@@ -303,9 +324,30 @@ export default function EditStudio({ fromJobId }: { fromJobId?: string }) {
               subtitles={subtitles}
               musicUrl={catalog.music?.find((t) => t.id === musicId)?.file}
               keepClipAudio={keepClipAudio}
+              voice={voiceFresh}
               selectedKey={selected}
               onSelect={setSelected}
             />
+            {lines.length > 0 && (
+              <div className="absolute top-3 right-3 z-10">
+                {voiceFresh ? (
+                  <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ok/15 px-3 text-[12.5px] font-semibold text-ok">
+                    <Icon name="check" size={14} /> Có giọng đọc
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={genVoice}
+                    disabled={!canVoice || voiceGen}
+                    title={canVoice ? undefined : voice.preset || voice.refUrl ? "Sửa lỗi lời đọc trước" : "Chọn giọng ở tab Giọng"}
+                    className="press glass inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium hairline disabled:opacity-50"
+                  >
+                    {voiceGen ? <Spinner /> : <Icon name="mic" size={14} />}
+                    {voiceGen ? "Đang tạo giọng…" : voicePv ? "Giọng đã đổi · tạo lại" : "Nghe thử giọng đọc"}
+                  </button>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setBin(true)}
