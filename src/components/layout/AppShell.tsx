@@ -8,7 +8,7 @@ import { EventsProvider, useCreditBalance } from "@/components/realtime/Events";
 import { Avatar } from "@/components/ui/Bits";
 import { cx } from "@/components/ui/cx";
 import { CoinMark, Icon, type IconName } from "@/components/ui/Icon";
-import { formatCredit } from "@/lib/api-client";
+import { apiCached, formatCredit } from "@/lib/api-client";
 import { MenuItem, Popover } from "@/components/ui/Overlay";
 import { ToastProvider } from "@/components/ui/Toast";
 import { Logo } from "./Logo";
@@ -195,7 +195,24 @@ function TabBar() {
   );
 }
 
+// Lúc trình duyệt rảnh: tải trước catalog các studio để bấm chuyển tab là có dữ liệu ngay (xem apiCached).
+function usePrefetchCatalogs() {
+  useEffect(() => {
+    const run = () => {
+      for (const kind of ["image", "video"]) apiCached(`/api/catalog?kind=${kind}`).catch(() => {});
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(run, { timeout: 4000 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = window.setTimeout(run, 1500);
+    return () => window.clearTimeout(t);
+  }, []);
+}
+
 export function AppShell({ user, balance, held, children }: { user: ShellUser; balance: number; held: number; children: React.ReactNode }) {
+  usePrefetchCatalogs();
   return (
     <ToastProvider>
       <EventsProvider initialBalance={balance} initialHeld={held}>
