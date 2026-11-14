@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { FileDrop } from "@/components/admin/FileDrop";
 import { jsonInit, useAction } from "@/components/admin/hooks";
 import { FieldRow, Mono, PageHeader, TextInput } from "@/components/admin/kit";
 import { Badge, Empty } from "@/components/ui/Bits";
@@ -23,10 +24,30 @@ export function MusicView({ data }: { data: Data }) {
   const [editing, setEditing] = useState<MusicTrack | "new" | null>(null);
   const [form, setForm] = useState<MusicTrack>({ id: "", name: "", file: "" });
   const [del, setDel] = useState<MusicTrack | null>(null);
+  const [extra, setExtra] = useState<string[]>([]);
+  const files = useMemo(() => [...new Set([...data.files, ...extra])], [data.files, extra]);
 
   function open(t: MusicTrack | "new") {
     setEditing(t);
-    setForm(t === "new" ? { id: "", name: "", file: data.files[0] ?? "" } : t);
+    setForm(t === "new" ? { id: "", name: "", file: files[0] ?? "" } : t);
+  }
+
+  // Tải file nhạc lên kho, rồi mở form thêm bài với file + tên đã điền sẵn (hoặc gắn file vào bài đang sửa).
+  async function upload(file: File) {
+    const fd = new FormData();
+    fd.set("file", file);
+    const r = await run("up", () => api<{ file: string; suggestedId: string; suggestedName: string }>("/api/admin/music/upload", { method: "POST", body: fd }), {
+      success: "Đã tải file nhạc lên",
+    });
+    if (!r) return;
+    setExtra((l) => (l.includes(r.file) ? l : [...l, r.file]));
+    if (editing === null) {
+      const taken = new Set(tracks.map((t) => t.id));
+      let id = r.suggestedId || "nhac";
+      for (let i = 2; taken.has(id); i++) id = `${r.suggestedId}-${i}`.slice(0, 50);
+      setEditing("new");
+      setForm({ id, name: r.suggestedName || id, file: r.file });
+    } else setForm((f) => ({ ...f, file: r.file, name: f.name || r.suggestedName, id: f.id || r.suggestedId }));
   }
 
   async function save() {
@@ -54,17 +75,27 @@ export function MusicView({ data }: { data: Data }) {
       <PageHeader
         icon="music"
         title="Nhạc"
-        sub={`${tracks.length} bài · ${data.files.length} file trong public/music`}
+        sub={`${tracks.length} bài · ${files.length} file nhạc`}
         actions={
-          <Button size="sm" variant="primary" icon="plus" disabled={data.files.length === 0} onClick={() => open("new")}>
+          <Button size="sm" variant="primary" icon="plus" disabled={files.length === 0} onClick={() => open("new")}>
             Thêm bài
           </Button>
         }
       />
 
-      {data.files.length === 0 && tracks.length === 0 ? (
+      <FileDrop
+        className="mb-4"
+        accept=".mp3,.m4a,.wav,audio/mpeg,audio/mp4,audio/wav,audio/x-wav"
+        icon="music"
+        busy={isBusy("up")}
+        title="Tải file âm thanh lên"
+        hint="MP3, M4A, WAV · tối đa 25 MB · kéo thả vào đây hoặc bấm để chọn"
+        onFile={upload}
+      />
+
+      {files.length === 0 && tracks.length === 0 ? (
         <div className="rounded-m3 bg-s1 hairline">
-          <Empty icon="music" title="Chưa có file .mp3" hint="Chép nhạc CC0 vào public/music" />
+          <Empty icon="music" title="Chưa có file nhạc" hint="Tải file âm thanh lên ở khung phía trên" />
         </div>
       ) : tracks.length === 0 ? (
         <div className="rounded-m3 bg-s1 hairline">
@@ -73,7 +104,7 @@ export function MusicView({ data }: { data: Data }) {
       ) : (
         <ul className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {tracks.map((t, i) => {
-            const missing = !data.files.includes(t.file);
+            const missing = !files.includes(t.file);
             return (
               <li key={t.id} className="reveal rounded-m3 bg-s1 p-4 hairline" style={{ "--i": i } as React.CSSProperties}>
                 <div className="flex items-start gap-3">
@@ -129,22 +160,31 @@ export function MusicView({ data }: { data: Data }) {
           </FieldRow>
           <FieldRow label="File">
             <Select inputSize="sm" value={form.file} onChange={(e) => setForm((f) => ({ ...f, file: e.target.value }))}>
-              {!data.files.includes(form.file) && form.file && <option value={form.file}>{form.file} (thiếu)</option>}
-              {data.files.map((f) => (
+              {!files.includes(form.file) && form.file && <option value={form.file}>{form.file} (thiếu)</option>}
+              {files.map((f) => (
                 <option key={f} value={f}>
                   {f}
                 </option>
               ))}
             </Select>
           </FieldRow>
-          {form.file && data.files.includes(form.file) && <audio key={form.file} controls preload="none" src={form.file} className="h-9 w-full [color-scheme:dark]" />}
+          <FileDrop
+            accept=".mp3,.m4a,.wav,audio/mpeg,audio/mp4,audio/wav,audio/x-wav"
+            icon="music"
+            busy={isBusy("up")}
+            title="Hoặc tải file mới lên"
+            hint="Chọn xong tự điền vào ô File"
+            className="py-4"
+            onFile={upload}
+          />
+          {form.file && files.includes(form.file) && <audio key={form.file} controls preload="none" src={form.file} className="h-9 w-full [color-scheme:dark]" />}
         </div>
       </Drawer>
 
       <ConfirmDialog
         open={del !== null}
         title={`Xóa “${del?.name ?? ""}”?`}
-        body="File mp3 vẫn giữ trong public/music."
+        body="File nhạc có sẵn trong public/music được giữ lại; file bạn tải lên sẽ bị xóa theo bài."
         confirmLabel="Xóa"
         danger
         busy={isBusy("del")}

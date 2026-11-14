@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
@@ -11,6 +11,7 @@ import {
   type UserStatus,
 } from "@prisma/client";
 import { z } from "zod";
+import { storagePath } from "@/lib/storage";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getMuse } from "@/server/engines";
@@ -543,13 +544,73 @@ export const musicTrackSchema = z.object({
   file: z
     .string()
     .trim()
-    .regex(/^\/music\/[\w.-]+\.mp3$/, { message: "File phải là /music/<tên>.mp3" }),
+    .regex(/^\/(media\/)?music\/[\w.-]+\.(mp3|m4a|wav)$/i, { message: "File phải là /music/<tên>.mp3 hoặc /media/music/<tên>.(mp3|m4a|wav)" }),
 });
 export const musicUpdateSchema = musicTrackSchema.partial().required({ id: true });
 
+const MUSIC_EXT = /\.(mp3|m4a|wav)$/i;
+export const MAX_MUSIC_BYTES = 25 * 1024 * 1024;
+
+// Nhạc có sẵn trong public/music (cũ) + nhạc admin tải lên (kho storage/music, phục vụ qua /media/music).
+function uploadedMusicDir(): string {
+  return path.dirname(storagePath("music/x"));
+}
+
 async function musicFiles(): Promise<string[]> {
-  const names = await fs.readdir(MUSIC_DIR).catch(() => [] as string[]);
-  return names.filter((n) => n.toLowerCase().endsWith(".mp3")).sort().map((n) => `/music/${n}`);
+  const [pub, up] = await Promise.all([
+    fs.readdir(MUSIC_DIR).catch(() => [] as string[]),
+    fs.readdir(uploadedMusicDir()).catch(() => [] as string[]),
+  ]);
+  return [
+    ...pub.filter((n) => n.toLowerCase().endsWith(".mp3")).sort().map((n) => `/music/${n}`),
+    ...up.filter((n) => MUSIC_EXT.test(n)).sort().map((n) => `/media/music/${n}`),
+  ];
+}
+
+// ffprobe: file phải có luồng âm thanh thật (chặn đổi đuôi file khác thành .mp3).
+function hasAudioStream(file: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const p = spawn("ffprobe", ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_type", "-of", "csv=p=0", file], { stdio: ["ignore", "pipe", "ignore"] });
+    let out = "";
+    p.stdout.on("data", (d: Buffer) => (out += d.toString()));
+    const t = setTimeout(() => p.kill("SIGKILL"), 15_000);
+    p.on("error", () => resolve(false));
+    p.on("close", () => {
+      clearTimeout(t);
+      resolve(out.trim().startsWith("audio"));
+    });
+  });
+}
+
+export async function saveMusicUpload(file: File): Promise<{ file: string; suggestedId: string; suggestedName: string }> {
+  if (!MUSIC_EXT.test(file.name)) throw new AppError("VALIDATION", "Chỉ nhận file .mp3, .m4a hoặc .wav");
+  if (file.size === 0) throw new AppError("VALIDATION", "File rỗng");
+  if (file.size > MAX_MUSIC_BYTES) throw new AppError("VALIDATION", "File nhạc tối đa 25 MB");
+  const ext = path.extname(file.name).toLowerCase();
+  const base = path
+    .basename(file.name, path.extname(file.name))
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "nhac";
+  const existing = new Set(await musicFiles());
+  let name = `${base}${ext}`;
+  for (let i = 2; existing.has(`/media/music/${name}`) || existing.has(`/music/${name}`); i++) name = `${base}-${i}${ext}`;
+  const target = storagePath(`music/${name}`);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  const tmp = `${target}.${process.pid}.part`;
+  await fs.writeFile(tmp, Buffer.from(await file.arrayBuffer()));
+  if (!(await hasAudioStream(tmp))) {
+    await fs.rm(tmp, { force: true });
+    throw new AppError("VALIDATION", "File không phải âm thanh hợp lệ");
+  }
+  await fs.rename(tmp, target);
+  const id = base.slice(0, 50);
+  const pretty = path.basename(file.name, path.extname(file.name)).replace(/[_-]+/g, " ").trim();
+  return { file: `/media/music/${name}`, suggestedId: id, suggestedName: pretty.charAt(0).toUpperCase() + pretty.slice(1) };
 }
 
 async function getTracks(): Promise<MusicTrack[]> {
@@ -596,10 +657,13 @@ export async function deleteMusicTrack(id: string): Promise<void> {
     where: { kind: "ASSEMBLE", status: { in: ["PENDING", "RUNNING"] }, params: { path: ["musicId"], equals: id } },
   });
   if (inUse > 0) throw new AppError("CONFLICT", "Bài nhạc đang được dùng cho tác vụ ghép chưa xong");
-  await setSetting(
-    "music_tracks",
-    tracks.filter((t) => t.id !== id),
-  );
+  const gone = tracks.find((t) => t.id === id);
+  const rest = tracks.filter((t) => t.id !== id);
+  await setSetting("music_tracks", rest);
+  // File do admin tải lên: xóa luôn nếu không còn bài nào dùng. File trong public/music giữ nguyên.
+  if (gone?.file.startsWith("/media/music/") && !rest.some((t) => t.file === gone.file)) {
+    await fs.rm(storagePath(gone.file.slice("/media/".length)), { force: true }).catch(() => undefined);
+  }
 }
 
 // ---------- Job ----------

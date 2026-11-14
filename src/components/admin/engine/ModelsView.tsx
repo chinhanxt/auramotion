@@ -217,16 +217,11 @@ function PriceInput({ value, onSave }: { value: string; onSave: (v: number) => v
   );
 }
 
-const MINI_SELECT = "h-8 w-full cursor-pointer appearance-none rounded-[9px] bg-white/[.04] pr-7 pl-2.5 text-[12.5px] outline-none hairline focus:bg-white/[.07] disabled:opacity-50";
-
 function MiniSelect({ value, onChange, children, label, className, disabled }: { value: string; onChange: (v: string) => void; children: React.ReactNode; label: string; className?: string; disabled?: boolean }) {
   return (
-    <span className={cx("relative block min-w-0", className)}>
-      <select aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className={MINI_SELECT}>
-        {children}
-      </select>
-      <Icon name="chevronDown" size={13} className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-muted" />
-    </span>
+    <Select aria-label={label} inputSize="sm" className={cx("min-w-0", className)} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      {children}
+    </Select>
   );
 }
 

@@ -14,7 +14,7 @@ import { PAYMENT_STATUS_LABEL, PAYMENT_STATUS_TONE, formatVnd, paymentTitle, typ
 const POLL_MS = 3000;
 const REDIRECT_MS = 3000;
 
-export type PaymentDetail = PaymentSummary & { qrUrl: string };
+export type PaymentDetail = PaymentSummary & { qrUrl: string; qrStatic?: boolean; qrNote?: string };
 export type BankInfo = { bankId: string; account: string; accountName: string };
 
 function Row({ label, value, display, copy, strong }: { label: string; value: string; display?: string; copy?: boolean; strong?: boolean }) {
@@ -127,6 +127,9 @@ export function PaymentView({ initial, bank }: { initial: PaymentDetail; bank: B
         <p className="relative mt-5 flex items-center justify-center gap-2 text-sm text-muted">
           <Icon name="qr" size={16} /> Mở app ngân hàng và quét mã
         </p>
+        {payment.qrStatic && (
+          <p className="relative mt-2 text-center text-xs text-dim">{payment.qrNote || "Mã QR chung: nhập đúng số tiền và nội dung chuyển khoản ở bên cạnh."}</p>
+        )}
       </div>
 
       <div className="space-y-4 rounded-m4 bg-s1 p-5 hairline sm:p-7">

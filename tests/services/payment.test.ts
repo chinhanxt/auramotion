@@ -66,7 +66,7 @@ describe("payment", () => {
     const other = (await db.user.create({ data: { email: "o@test.local", name: "O" } })).id;
     expect((await getPayment(userId, order.id)).qrUrl).toBe(order.qrUrl);
     expect(Object.keys(await getPayment(userId, order.id)).sort()).toEqual(
-      ["amount", "createdAt", "creditAmount", "id", "paidAt", "period", "planCode", "qrUrl", "refCode", "status", "type"].sort(),
+      ["amount", "createdAt", "creditAmount", "id", "paidAt", "period", "planCode", "qrStatic", "qrUrl", "refCode", "status", "type"].sort(),
     );
     await expect(getPayment(other, order.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });

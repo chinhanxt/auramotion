@@ -186,7 +186,7 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
             } else if (e.key === "Enter" && results[sel]) go(results[sel].href);
           }}
           placeholder="Đi tới trang, tìm email, mã đơn…"
-          className={cx(inputClass, "h-13 bg-transparent px-1 text-[15px] shadow-none hover:bg-transparent focus:bg-transparent focus:shadow-none")}
+          className={cx(inputClass, "h-13 bg-transparent px-1 text-[15px] shadow-none outline-none! ring-0 hover:bg-transparent focus:bg-transparent focus:shadow-none focus-visible:outline-none!")}
         />
         <Kbd>Esc</Kbd>
       </div>

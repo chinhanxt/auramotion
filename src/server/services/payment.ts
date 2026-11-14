@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { grant, publishCredit } from "@/server/services/credit";
+import { getPaymentQr } from "@/server/services/payment-qr";
 import { activatePlan } from "@/server/services/plan";
 import { getSetting } from "@/server/services/settings";
 
@@ -15,7 +16,7 @@ export type PublicPayment = Pick<
   Payment,
   "id" | "type" | "planCode" | "period" | "creditAmount" | "amount" | "refCode" | "status" | "paidAt" | "createdAt"
 >;
-export type PaymentWithQr = PublicPayment & { qrUrl: string };
+export type PaymentWithQr = PublicPayment & { qrUrl: string; qrStatic: boolean; qrNote?: string };
 
 const REF_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 // Lookahead để lấy cả các ứng viên chồng lấn, vd "NAMAM12345678" → "AMAM123456", "AM12345678".
@@ -41,7 +42,9 @@ function qrUrl(amount: number, refCode: string): string {
 }
 
 // Chỉ trả trường người dùng cần (bỏ providerTxnId, confirmedBy, userId).
-function withQr(p: Payment): PaymentWithQr {
+async function withQr(p: Payment): Promise<PaymentWithQr> {
+  // Admin đã tải mã QR riêng lên thì dùng ảnh đó (không nhúng số tiền / nội dung); chưa có thì dùng QR tự sinh (VietQR).
+  const own = await getPaymentQr();
   return {
     id: p.id,
     type: p.type,
@@ -53,7 +56,9 @@ function withQr(p: Payment): PaymentWithQr {
     status: p.status,
     paidAt: p.paidAt,
     createdAt: p.createdAt,
-    qrUrl: qrUrl(p.amount, p.refCode),
+    qrUrl: own ? own.url : qrUrl(p.amount, p.refCode),
+    qrStatic: Boolean(own),
+    ...(own?.note ? { qrNote: own.note } : {}),
   };
 }
 
@@ -82,7 +87,7 @@ export async function createOrder(userId: string, input: OrderInput): Promise<Pa
   // refCode trùng (rất hiếm) thì sinh lại.
   for (let attempt = 0; ; attempt++) {
     try {
-      return withQr(await db.payment.create({ data: { ...data, refCode: newRefCode() } }));
+      return await withQr(await db.payment.create({ data: { ...data, refCode: newRefCode() } }));
     } catch (err) {
       if (!isUniqueViolation(err) || attempt >= 4) throw err;
     }
@@ -92,7 +97,7 @@ export async function createOrder(userId: string, input: OrderInput): Promise<Pa
 export async function getPayment(userId: string, paymentId: string): Promise<PaymentWithQr> {
   const payment = await db.payment.findFirst({ where: { id: paymentId, userId } });
   if (!payment) throw new AppError("NOT_FOUND", "Không tìm thấy đơn thanh toán");
-  return withQr(payment);
+  return await withQr(payment);
 }
 
 // Chuyển PENDING → SUCCEEDED và kích hoạt gói / cộng Credit trong cùng 1 transaction.

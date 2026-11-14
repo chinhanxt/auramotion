@@ -64,6 +64,12 @@ async function musicFile(musicId: string | undefined): Promise<string | null> {
   const tracks = await getSetting<MusicTrack[]>("music_tracks").catch(() => [] as MusicTrack[]);
   const track = Array.isArray(tracks) ? tracks.find((t) => t.id === musicId) : undefined;
   if (!track || typeof track.file !== "string") throw new InputError("VALIDATION");
+  // /media/music/<tên>: nhạc admin tải lên (storage); /music/<tên>: nhạc có sẵn trong public/music.
+  if (track.file.startsWith("/media/music/")) {
+    const up = storagePath(track.file.slice("/media/".length));
+    if (!(await isFile(up))) throw new InputError("VALIDATION");
+    return up;
+  }
   const file = path.resolve("public", track.file.replace(/^\/+/, ""));
   if (!file.startsWith(MUSIC_DIR + path.sep) || !(await isFile(file))) throw new InputError("VALIDATION");
   return file;

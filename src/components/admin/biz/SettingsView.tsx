@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { jsonInit, useAction, useDraft } from "@/components/admin/hooks";
 import { FieldRow, NumberInput, PageHeader, Panel, SaveBar, TextInput } from "@/components/admin/kit";
 import { formatVnd, providerLabel } from "@/components/admin/format";
+import { QrUploader } from "@/components/admin/biz/QrUploader";
 import { Notice } from "@/components/ui/Bits";
 import { IconButton } from "@/components/ui/Button";
 import { Stepper, Switch } from "@/components/ui/Controls";
@@ -211,6 +212,7 @@ export function SettingsView({
       <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         <div className="space-y-4">
           <Maintenance initial={maintenance} />
+          <QrUploader />
           <PromptWriter initial={promptWriter} />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             <LinkCard

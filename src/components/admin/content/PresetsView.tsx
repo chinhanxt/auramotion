@@ -1,5 +1,6 @@
 "use client";
 
+import { thumbUrl } from "@/lib/media-url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { jsonInit, useAction } from "@/components/admin/hooks";
 import { CoverMedia } from "@/components/studio/PresetGallery";
@@ -49,12 +50,12 @@ function coverVideo(p: Pick<Preset, "cover" | "thumbnailUrl">): string | undefin
 }
 
 // Nền bìa: gradient → background; URL ảnh → ảnh; video / không có → gradient trung tính.
-export function coverStyle(p: Pick<Preset, "cover" | "thumbnailUrl">): React.CSSProperties {
+export function coverStyle(p: Pick<Preset, "cover" | "thumbnailUrl">, w = 360): React.CSSProperties {
   const c = p.cover?.trim();
   if (c && isGradient(c)) return { background: c };
   const url = c || p.thumbnailUrl;
   if (url && coverVideo(p)) return { background: FALLBACK };
-  if (url) return { backgroundImage: `url("${url.replace(/"/g, "")}")`, backgroundSize: "cover", backgroundPosition: "center" };
+  if (url) return { backgroundImage: `url("${thumbUrl(url, w).replace(/"/g, "")}")`, backgroundSize: "cover", backgroundPosition: "center" };
   return { background: FALLBACK };
 }
 
@@ -336,7 +337,7 @@ function PresetEditor({
         <div className="space-y-5 p-5">
           <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
             <div className="space-y-2">
-              <div className="relative aspect-[4/5] overflow-hidden rounded-m3 hairline" style={coverStyle(d)}>
+              <div className="relative aspect-[4/5] overflow-hidden rounded-m3 hairline" style={coverStyle(d, 640)}>
                 <CoverMedia video={coverVideo(d)} />
                 {coverBusy && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 p-4 backdrop-blur-[2px]">
@@ -386,7 +387,7 @@ function PresetEditor({
           </FieldRow>
           <FieldRow label="Bìa" hint="CSS gradient hoặc URL ảnh">
             <div className="flex gap-2">
-              <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-m1 hairline" style={coverStyle({ cover: d.cover, thumbnailUrl: null })}>
+              <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-m1 hairline" style={coverStyle({ cover: d.cover, thumbnailUrl: null }, 160)}>
                 <CoverMedia video={coverVideo({ cover: d.cover, thumbnailUrl: null })} />
               </span>
               <TextInput
